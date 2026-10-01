@@ -43,8 +43,8 @@ interface UserDao {
   @Query("UPDATE users SET lastLatitude = :latitude, lastLongitude = :longitude, lastLocationAddress = :address, lastLocationTime = :timestamp WHERE rmCode = :rmCode")
   suspend fun updateUserLocation(rmCode: String, latitude: Double, longitude: Double, address: String, timestamp: Long)
 
-  @Query("UPDATE users SET lastLatitude = :lat, lastLongitude = :lng, lastLocationAddress = :address, lastLocationTime = :timestamp WHERE rmCode = :rmCode")
-  suspend fun updateLocation(rmCode: String, lat: Double, lng: Double, address: String, timestamp: Long)
+  @Query("UPDATE users SET lastLatitude = :lat, lastLongitude = :lng, lastLocationAddress = :address, lastLocationTime = :time WHERE rmCode = :rmCode")
+  suspend fun updateLocation(rmCode: String, lat: Double, lng: Double, address: String, time: Long)
 
   @Query("UPDATE users SET isOnline = :isOnline WHERE rmCode = :rmCode")
   suspend fun updateOnlineStatus(rmCode: String, isOnline: Boolean)
