@@ -111,6 +111,21 @@ fun CustomerFileFormScreen(
   // Form Fields
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var fileId by remember { mutableStateOf(editFileId ?: SecurityUtils.generateFileId(currentUser.rmCode)) }
+
+  val cpvPhotoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      viewModel.addAttachment(
+        fileId = fileId,
+        category = "CPV Photo",
+        fileName = "CPV_Photo_${System.currentTimeMillis()}.jpg",
+        fileType = "image/jpeg",
+        fileSizeBytes = 512 * 1024L,
+        fileUri = uri.toString()
+      )
+    }
+  }
   var customerName by remember { mutableStateOf("") }
   var companyName by remember { mutableStateOf("") }
   var officeAddress by remember { mutableStateOf("") }
@@ -832,80 +847,96 @@ fun CustomerFileFormScreen(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(
-            text = "H. Contact Point Verification (CPV)",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = EblNavyDark
-          )
-          CpvStatusBadge(selectedCpvStatus)
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Image, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "Contact Point Verification (CPV)",
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+          }
         }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+          text = "Attach field verification photograph and enter verification remarks.",
+          fontSize = 11.sp,
+          color = Color.Gray
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // CPV Status Dropdown
-        ExposedDropdownMenuBox(
-          expanded = cpvExpanded,
-          onExpandedChange = { cpvExpanded = !cpvExpanded },
-          modifier = Modifier.fillMaxWidth()
+        // CPV Photo Add Button & Badge
+        val cpvPhotos = attachments.filter { it.category == "CPV Photo" }
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          OutlinedTextField(
-            value = selectedCpvStatus,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("CPV Status") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cpvExpanded) },
-            modifier = Modifier.fillMaxWidth().menuAnchor().testTag("form_cpv_status")
-          )
-          ExposedDropdownMenu(
-            expanded = cpvExpanded,
-            onDismissRequest = { cpvExpanded = false }
+          Button(
+            onClick = {
+              cpvPhotoPickerLauncher.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+              )
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.testTag("btn_add_cpv_photo")
           ) {
-            cpvStatusOptions.forEach { opt ->
-              DropdownMenuItem(
-                text = { Text(opt) },
-                onClick = {
-                  selectedCpvStatus = opt
-                  cpvExpanded = false
-                }
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Add CPV Photo", fontSize = 12.sp)
+          }
+
+          if (cpvPhotos.isNotEmpty()) {
+            androidx.compose.material3.Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFDCFCE7),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC))
+            ) {
+              Text(
+                text = "✓ ${cpvPhotos.size} Photo(s) Attached",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF15803D),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
               )
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-          VoiceInputField(
-            value = cpvDate,
-            onValueChange = { cpvDate = it },
-            label = "CPV Date (YYYY-MM-DD)",
-            placeholder = "e.g. 2026-10-15",
-            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EblNavyPrimary) },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-            testTag = "form_cpv_date"
-          )
-          VoiceInputField(
-            value = cpvAddress,
-            onValueChange = { cpvAddress = it },
-            label = "CPV Visited Address",
-            placeholder = "Address visited...",
-            modifier = Modifier.weight(1f),
-            testTag = "form_cpv_address"
-          )
+        if (cpvPhotos.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(8.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            cpvPhotos.take(4).forEach { photo ->
+              Card(
+                modifier = Modifier
+                  .size(60.dp)
+                  .clickable { previewAttachment = photo },
+                shape = RoundedCornerShape(6.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
+              ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                  Icon(Icons.Default.Image, contentDescription = null, tint = EblNavyPrimary)
+                }
+              }
+            }
+          }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
+        // CPV Remarks Field
         VoiceInputField(
           value = cpvRemarks,
           onValueChange = { cpvRemarks = it },
-          label = "CPV Verification Remarks / Findings",
-          placeholder = "Findings during field visit...",
+          label = "CPV Remarks / Notes",
+          placeholder = "Enter CPV verification findings or notes...",
           singleLine = false,
           maxLines = 3,
           modifier = Modifier.fillMaxWidth(),

@@ -761,20 +761,59 @@ class EblRepository(
     )
 
     try {
-      val allFiles = database.customerFileDao().getAllActiveFilesFlow()
+      val allFiles = database.customerFileDao().getAllActiveFiles()
       val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
-      val rms = database.userDao().getAllRmsFlow()
-      val allAttachments = database.fileAttachmentDao().getAllAttachments()
       val recentLogs = database.auditLogDao().getAllLogs()
+      val recentLocations = database.userLocationLogDao().getRecentLocationLogs(50)
 
       // If an Apps Script Web App URL is provided, send real HTTP request
       if (currentStatus.appsScriptUrl.isNotBlank() && currentStatus.appsScriptUrl.startsWith("http")) {
+        val filesArray = org.json.JSONArray()
+        for (f in allFiles) {
+          val fObj = JSONObject().apply {
+            put("ccNumber", f.ccNumber.ifBlank { f.fileId })
+            put("fileId", f.fileId)
+            put("customerName", f.customerName)
+            put("companyName", f.companyName)
+            put("officeAddress", f.officeAddress)
+            put("mobile", f.mobile)
+            put("email", f.email)
+            put("productType", f.productType)
+            put("applicationStatus", f.applicationStatus)
+            put("activeStatus", f.activeStatus)
+            put("assignedRmCode", f.assignedRmCode)
+            put("pendingDocuments", f.pendingDocuments)
+            put("cpvRemarks", f.cpvRemarks)
+            put("submissionAddress", f.submissionAddress ?: "")
+            put("submissionLat", f.submissionLat ?: 0.0)
+            put("submissionLng", f.submissionLng ?: 0.0)
+            put("updatedAt", DateUtils.formatDateTime(f.updatedAt))
+          }
+          filesArray.put(fObj)
+        }
+
+        val locationsArray = org.json.JSONArray()
+        for (loc in recentLocations) {
+          locationsArray.put(JSONObject().apply {
+            put("rmCode", loc.rmCode)
+            put("userName", loc.userName)
+            put("latitude", loc.latitude)
+            put("longitude", loc.longitude)
+            put("address", loc.address)
+            put("timestamp", DateUtils.formatDateTime(loc.timestamp))
+            put("sourceAction", loc.sourceAction)
+          })
+        }
+
         val payload = JSONObject().apply {
+          put("action", "SYNC_ALL_DATA")
           put("spreadsheetId", currentStatus.spreadsheetId)
           put("secretKey", currentStatus.syncSecretKey)
           put("timestamp", DateUtils.currentDhakaMillis())
           put("syncedBy", currentUser.rmCode)
-          put("filesCount", unsyncedFiles.size)
+          put("filesCount", filesArray.length())
+          put("files", filesArray)
+          put("locations", locationsArray)
         }
 
         val requestBody = payload.toString().toRequestBody("application/json".toMediaType())

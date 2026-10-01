@@ -136,9 +136,9 @@ fun LoginScreen(
         .background(
           Brush.verticalGradient(
             colors = listOf(
-              Color(0xDF091424),
-              Color(0xF50B1B30),
-              Color(0xFD050D18)
+              Color(0x66091424),
+              Color(0x880B1B30),
+              Color(0xB3050D18)
             )
           )
         )
@@ -327,58 +327,6 @@ fun LoginScreen(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
               )
-            }
-          }
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // Quick Demo Credentials for Testing
-          Text(
-            text = "Quick Demo Access:",
-            fontSize = 11.sp,
-            color = Color.Gray,
-            fontWeight = FontWeight.Medium
-          )
-          Spacer(modifier = Modifier.height(6.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            OutlinedButton(
-              onClick = {
-                usernameInput = "104393"
-                passwordInput = "password123"
-                errorMessage = null
-              },
-              modifier = Modifier.weight(1f).testTag("quick_login_rm"),
-              shape = RoundedCornerShape(6.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-            ) {
-              Text("RM 104393", fontSize = 10.sp)
-            }
-            OutlinedButton(
-              onClick = {
-                usernameInput = "Admin0"
-                passwordInput = "#123456A"
-                errorMessage = null
-              },
-              modifier = Modifier.weight(1f).testTag("quick_login_admin"),
-              shape = RoundedCornerShape(6.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-            ) {
-              Text("Admin0", fontSize = 10.sp)
-            }
-            OutlinedButton(
-              onClick = {
-                usernameInput = "12345"
-                passwordInput = "12345"
-                errorMessage = null
-              },
-              modifier = Modifier.weight(1f).testTag("quick_login_mentor"),
-              shape = RoundedCornerShape(6.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-            ) {
-              Text("Mentor 12345", fontSize = 10.sp)
             }
           }
         }

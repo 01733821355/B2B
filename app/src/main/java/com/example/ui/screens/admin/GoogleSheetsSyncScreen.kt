@@ -74,9 +74,92 @@ fun GoogleSheetsSyncScreen(
       if (status.spreadsheetId.isNotBlank()) "https://docs.google.com/spreadsheets/d/${status.spreadsheetId}/edit" else ""
     )
   }
+  var inputAppsScriptUrl by remember(status.appsScriptUrl) { mutableStateOf(status.appsScriptUrl) }
   var isSavingUrl by remember { mutableStateOf(false) }
+  var isSavingScriptUrl by remember { mutableStateOf(false) }
   var isSyncingNow by remember { mutableStateOf(false) }
   var feedbackMessage by remember { mutableStateOf<String?>(null) }
+  var showScriptCodeDialog by remember { mutableStateOf(false) }
+
+  val appsScriptTemplate = """
+function doPost(e) {
+  try {
+    var data = JSON.parse(e.postData.contents);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // 1. Auto-create & format 'Customer_Files' Tab
+    var fileSheet = ss.getSheetByName('Customer_Files');
+    if (!fileSheet) {
+      fileSheet = ss.insertSheet('Customer_Files');
+      var headers = [
+        'CC-Number', 'File ID', 'Customer Name', 'Company Name',
+        'Office Address', 'Mobile', 'Email', 'Product Type',
+        'Status', 'Active', 'Assigned RM', 'Pending Documents',
+        'CPV Remarks', 'GPS Location Address', 'GPS Lat', 'GPS Lng', 'Last Updated'
+      ];
+      fileSheet.appendRow(headers);
+      var hr = fileSheet.getRange(1, 1, 1, headers.length);
+      hr.setBackground('#0A192F').setFontColor('#FFFFFF').setFontWeight('bold');
+      fileSheet.setFrozenRows(1);
+    }
+    
+    // 2. Auto-create & format 'RM_Location_Logs' Tab
+    var locSheet = ss.getSheetByName('RM_Location_Logs');
+    if (!locSheet) {
+      locSheet = ss.insertSheet('RM_Location_Logs');
+      var locHeaders = ['RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Trigger Action'];
+      locSheet.appendRow(locHeaders);
+      var lr = locSheet.getRange(1, 1, 1, locHeaders.length);
+      lr.setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
+      locSheet.setFrozenRows(1);
+    }
+    
+    // 3. Upsert Files Data by CC-Number / File ID
+    if (data.files && data.files.length > 0) {
+      var existingData = fileSheet.getDataRange().getValues();
+      var idRowMap = {};
+      for (var r = 1; r < existingData.length; r++) {
+        var key = existingData[r][0] || existingData[r][1];
+        if (key) idRowMap[key] = r + 1;
+      }
+      
+      data.files.forEach(function(f) {
+        var row = [
+          f.ccNumber, f.fileId, f.customerName, f.companyName,
+          f.officeAddress, f.mobile, f.email, f.productType,
+          f.applicationStatus, f.activeStatus, f.assignedRmCode,
+          f.pendingDocuments, f.cpvRemarks, f.submissionAddress,
+          f.submissionLat, f.submissionLng, f.updatedAt
+        ];
+        var match = f.ccNumber || f.fileId;
+        if (idRowMap[match]) {
+          fileSheet.getRange(idRowMap[match], 1, 1, row.length).setValues([row]);
+        } else {
+          fileSheet.appendRow(row);
+          idRowMap[match] = fileSheet.getLastRow();
+        }
+      });
+    }
+    
+    // 4. Record Location Logs
+    if (data.locations && data.locations.length > 0) {
+      data.locations.forEach(function(l) {
+        locSheet.appendRow([l.rmCode, l.userName, l.latitude, l.longitude, l.address, l.timestamp, l.sourceAction]);
+      });
+    }
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      syncedCount: (data.files ? data.files.length : 0)
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+""".trimIndent()
 
   Column(
     modifier = modifier
@@ -332,6 +415,136 @@ fun GoogleSheetsSyncScreen(
             color = if (feedbackMessage!!.contains("Success", ignoreCase = true) || feedbackMessage!!.contains("Linked", ignoreCase = true)) Color(0xFF059669) else Color(0xFFDC2626),
             fontWeight = FontWeight.Medium
           )
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(14.dp))
+
+    // Automated Apps Script Web App Connector (Auto-creates tabs & headers)
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Code, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = "Apps Script Web App Connector",
+              fontSize = 15.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+          }
+          Surface(
+            color = Color(0xFFEFF6FF),
+            shape = RoundedCornerShape(6.dp)
+          ) {
+            Text(
+              text = "AUTO TABS & HEADERS",
+              color = Color(0xFF1D4ED8),
+              fontSize = 9.sp,
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+          text = "Paste the Google Apps Script Web App URL below to automatically create 'Customer_Files' and 'RM_Location_Logs' sheets with formatted headers upon sync.",
+          fontSize = 11.sp,
+          color = Color.Gray,
+          lineHeight = 15.sp
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        com.example.ui.common.VoiceInputField(
+          value = inputAppsScriptUrl,
+          onValueChange = { inputAppsScriptUrl = it },
+          label = "Apps Script Web App URL",
+          placeholder = "https://script.google.com/macros/s/.../exec",
+          leadingIcon = { Icon(Icons.Default.Language, contentDescription = null, tint = EblNavyPrimary) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "input_apps_script_url"
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Button(
+            onClick = {
+              if (inputAppsScriptUrl.isBlank()) {
+                feedbackMessage = "Please paste your Google Apps Script Web App URL."
+                return@Button
+              }
+              isSavingScriptUrl = true
+              viewModel.updateAppsScriptConfig(inputAppsScriptUrl.trim(), "EBL_SYNC_KEY") { success, msg ->
+                isSavingScriptUrl = false
+                feedbackMessage = if (success) "Apps Script Web App connected successfully!" else msg
+              }
+            },
+            enabled = !isSavingScriptUrl,
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f)
+          ) {
+            if (isSavingScriptUrl) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+            } else {
+              Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Save Connector", fontSize = 11.sp)
+            }
+          }
+
+          OutlinedButton(
+            onClick = {
+              val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+              val clip = android.content.ClipData.newPlainText("Google Apps Script", appsScriptTemplate)
+              clipboard.setPrimaryClip(clip)
+              feedbackMessage = "Google Apps Script code copied to clipboard! Paste it into Extensions > Apps Script."
+            },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f)
+          ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Copy Script Code", fontSize = 11.sp)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Bengali & English Setup Instructions
+        Surface(
+          color = Color(0xFFF8FAFC),
+          shape = RoundedCornerShape(8.dp),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+        ) {
+          Column(modifier = Modifier.padding(12.dp)) {
+            Text("কীভাবে গুগল শিট সেটআপ করবেন (How to Setup):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("১. আপনার গুগল শিটে যান এবং Extensions > Apps Script-এ ক্লিক করুন।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("২. ওপরের 'Copy Script Code' বাটনে চাপ দিয়ে কোডটি কপি করে Apps Script-এ পেস্ট করুন।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৩. Deploy > New deployment সিলেক্ট করুন, Type দিন 'Web app'।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৪. 'Who has access' অপশনে 'Anyone' নির্বাচন করে Deploy চাপুন।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৫. পাওয়া Web App URL-টি কপি করে এখানে পেস্ট করে 'Save Connector' চাপুন।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৬. ব্যস! অ্যাপ স্বয়ংক্রিয়ভাবে 'Customer_Files' ও 'RM_Location_Logs' ট্যাব ও হেডার তৈরি করবে।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
+          }
         }
       }
     }

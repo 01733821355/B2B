@@ -175,6 +175,141 @@ fun AppSettingsScreen(
 
     Spacer(modifier = Modifier.height(16.dp))
 
+    // UI Appearance, Theme Color & Typography
+    val currentColorTheme = settings.find { it.settingKey == "UI_COLOR_THEME" }?.settingValue ?: "ROYAL_NAVY"
+    val currentFontStyle = settings.find { it.settingKey == "UI_FONT_STYLE" }?.settingValue ?: "DEFAULT_SANS"
+    val currentTextScale = settings.find { it.settingKey == "UI_TEXT_SCALE" }?.settingValue ?: "STANDARD"
+
+    var selectedColorTheme by remember(currentColorTheme) { mutableStateOf(currentColorTheme) }
+    var selectedFontStyle by remember(currentFontStyle) { mutableStateOf(currentFontStyle) }
+    var selectedTextScale by remember(currentTextScale) { mutableStateOf(currentTextScale) }
+
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("UI Appearance & Font Styling (রং ও ফন্ট শৈলী)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+        }
+        Text("Customize primary theme colors, typography styling, and reading size", fontSize = 11.sp, color = Color.Gray)
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 1. Primary Theme Color Palette
+        Text("Primary Brand Color Palette:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val palettes = listOf(
+          Triple("ROYAL_NAVY", "Royal Navy", Color(0xFF0A192F)),
+          Triple("EMERALD", "Emerald Green", Color(0xFF065F46)),
+          Triple("CRIMSON", "Deep Crimson", Color(0xFF9F1239)),
+          Triple("MIDNIGHT", "Midnight Slate", Color(0xFF0F172A)),
+          Triple("SAPPHIRE", "Sapphire Indigo", Color(0xFF312E81))
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          palettes.forEach { (key, label, color) ->
+            val isSelected = selectedColorTheme == key
+            androidx.compose.material3.Surface(
+              onClick = {
+                selectedColorTheme = key
+                viewModel.updateSetting("UI_COLOR_THEME", key)
+              },
+              shape = RoundedCornerShape(8.dp),
+              color = color,
+              border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFDE047)) else null,
+              modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                if (isSelected) {
+                  Icon(Icons.Default.Save, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+              }
+            }
+          }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = "Active Theme: ${palettes.find { it.first == selectedColorTheme }?.second ?: "Royal Navy"}",
+          fontSize = 11.sp,
+          color = EblNavyPrimary,
+          fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 2. Font Style / Typography Preset
+        Text("Typography & Font Style:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val fontOptions = listOf(
+          Pair("DEFAULT_SANS", "Clean Modern Sans"),
+          Pair("EXECUTIVE_SERIF", "Executive Formal"),
+          Pair("TECHNICAL_MONO", "Technical Dense")
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          fontOptions.forEach { (key, label) ->
+            val isSelected = selectedFontStyle == key
+            androidx.compose.material3.FilterChip(
+              selected = isSelected,
+              onClick = {
+                selectedFontStyle = key
+                viewModel.updateSetting("UI_FONT_STYLE", key)
+              },
+              label = { Text(label, fontSize = 10.sp) },
+              modifier = Modifier.weight(1f)
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 3. UI Text Scale / Font Size
+        Text("UI Text Reading Scale:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val scaleOptions = listOf(
+          Pair("COMPACT", "Compact (90%)"),
+          Pair("STANDARD", "Standard (100%)"),
+          Pair("COMFORTABLE", "Comfortable (115%)")
+        )
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          scaleOptions.forEach { (key, label) ->
+            val isSelected = selectedTextScale == key
+            androidx.compose.material3.FilterChip(
+              selected = isSelected,
+              onClick = {
+                selectedTextScale = key
+                viewModel.updateSetting("UI_TEXT_SCALE", key)
+              },
+              label = { Text(label, fontSize = 10.sp) },
+              modifier = Modifier.weight(1f)
+            )
+          }
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
     // Week Start & Timezone
     Card(
       modifier = Modifier.fillMaxWidth(),

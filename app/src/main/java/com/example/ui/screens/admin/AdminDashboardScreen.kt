@@ -136,14 +136,14 @@ fun AdminDashboardScreen(
             }
 
             OutlinedButton(
-              onClick = { onNavigate(Screen.GoogleSheetsSync) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+              onClick = { onNavigate(Screen.RmMapping) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFDE047)),
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_sync")
+              modifier = Modifier.weight(1f).testTag("admin_nav_add_rm")
             ) {
-              Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(14.dp))
+              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Sheets Sync", fontSize = 11.sp)
+              Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
         }

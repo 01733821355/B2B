@@ -310,9 +310,24 @@ fun EblMainApp(viewModel: AppViewModel) {
           }
 
           is Screen.GoogleSheetsSync -> {
-            GoogleSheetsSyncScreen(
-              viewModel = viewModel
-            )
+            if (currentUser?.role == "MENTOR") {
+              GoogleSheetsSyncScreen(
+                viewModel = viewModel
+              )
+            } else {
+              Box(
+                modifier = Modifier
+                  .fillMaxSize()
+                  .padding(32.dp),
+                contentAlignment = Alignment.Center
+              ) {
+                Text(
+                  text = "Access Restricted: Google Sheets Sync is exclusively managed by the Operations Mentor.",
+                  color = Color.Gray,
+                  fontSize = 13.sp
+                )
+              }
+            }
           }
 
           is Screen.AuditLogs -> {
@@ -362,116 +377,108 @@ fun EblBottomNav(
 ) {
   NavigationBar(
     containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 8.dp
+    tonalElevation = 2.dp,
+    modifier = Modifier.height(58.dp)
   ) {
     if (userRole == "RM") {
       NavigationBarItem(
         selected = currentScreen is Screen.RmDashboard,
         onClick = { onSelectScreen(Screen.RmDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-        label = { Text("Dashboard", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", modifier = Modifier.size(20.dp)) },
+        label = { Text("Dashboard", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
         onClick = { onSelectScreen(Screen.CustomerForm(null)) },
-        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File") },
-        label = { Text("New File", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
+        label = { Text("New File", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.CustomerList,
         onClick = { onSelectScreen(Screen.CustomerList) },
-        icon = { Icon(Icons.Default.Folder, contentDescription = "My Files") },
-        label = { Text("My Files", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Folder, contentDescription = "My Files", modifier = Modifier.size(20.dp)) },
+        label = { Text("My Files", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.Reports,
         onClick = { onSelectScreen(Screen.Reports) },
-        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports") },
-        label = { Text("Reports", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports", modifier = Modifier.size(20.dp)) },
+        label = { Text("Reports", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     } else if (userRole == "ADMIN") {
       NavigationBarItem(
         selected = currentScreen is Screen.AdminDashboard,
         onClick = { onSelectScreen(Screen.AdminDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
-        label = { Text("Dashboard", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", modifier = Modifier.size(20.dp)) },
+        label = { Text("Dashboard", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.GlobalDatabase,
         onClick = { onSelectScreen(Screen.GlobalDatabase) },
-        icon = { Icon(Icons.Default.Storage, contentDescription = "Database") },
-        label = { Text("Database", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
+        label = { Text("Database", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.RmMapping,
         onClick = { onSelectScreen(Screen.RmMapping) },
-        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping") },
-        label = { Text("RM Mapping", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping", modifier = Modifier.size(20.dp)) },
+        label = { Text("RM Mapping", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
-        selected = currentScreen is Screen.GoogleSheetsSync,
-        onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
-        icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
-        label = { Text("Sheets", fontSize = 10.sp) },
+        selected = currentScreen is Screen.Reports,
+        onClick = { onSelectScreen(Screen.Reports) },
+        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports", modifier = Modifier.size(20.dp)) },
+        label = { Text("Reports", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.AppSettings,
         onClick = { onSelectScreen(Screen.AppSettings) },
-        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings") },
-        label = { Text("Settings", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp)) },
+        label = { Text("Settings", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     } else { // MENTOR
       NavigationBarItem(
         selected = currentScreen is Screen.MentorDashboard,
         onClick = { onSelectScreen(Screen.MentorDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Console") },
-        label = { Text("Console", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Console", modifier = Modifier.size(20.dp)) },
+        label = { Text("Console", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.GlobalDatabase,
         onClick = { onSelectScreen(Screen.GlobalDatabase) },
-        icon = { Icon(Icons.Default.Storage, contentDescription = "Database") },
-        label = { Text("Database", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
+        label = { Text("Database", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.RmMapping,
         onClick = { onSelectScreen(Screen.RmMapping) },
-        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping") },
-        label = { Text("RM Mapping", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping", modifier = Modifier.size(20.dp)) },
+        label = { Text("RM Mapping", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
-      if (userRole == "MENTOR") {
-        NavigationBarItem(
-          selected = currentScreen is Screen.MentorUserLocationTracking,
-          onClick = { onSelectScreen(Screen.MentorUserLocationTracking) },
-          icon = { Icon(Icons.Default.LocationOn, contentDescription = "Locations") },
-          label = { Text("Locations", fontSize = 10.sp) },
-          colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-        )
-      }
       NavigationBarItem(
-        selected = currentScreen is Screen.AuditLogs,
-        onClick = { onSelectScreen(Screen.AuditLogs) },
-        icon = { Icon(Icons.Default.History, contentDescription = "Audit") },
-        label = { Text("Audit", fontSize = 10.sp) },
+        selected = currentScreen is Screen.MentorUserLocationTracking,
+        onClick = { onSelectScreen(Screen.MentorUserLocationTracking) },
+        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Locations", modifier = Modifier.size(20.dp)) },
+        label = { Text("Locations", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
         selected = currentScreen is Screen.GoogleSheetsSync,
         onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
-        icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
-        label = { Text("Sheets", fontSize = 10.sp) },
+        icon = { Icon(Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(20.dp)) },
+        label = { Text("Sheets", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     }
@@ -538,19 +545,13 @@ fun EblNavigationRail(
         icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports") },
         label = { Text("Reports") }
       )
-      NavigationRailItem(
-        selected = currentScreen is Screen.GoogleSheetsSync,
-        onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
-        icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
-        label = { Text("Sync") }
-      )
-      NavigationRailItem(
-        selected = currentScreen is Screen.AuditLogs,
-        onClick = { onSelectScreen(Screen.AuditLogs) },
-        icon = { Icon(Icons.Default.History, contentDescription = "Audit") },
-        label = { Text("Audit") }
-      )
       if (userRole == "MENTOR") {
+        NavigationRailItem(
+          selected = currentScreen is Screen.GoogleSheetsSync,
+          onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
+          icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
+          label = { Text("Sync") }
+        )
         NavigationRailItem(
           selected = currentScreen is Screen.MentorUserLocationTracking,
           onClick = { onSelectScreen(Screen.MentorUserLocationTracking) },

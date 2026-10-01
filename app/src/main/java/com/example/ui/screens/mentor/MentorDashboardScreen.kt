@@ -129,7 +129,7 @@ fun MentorDashboardScreen(
           // Operational Quick Action Buttons
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
             OutlinedButton(
               onClick = { onNavigate(Screen.GlobalDatabase) },
@@ -137,9 +137,9 @@ fun MentorDashboardScreen(
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.weight(1f).testTag("mentor_btn_database")
             ) {
-              Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Database", fontSize = 11.sp)
+              Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(12.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("Database", fontSize = 10.sp)
             }
 
             OutlinedButton(
@@ -148,20 +148,9 @@ fun MentorDashboardScreen(
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.weight(1f).testTag("mentor_btn_rm_mapping")
             ) {
-              Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("RM Mapping", fontSize = 11.sp)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.AuditLogs) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_audit_logs")
-            ) {
-              Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Audit", fontSize = 11.sp)
+              Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(12.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("RMs", fontSize = 10.sp)
             }
 
             OutlinedButton(
@@ -170,9 +159,135 @@ fun MentorDashboardScreen(
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.weight(1f).testTag("mentor_btn_user_locations")
             ) {
-              Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Locations", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(12.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("Radar", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+
+            OutlinedButton(
+              onClick = { onNavigate(Screen.GoogleSheetsSync) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF34D399)),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.weight(1f).testTag("mentor_btn_sheets_sync")
+            ) {
+              Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(12.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("Sheets", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      }
+    }
+
+    // Pending RM Approvals Alert Banner (Only for Mentor)
+    val pendingRms = allRms.filter { it.accountStatus == "PENDING_APPROVAL" }
+    if (pendingRms.isNotEmpty()) {
+      item {
+        Card(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))
+        ) {
+          Row(
+            modifier = Modifier.padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+              Icon(Icons.Default.Group, contentDescription = null, tint = Color(0xFFB45309))
+              Spacer(modifier = Modifier.width(8.dp))
+              Column {
+                Text(
+                  text = "${pendingRms.size} RM Assigned - Pending Approval",
+                  fontSize = 13.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF92400E)
+                )
+                Text(
+                  text = "Assigned by Admin • Requires Mentor authorization",
+                  fontSize = 10.sp,
+                  color = Color(0xFFB45309)
+                )
+              }
+            }
+            Button(
+              onClick = { onNavigate(Screen.RmMapping) },
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFB45309)),
+              shape = RoundedCornerShape(6.dp)
+            ) {
+              Text("Approve", fontSize = 11.sp)
+            }
+          }
+        }
+      }
+    }
+
+    // Google Sheets Auto-Sync Card (EXCLUSIVE TO MENTOR)
+    item {
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp)
+          .clickable { onNavigate(Screen.GoogleSheetsSync) }
+          .testTag("mentor_card_sheets_sync"),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Row(
+          modifier = Modifier.padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(42.dp)
+                .background(Color(0xFF064E3B), RoundedCornerShape(10.dp)),
+              contentAlignment = Alignment.Center
+            ) {
+              Icon(
+                imageVector = Icons.Default.Sync,
+                contentDescription = null,
+                tint = Color(0xFF34D399),
+                modifier = Modifier.size(22.dp)
+              )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                  text = "Google Sheets Auto-Sync Console",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                  color = Color(0xFF10B981).copy(alpha = 0.15f),
+                  shape = RoundedCornerShape(4.dp)
+                ) {
+                  Text(
+                    text = "MENTOR EXCLUSIVE",
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF059669),
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                  )
+                }
+              }
+              Spacer(modifier = Modifier.height(2.dp))
+              Text(
+                text = "Auto-create tabs, formatted headers, and real-time data sync.",
+                fontSize = 11.sp,
+                color = Color.Gray
+              )
             }
           }
         }

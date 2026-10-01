@@ -138,7 +138,7 @@ fun RmMappingScreen(
           ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Assign RM", fontSize = 12.sp)
+            Text("+ Add New RM", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
         }
       }

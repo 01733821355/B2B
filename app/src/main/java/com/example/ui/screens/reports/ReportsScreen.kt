@@ -57,9 +57,12 @@ import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.TimeFilterBar
 import com.example.ui.theme.EblNavyDark
+import androidx.compose.ui.platform.LocalContext
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.AppViewModel
 import com.example.util.DateUtils
+import com.example.util.PdfReportGenerator
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,9 +75,11 @@ fun ReportsScreen(
   val selectedTimeFilter by viewModel.selectedTimeFilter.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val selectedRmCode by viewModel.selectedRmCodeFilter.collectAsState()
+  val appCustomName by viewModel.appCustomName.collectAsState()
+  val context = LocalContext.current
 
-  var showExportDialog by remember { mutableStateOf(false) }
-  var exportedCsvContent by remember { mutableStateOf("") }
+  var generatedPdfFile by remember { mutableStateOf<File?>(null) }
+  var showPdfSuccessDialog by remember { mutableStateOf(false) }
   var showPrintPreviewDialog by remember { mutableStateOf(false) }
 
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
@@ -119,16 +124,23 @@ fun ReportsScreen(
 
         Button(
           onClick = {
-            exportedCsvContent = viewModel.eblRepository.generateCustomerFilesCsv(files, !isPrivileged)
-            showExportDialog = true
+            val pdf = PdfReportGenerator.generatePdfReport(
+              context = context,
+              files = files,
+              currentUser = currentUser,
+              periodLabel = selectedTimeFilter.label,
+              customAppName = appCustomName
+            )
+            generatedPdfFile = pdf
+            showPdfSuccessDialog = true
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.testTag("btn_export_csv_report")
+          modifier = Modifier.testTag("btn_export_pdf_report")
         ) {
           Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("CSV", fontSize = 11.sp)
+          Text("Export PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
       }
     }
@@ -243,30 +255,32 @@ fun ReportsScreen(
     }
   }
 
-  // Export CSV Dialog
-  if (showExportDialog) {
+  // PDF Generated Success Dialog
+  if (showPdfSuccessDialog && generatedPdfFile != null) {
     AlertDialog(
-      onDismissRequest = { showExportDialog = false },
-      title = { Text("Exported Report (CSV)", fontWeight = FontWeight.Bold) },
+      onDismissRequest = { showPdfSuccessDialog = false },
+      title = { Text("PDF Report Generated", fontWeight = FontWeight.Bold) },
       text = {
         Column {
-          Text("Sensitive authentication passwords and internal tokens were securely excluded.", fontSize = 11.sp, color = Color.Gray)
-          Spacer(modifier = Modifier.height(8.dp))
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(240.dp)
-              .background(Color(0xFFF8FAFC), RoundedCornerShape(8.dp))
-              .padding(10.dp)
-              .verticalScroll(rememberScrollState())
-          ) {
-            Text(exportedCsvContent, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
-          }
+          Text("Formal Executive PDF report has been generated successfully.", fontSize = 12.sp)
+          Spacer(modifier = Modifier.height(6.dp))
+          Text("File: ${generatedPdfFile!!.name} (${generatedPdfFile!!.length() / 1024} KB)", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          Text("Ready to share via WhatsApp, Gmail, or open in PDF viewer.", fontSize = 11.sp, color = EblNavyPrimary)
         }
       },
       confirmButton = {
-        Button(onClick = { showExportDialog = false }) {
-          Text("Close")
+        Button(
+          onClick = {
+            PdfReportGenerator.shareOrViewPdf(context, generatedPdfFile!!)
+          }
+        ) {
+          Text("Open / Share PDF")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showPdfSuccessDialog = false }) {
+          Text("Done")
         }
       }
     )
