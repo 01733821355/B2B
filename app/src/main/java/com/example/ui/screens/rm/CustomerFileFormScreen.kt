@@ -109,6 +109,7 @@ fun CustomerFileFormScreen(
   var isLoaded by remember { mutableStateOf(editFileId == null) }
 
   // Form Fields
+  var errorMessage by remember { mutableStateOf<String?>(null) }
   var fileId by remember { mutableStateOf(editFileId ?: SecurityUtils.generateFileId(currentUser.rmCode)) }
   var customerName by remember { mutableStateOf("") }
   var companyName by remember { mutableStateOf("") }
@@ -218,7 +219,6 @@ fun CustomerFileFormScreen(
   var showAddAttachmentDialog by remember { mutableStateOf(false) }
   var previewAttachment by remember { mutableStateOf<FileAttachmentEntity?>(null) }
 
-  var errorMessage by remember { mutableStateOf<String?>(null) }
   var isSaving by remember { mutableStateOf(false) }
 
   // Load existing file data if editing
@@ -1027,7 +1027,7 @@ fun CustomerFileFormScreen(
               .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center
           ) {
-            Column(horizontalAlignment = Alignment.CenterVertically) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
               Icon(
                 imageVector = if (previewAttachment!!.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
                 contentDescription = null,

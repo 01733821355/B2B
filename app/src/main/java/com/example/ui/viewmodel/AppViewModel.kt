@@ -570,23 +570,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun updateAppsScriptConfig(url: String, secretKey: String, onResult: (Boolean, String?) -> Unit) {
+  fun triggerGoogleSheetsSync(onResult: (Boolean, String?) -> Unit) {
     viewModelScope.launch {
-      val res = eblRepository.updateAppsScriptConfig(url, secretKey)
-      res.onSuccess {
-        _uiMessage.emit("Google Sheets connector config saved.")
-        onResult(true, null)
+      val res = eblRepository.triggerGoogleSheetsSync()
+      res.onSuccess { msg ->
+        _uiMessage.emit(msg)
+        onResult(true, msg)
       }.onFailure { err ->
+        _uiMessage.emit("Sync Error: ${err.message}")
         onResult(false, err.message)
       }
     }
   }
 
-  fun setAppCustomName(name: String, onResult: (Boolean, String?) -> Unit) {
+  fun updateAppsScriptConfig(url: String, secretKey: String, onResult: (Boolean, String?) -> Unit) {
     viewModelScope.launch {
-      val res = eblRepository.setAppCustomName(name)
+      val res = eblRepository.updateAppsScriptConfig(url, secretKey)
       res.onSuccess {
-        _uiMessage.emit("Universal App Name updated to '$name'.")
+        _uiMessage.emit("Google Sheets connector config saved.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)

@@ -48,6 +48,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import com.example.ui.common.VoiceInputField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -247,7 +248,7 @@ fun CustomerFileListScreen(
           .padding(32.dp),
         contentAlignment = Alignment.Center
       ) {
-        Column(horizontalAlignment = Alignment.CenterVertically) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
           Text("No customer records match your filter criteria.", color = Color.Gray, fontSize = 14.sp)
           Spacer(modifier = Modifier.height(10.dp))
           OutlinedButton(onClick = { viewModel.resetFilters() }) {

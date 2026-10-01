@@ -149,7 +149,7 @@ fun LoginScreen(
         .fillMaxSize()
         .verticalScroll(scrollState)
         .padding(horizontal = 24.dp, vertical = 32.dp),
-      horizontalAlignment = Alignment.CenterVertically,
+      horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center
     ) {
       // Golden Brand Logo Icon
