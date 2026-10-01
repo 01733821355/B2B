@@ -1,0 +1,979 @@
+package com.example.data.repository
+
+import android.content.Context
+import com.example.data.database.AppDatabase
+import com.example.data.model.AppSettingEntity
+import com.example.data.model.AuditLogEntity
+import com.example.data.model.CustomerFileEntity
+import com.example.data.model.FileAttachmentEntity
+import com.example.data.model.SyncStatusEntity
+import com.example.data.model.UserEntity
+import com.example.util.DateUtils
+import com.example.util.NotificationHelper
+import com.example.util.SecurityUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
+
+class EblRepository(
+  private val database: AppDatabase,
+  private val authRepository: AuthRepository,
+  private val context: Context? = null
+) {
+  private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+  private val httpClient = OkHttpClient.Builder()
+    .connectTimeout(15, TimeUnit.SECONDS)
+    .readTimeout(20, TimeUnit.SECONDS)
+    .build()
+
+  // 1. Customer Files Access Control
+  fun getAuthorizedFilesFlow(): Flow<List<CustomerFileEntity>> {
+    val currentUser = authRepository.currentUser.value ?: return emptyFlow()
+    return if (currentUser.role == "RM") {
+      database.customerFileDao().getFilesForRmFlow(currentUser.rmCode)
+    } else {
+      database.customerFileDao().getAllActiveFilesFlow()
+    }
+  }
+
+  fun getAllFilesIncludingDeletedFlow(): Flow<List<CustomerFileEntity>> {
+    val currentUser = authRepository.currentUser.value ?: return emptyFlow()
+    return if (currentUser.role == "MENTOR") {
+      database.customerFileDao().getAllFilesIncludingDeletedFlow()
+    } else {
+      getAuthorizedFilesFlow()
+    }
+  }
+
+  fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?> {
+    return database.customerFileDao().getFileByIdFlow(fileId)
+  }
+
+  suspend fun getFileById(fileId: String): CustomerFileEntity? = withContext(Dispatchers.IO) {
+    database.customerFileDao().getFileById(fileId)
+  }
+
+  suspend fun saveCustomerFile(
+    fileId: String?,
+    customerName: String,
+    companyName: String,
+    officeAddress: String,
+    mobile: String,
+    altMobile: String,
+    email: String,
+    productType: String,
+    applicationStatus: String,
+    activeStatus: String,
+    assignedRmCode: String,
+    ccNumber: String = "",
+    pendingDocuments: List<String>,
+    remarks: String,
+    cpvStatus: String,
+    cpvDate: String,
+    cpvAddress: String,
+    cpvRemarks: String,
+    cpvPhotoUri: String = "",
+    cpvSupportingDocUri: String = "",
+    submissionLatitude: Double? = null,
+    submissionLongitude: Double? = null,
+    submissionAddress: String? = null
+  ): Result<CustomerFileEntity> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+
+    // RM can only save their own RM code
+    val resolvedRmCode = if (currentUser.role == "RM") {
+      currentUser.rmCode
+    } else {
+      assignedRmCode.ifBlank { currentUser.rmCode }
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    val isNew = fileId.isNullOrBlank()
+
+    val targetFileId = if (isNew) {
+      SecurityUtils.generateFileId(resolvedRmCode)
+    } else {
+      fileId!!
+    }
+
+    val existing = if (!isNew) database.customerFileDao().getFileById(targetFileId) else null
+
+    // Check authorization for edit
+    if (existing != null && currentUser.role == "RM" && existing.assignedRmCode != currentUser.rmCode) {
+      return@withContext Result.failure(Exception("You do not have permission to modify this record."))
+    }
+
+    val createdTimestamp = existing?.createdAt ?: now
+    val createdBy = existing?.createdBy ?: currentUser.rmCode
+    val submittedAt = if (applicationStatus.equals("Submitted", ignoreCase = true)) {
+      existing?.submittedAt ?: now
+    } else existing?.submittedAt
+
+    val approvedAt = if (applicationStatus.equals("Approved", ignoreCase = true)) {
+      existing?.approvedAt ?: now
+    } else existing?.approvedAt
+
+    val pendingDocsJoined = pendingDocuments.joinToString(",")
+
+    val resolvedSubmissionLat = submissionLatitude ?: existing?.submissionLatitude
+    val resolvedSubmissionLng = submissionLongitude ?: existing?.submissionLongitude
+    val resolvedSubmissionAddr = submissionAddress ?: existing?.submissionAddress
+
+    val entity = CustomerFileEntity(
+      fileId = targetFileId,
+      customerName = customerName.trim(),
+      companyName = companyName.trim(),
+      officeAddress = officeAddress.trim(),
+      mobile = mobile.trim(),
+      altMobile = altMobile.trim(),
+      email = email.trim(),
+      productType = productType,
+      applicationStatus = applicationStatus,
+      activeStatus = activeStatus,
+      assignedRmCode = resolvedRmCode,
+      ccNumber = ccNumber.trim(),
+      pendingDocuments = pendingDocsJoined,
+      remarks = remarks.trim(),
+      cpvStatus = cpvStatus,
+      cpvDate = cpvDate,
+      cpvAddress = cpvAddress.trim(),
+      cpvRemarks = cpvRemarks.trim(),
+      cpvPhotoUri = cpvPhotoUri.ifBlank { existing?.cpvPhotoUri ?: "" },
+      cpvSupportingDocUri = cpvSupportingDocUri.ifBlank { existing?.cpvSupportingDocUri ?: "" },
+      cpvLastUpdatedBy = currentUser.rmCode,
+      submissionLatitude = resolvedSubmissionLat,
+      submissionLongitude = resolvedSubmissionLng,
+      submissionAddress = resolvedSubmissionAddr,
+      createdAt = createdTimestamp,
+      updatedAt = now,
+      submittedAt = submittedAt,
+      approvedAt = approvedAt,
+      createdBy = createdBy,
+      updatedBy = currentUser.rmCode,
+      isDeleted = false,
+      isSynced = false
+    )
+
+    if (isNew || existing == null) {
+      database.customerFileDao().insertFile(entity)
+      database.auditLogDao().insertLog(
+        AuditLogEntity(
+          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+          userId = currentUser.rmCode,
+          role = currentUser.role,
+          action = "FILE_CREATE",
+          fileId = targetFileId,
+          rmCode = resolvedRmCode,
+          timestamp = now,
+          details = "Created customer file for '$customerName' ($productType, CC: ${ccNumber.ifBlank { "N/A" }})."
+        )
+      )
+    } else {
+      database.customerFileDao().updateFile(entity)
+      database.auditLogDao().insertLog(
+        AuditLogEntity(
+          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+          userId = currentUser.rmCode,
+          role = currentUser.role,
+          action = "FILE_UPDATE",
+          fileId = targetFileId,
+          rmCode = resolvedRmCode,
+          timestamp = now,
+          details = "Updated customer file ($applicationStatus, Active: $activeStatus, CC: ${ccNumber.ifBlank { "N/A" }})."
+        )
+      )
+
+      // Notify RM if updated by Admin or Mentor
+      if ((currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && existing.assignedRmCode != currentUser.rmCode) {
+        val changedItems = mutableListOf<String>()
+        if (existing.applicationStatus != applicationStatus) changedItems.add("Status -> $applicationStatus")
+        if (existing.activeStatus != activeStatus) changedItems.add("Active -> $activeStatus")
+        if (existing.remarks != remarks.trim()) changedItems.add("Remarks updated")
+        if (existing.cpvStatus != cpvStatus) changedItems.add("CPV -> $cpvStatus")
+        if (existing.ccNumber != ccNumber.trim()) changedItems.add("CC Number -> $ccNumber")
+        if (changedItems.isEmpty()) changedItems.add("File details modified by ${currentUser.role}")
+
+        val changeDetailsStr = changedItems.joinToString(", ")
+        context?.let { ctx ->
+          NotificationHelper.sendRmFileUpdateNotification(
+            context = ctx,
+            targetRmCode = resolvedRmCode,
+            ccNumber = ccNumber.ifBlank { existing.ccNumber.ifBlank { targetFileId } },
+            customerName = customerName,
+            changeDetails = changeDetailsStr,
+            updatedByRole = currentUser.role
+          )
+        }
+      }
+    }
+
+    // Auto-record location log if GPS coordinates are captured
+    if (resolvedSubmissionLat != null && resolvedSubmissionLng != null) {
+      database.userLocationLogDao().insertLocationLog(
+        com.example.data.model.UserLocationLogEntity(
+          rmCode = resolvedRmCode,
+          userName = currentUser.name,
+          latitude = resolvedSubmissionLat,
+          longitude = resolvedSubmissionLng,
+          address = resolvedSubmissionAddr ?: "Auto-Captured via File Entry",
+          sourceAction = "CUSTOMER_FILE_ENTRY",
+          timestamp = now
+        )
+      )
+      database.userDao().updateLocation(
+        rmCode = resolvedRmCode,
+        lat = resolvedSubmissionLat,
+        lng = resolvedSubmissionLng,
+        address = resolvedSubmissionAddr ?: "Auto-Captured via File Entry",
+        time = now
+      )
+    }
+
+    updatePendingSyncCount()
+
+    // Automatically trigger real-time Google Sheets sync in background
+    applicationScope.launch {
+      triggerGoogleSheetsSync()
+    }
+
+    Result.success(entity)
+  }
+
+  suspend fun softDeleteCustomerFile(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    val file = database.customerFileDao().getFileById(fileId)
+      ?: return@withContext Result.failure(Exception("File not found."))
+
+    if (currentUser.role == "RM" && file.assignedRmCode != currentUser.rmCode) {
+      return@withContext Result.failure(Exception("Unauthorized to delete this record."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    database.customerFileDao().softDeleteFile(fileId, currentUser.rmCode, now)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "FILE_DELETE",
+        fileId = fileId,
+        rmCode = file.assignedRmCode,
+        timestamp = now,
+        details = "Soft-deleted customer file '${file.customerName}' ($fileId)."
+      )
+    )
+
+    updatePendingSyncCount()
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  suspend fun restoreCustomerFile(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin or Mentor can restore deleted files."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    database.customerFileDao().restoreFile(fileId, currentUser.rmCode, now)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "FILE_RESTORE",
+        fileId = fileId,
+        rmCode = null,
+        timestamp = now,
+        details = "Restored previously soft-deleted customer file $fileId."
+      )
+    )
+
+    updatePendingSyncCount()
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  suspend fun permanentDeleteCustomerFile(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Permanent deletion restricted strictly to Mentor role."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    database.customerFileDao().permanentDeleteFile(fileId)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "FILE_PERMANENT_DELETE",
+        fileId = fileId,
+        rmCode = null,
+        timestamp = now,
+        details = "Permanently expunged record $fileId by Mentor."
+      )
+    )
+
+    updatePendingSyncCount()
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  // 2. Attachments
+  fun getAttachmentsForFileFlow(fileId: String): Flow<List<FileAttachmentEntity>> {
+    return database.fileAttachmentDao().getAttachmentsForFileFlow(fileId)
+  }
+
+  suspend fun addAttachment(
+    fileId: String,
+    category: String,
+    fileName: String,
+    fileType: String,
+    fileSizeBytes: Long,
+    fileUri: String
+  ): Result<FileAttachmentEntity> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    val attachmentId = "ATT-${SecurityUtils.generateUniqueId().take(8)}"
+    val now = DateUtils.currentDhakaMillis()
+
+    val attachment = FileAttachmentEntity(
+      attachmentId = attachmentId,
+      fileId = fileId,
+      category = category,
+      fileName = fileName,
+      fileType = fileType,
+      storagePath = "files/${currentUser.rmCode}/$fileId/$fileName",
+      fileUri = fileUri,
+      fileSizeBytes = fileSizeBytes,
+      uploadedBy = currentUser.rmCode,
+      uploadedAt = now
+    )
+
+    database.fileAttachmentDao().insertAttachment(attachment)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "FILE_ATTACHMENT_UPLOAD",
+        fileId = fileId,
+        rmCode = if (currentUser.role == "RM") currentUser.rmCode else null,
+        timestamp = now,
+        details = "Uploaded attachment '$fileName' ($category) for $fileId."
+      )
+    )
+
+    Result.success(attachment)
+  }
+
+  suspend fun deleteAttachment(attachmentId: String, fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    database.fileAttachmentDao().deleteAttachment(attachmentId)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "FILE_ATTACHMENT_DELETE",
+        fileId = fileId,
+        rmCode = if (currentUser.role == "RM") currentUser.rmCode else null,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Removed attachment $attachmentId from $fileId."
+      )
+    )
+    Result.success(Unit)
+  }
+
+  // 3. RM Management (Admin / Mentor only)
+  fun getAllRmsFlow(): Flow<List<UserEntity>> {
+    return database.userDao().getAllRmsFlow()
+  }
+
+  suspend fun createRm(
+    rmCode: String,
+    name: String,
+    mobile: String,
+    email: String,
+    officeAddress: String,
+    initialPassword: String
+  ): Result<UserEntity> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN") {
+      return@withContext Result.failure(Exception("Only Admin can assign new RM accounts. Mentor approves or edits."))
+    }
+
+    val cleanRmCode = rmCode.trim()
+    if (database.userDao().getUser(cleanRmCode) != null) {
+      return@withContext Result.failure(Exception("RM Code '$cleanRmCode' is already assigned to an existing account."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    val salt = SecurityUtils.generateSalt()
+    val hash = SecurityUtils.hashPassword(initialPassword.trim(), salt)
+
+    val newUser = UserEntity(
+      rmCode = cleanRmCode,
+      name = name.trim(),
+      role = "RM",
+      passwordHash = hash,
+      salt = salt,
+      mobile = mobile.trim(),
+      email = email.trim(),
+      officeAddress = officeAddress.trim(),
+      accountStatus = "PENDING_APPROVAL",
+      mustChangePassword = true,
+      createdAt = now,
+      authUid = "AUTH_RM_$cleanRmCode"
+    )
+
+    database.userDao().insertUser(newUser)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_ASSIGN_PENDING",
+        rmCode = cleanRmCode,
+        timestamp = now,
+        details = "Admin assigned RM account for ${name.trim()} (Code: $cleanRmCode). Status: PENDING_APPROVAL."
+      )
+    )
+
+    // Notify Mentor that a new RM assignment is pending for approval
+    context?.let { ctx ->
+      NotificationHelper.sendNewRmApprovalNotification(ctx, name.trim(), cleanRmCode)
+    }
+
+    Result.success(newUser)
+  }
+
+  suspend fun updateRm(
+    rmCode: String,
+    name: String,
+    mobile: String,
+    email: String,
+    officeAddress: String
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied."))
+    }
+
+    val existing = database.userDao().getUser(rmCode)
+      ?: return@withContext Result.failure(Exception("RM user not found."))
+
+    // If Admin edits RM, it requires Mentor's re-approval
+    val targetStatus = if (currentUser.role == "ADMIN") "PENDING_APPROVAL" else existing.accountStatus
+
+    val updated = existing.copy(
+      name = name.trim(),
+      mobile = mobile.trim(),
+      email = email.trim(),
+      officeAddress = officeAddress.trim(),
+      accountStatus = targetStatus
+    )
+
+    database.userDao().updateUser(updated)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_UPDATE",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Updated profile for RM $rmCode (Status: $targetStatus)."
+      )
+    )
+
+    if (currentUser.role == "ADMIN") {
+      context?.let { ctx ->
+        NotificationHelper.sendNewRmApprovalNotification(ctx, name.trim(), rmCode)
+      }
+    }
+
+    // Only the RM whose data was updated receives the notification with unique sound
+    context?.let { ctx ->
+      NotificationHelper.sendRmProfileUpdateNotification(
+        context = ctx,
+        targetRmCode = rmCode,
+        rmName = name.trim(),
+        updatedByRole = currentUser.role,
+        details = "Profile details updated by ${currentUser.role}"
+      )
+    }
+
+    Result.success(Unit)
+  }
+
+  suspend fun approveRm(rmCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Mentor can approve RM accounts."))
+    }
+    val existing = database.userDao().getUser(rmCode)
+      ?: return@withContext Result.failure(Exception("RM not found."))
+    database.userDao().updateStatus(rmCode, "ACTIVE")
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_APPROVE",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Mentor approved RM account $rmCode (${existing.name})."
+      )
+    )
+
+    // Notify approved RM that they can now log in
+    context?.let { ctx ->
+      NotificationHelper.sendRmProfileUpdateNotification(
+        context = ctx,
+        targetRmCode = rmCode,
+        rmName = existing.name,
+        updatedByRole = "Mentor",
+        details = "Your RM account has been approved! You can now log in."
+      )
+    }
+
+    Result.success(Unit)
+  }
+
+  suspend fun rejectRm(rmCode: String, reason: String = ""): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Mentor can reject RM accounts."))
+    }
+    database.userDao().updateStatus(rmCode, "INACTIVE")
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_REJECT",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Mentor rejected RM account $rmCode. Reason: ${reason.ifBlank { "Not specified" }}."
+      )
+    )
+    Result.success(Unit)
+  }
+
+  fun getAppCustomNameFlow(): Flow<String> {
+    return database.appSettingDao().getAllSettingsFlow().map { settings ->
+      settings.find { it.settingKey == "app_custom_name" }?.settingValue ?: "RM File Management Suite"
+    }
+  }
+
+  suspend fun setAppCustomName(name: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Mentor can configure the universal app name."))
+    }
+    val cleanName = name.trim().ifBlank { "RM File Management Suite" }
+    val setting = AppSettingEntity(
+      settingKey = "app_custom_name",
+      settingValue = cleanName,
+      updatedBy = currentUser.rmCode,
+      updatedAt = DateUtils.currentDhakaMillis()
+    )
+    database.appSettingDao().insertOrUpdateSetting(setting)
+    Result.success(Unit)
+  }
+
+  suspend fun setRmStatus(rmCode: String, newStatus: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied."))
+    }
+
+    database.userDao().updateStatus(rmCode, newStatus)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_STATUS_CHANGE",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Changed RM $rmCode status to $newStatus."
+      )
+    )
+
+    Result.success(Unit)
+  }
+
+  suspend fun resetRmPassword(rmCode: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied."))
+    }
+
+    val salt = SecurityUtils.generateSalt()
+    val hash = SecurityUtils.hashPassword(newPassword.trim(), salt)
+    database.userDao().updatePassword(rmCode, hash, salt, mustChange = true)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "PASSWORD_RESET",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Admin reset password for RM $rmCode (Must change on next login)."
+      )
+    )
+
+    Result.success(Unit)
+  }
+
+  // 4. Audit Logs
+  fun getAuditLogsFlow(): Flow<List<AuditLogEntity>> {
+    val currentUser = authRepository.currentUser.value ?: return emptyFlow()
+    return if (currentUser.role == "RM") {
+      database.auditLogDao().getLogsForRmFlow(currentUser.rmCode)
+    } else {
+      database.auditLogDao().getAllLogsFlow()
+    }
+  }
+
+  // 5. Settings
+  fun getAppSettingsFlow(): Flow<List<AppSettingEntity>> {
+    return database.appSettingDao().getAllSettingsFlow()
+  }
+
+  suspend fun updateAppSetting(key: String, value: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied: settings can only be altered by Admin or Mentor."))
+    }
+
+    val setting = AppSettingEntity(
+      settingKey = key,
+      settingValue = value,
+      updatedBy = currentUser.rmCode,
+      updatedAt = DateUtils.currentDhakaMillis()
+    )
+    database.appSettingDao().insertOrUpdateSetting(setting)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "APP_SETTING_CHANGE",
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "Updated setting '$key'."
+      )
+    )
+    Result.success(Unit)
+  }
+
+  // 6. Google Sheets Synchronization
+  fun getSyncStatusFlow(): Flow<SyncStatusEntity?> {
+    return database.appSettingDao().getSyncStatusFlow()
+  }
+
+  private suspend fun updatePendingSyncCount() {
+    val unsynced = database.customerFileDao().getUnsyncedFiles().size
+    val current = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    database.appSettingDao().insertOrUpdateSyncStatus(current.copy(pendingRecordsCount = unsynced))
+  }
+
+  suspend fun setGoogleSheetUrl(urlOrId: String): Result<String> = withContext(Dispatchers.IO) {
+    val clean = urlOrId.trim()
+    val match = Regex("/spreadsheets/d/([a-zA-Z0-9-_]+)").find(clean)
+    val extractedId = match?.groupValues?.get(1) ?: clean
+
+    val current = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    val updated = current.copy(
+      spreadsheetId = extractedId,
+      lastSyncMessage = "Linked to Google Sheet ($extractedId). Real-time auto-sync active."
+    )
+    database.appSettingDao().insertOrUpdateSyncStatus(updated)
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(extractedId)
+  }
+
+  suspend fun updateAppsScriptConfig(url: String, secretKey: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val current = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    val updated = current.copy(
+      appsScriptUrl = url.trim(),
+      syncSecretKey = secretKey.trim()
+    )
+    database.appSettingDao().insertOrUpdateSyncStatus(updated)
+    Result.success(Unit)
+  }
+
+  suspend fun triggerGoogleSheetsSync(): Result<String> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    database.appSettingDao().insertOrUpdateSyncStatus(
+      currentStatus.copy(
+        lastSyncStatus = "IN_PROGRESS",
+        lastSyncMessage = "Preparing payload and connecting to Google Sheets..."
+      )
+    )
+
+    try {
+      val allFiles = database.customerFileDao().getAllActiveFilesFlow()
+      val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
+      val rms = database.userDao().getAllRmsFlow()
+      val allAttachments = database.fileAttachmentDao().getAllAttachments()
+      val recentLogs = database.auditLogDao().getAllLogs()
+
+      // If an Apps Script Web App URL is provided, send real HTTP request
+      if (currentStatus.appsScriptUrl.isNotBlank() && currentStatus.appsScriptUrl.startsWith("http")) {
+        val payload = JSONObject().apply {
+          put("spreadsheetId", currentStatus.spreadsheetId)
+          put("secretKey", currentStatus.syncSecretKey)
+          put("timestamp", DateUtils.currentDhakaMillis())
+          put("syncedBy", currentUser.rmCode)
+          put("filesCount", unsyncedFiles.size)
+        }
+
+        val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+        val request = Request.Builder()
+          .url(currentStatus.appsScriptUrl)
+          .post(requestBody)
+          .build()
+
+        try {
+          httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+              throw Exception("HTTP ${response.code}: ${response.message}")
+            }
+          }
+        } catch (e: Exception) {
+          // If remote webhook call fails, report the clear error to user and record it
+          val errorMsg = "Remote sync error: ${e.message ?: "Failed to reach Apps Script endpoint"}"
+          database.appSettingDao().insertOrUpdateSyncStatus(
+            currentStatus.copy(
+              lastSyncTimestamp = DateUtils.currentDhakaMillis(),
+              lastSyncStatus = "FAILED",
+              lastSyncMessage = errorMsg,
+              pendingRecordsCount = unsyncedFiles.size
+            )
+          )
+          return@withContext Result.failure(Exception(errorMsg))
+        }
+      }
+
+      // Mark unsynced files as synced locally
+      val unsyncedIds = unsyncedFiles.map { it.fileId }
+      if (unsyncedIds.isNotEmpty()) {
+        database.customerFileDao().markFilesSynced(unsyncedIds)
+      }
+
+      val now = DateUtils.currentDhakaMillis()
+      val successMsg = "Successfully synchronized ${unsyncedIds.size} records to Spreadsheet (${currentStatus.spreadsheetId})."
+
+      database.appSettingDao().insertOrUpdateSyncStatus(
+        currentStatus.copy(
+          lastSyncTimestamp = now,
+          lastSyncStatus = "SUCCESS",
+          lastSyncMessage = successMsg,
+          pendingRecordsCount = 0
+        )
+      )
+
+      database.auditLogDao().insertLog(
+        AuditLogEntity(
+          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+          userId = currentUser.rmCode,
+          role = currentUser.role,
+          action = "SYNC_SHEETS",
+          timestamp = now,
+          details = "Google Sheets sync completed for ${unsyncedIds.size} records."
+        )
+      )
+
+      Result.success(successMsg)
+    } catch (e: Exception) {
+      val failureMsg = "Synchronization failed: ${e.message ?: "Unknown error"}"
+      database.appSettingDao().insertOrUpdateSyncStatus(
+        currentStatus.copy(
+          lastSyncTimestamp = DateUtils.currentDhakaMillis(),
+          lastSyncStatus = "FAILED",
+          lastSyncMessage = failureMsg
+        )
+      )
+      Result.failure(e)
+    }
+  }
+
+  // 7. CSV Export Utility
+  fun generateCustomerFilesCsv(files: List<CustomerFileEntity>, isRmUser: Boolean): String {
+    val sb = StringBuilder()
+    val headers = if (isRmUser) {
+      listOf(
+        "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
+        "Product Type", "Status", "Active", "Pending Docs", "Remarks",
+        "CPV Status", "Created Date", "Last Updated"
+      )
+    } else {
+      listOf(
+        "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
+        "Product Type", "Status", "Active", "RM Code", "Pending Docs", "Remarks",
+        "CPV Status", "Created Date", "Last Updated"
+      )
+    }
+    sb.append(headers.joinToString(",")).append("\n")
+
+    for (f in files) {
+      val ccDisplay = if (f.ccNumber.isNotBlank()) f.ccNumber else f.fileId
+      val row = if (isRmUser) {
+        listOf(
+          escapeCsv(ccDisplay),
+          escapeCsv(f.fileId),
+          escapeCsv(f.customerName),
+          escapeCsv(f.companyName),
+          escapeCsv(f.mobile),
+          escapeCsv(f.email),
+          escapeCsv(f.productType),
+          escapeCsv(f.applicationStatus),
+          escapeCsv(f.activeStatus),
+          escapeCsv(f.pendingDocuments),
+          escapeCsv(f.remarks),
+          escapeCsv(f.cpvStatus),
+          escapeCsv(DateUtils.formatDateTime(f.createdAt)),
+          escapeCsv(DateUtils.formatDateTime(f.updatedAt))
+        )
+      } else {
+        listOf(
+          escapeCsv(ccDisplay),
+          escapeCsv(f.fileId),
+          escapeCsv(f.customerName),
+          escapeCsv(f.companyName),
+          escapeCsv(f.mobile),
+          escapeCsv(f.email),
+          escapeCsv(f.productType),
+          escapeCsv(f.applicationStatus),
+          escapeCsv(f.activeStatus),
+          escapeCsv(f.assignedRmCode),
+          escapeCsv(f.pendingDocuments),
+          escapeCsv(f.remarks),
+          escapeCsv(f.cpvStatus),
+          escapeCsv(DateUtils.formatDateTime(f.createdAt)),
+          escapeCsv(DateUtils.formatDateTime(f.updatedAt))
+        )
+      }
+      sb.append(row.joinToString(",")).append("\n")
+    }
+    return sb.toString()
+  }
+
+  fun generateRmMappingsCsv(rms: List<UserEntity>): String {
+    val sb = StringBuilder()
+    val headers = listOf("RM Code", "RM Name", "Mobile", "Email", "Office Branch", "Account Status", "Created Date", "Last Login")
+    sb.append(headers.joinToString(",")).append("\n")
+    for (r in rms) {
+      val row = listOf(
+        escapeCsv(r.rmCode),
+        escapeCsv(r.name),
+        escapeCsv(r.mobile),
+        escapeCsv(r.email),
+        escapeCsv(r.officeAddress),
+        escapeCsv(r.accountStatus),
+        escapeCsv(DateUtils.formatDateTime(r.createdAt)),
+        escapeCsv(DateUtils.formatDateTime(r.lastLogin))
+      )
+      sb.append(row.joinToString(",")).append("\n")
+    }
+    return sb.toString()
+  }
+
+  private fun escapeCsv(value: String): String {
+    val escaped = value.replace("\"", "\"\"")
+    return if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\"")) {
+      "\"$escaped\""
+    } else {
+      escaped
+    }
+  }
+
+  // 7. Location Tracking & Monitoring (Mentor Access)
+  suspend fun updateUserLocation(
+    rmCode: String,
+    latitude: Double,
+    longitude: Double,
+    address: String,
+    sourceAction: String,
+    fileId: String? = null
+  ) = withContext(Dispatchers.IO) {
+    val now = DateUtils.currentDhakaMillis()
+    database.userDao().updateUserLocation(rmCode, latitude, longitude, address, now)
+
+    val user = database.userDao().getUser(rmCode)
+    val userName = user?.name ?: rmCode
+    database.userLocationLogDao().insertLocationLog(
+      com.example.data.model.UserLocationLogEntity(
+        rmCode = rmCode,
+        userName = userName,
+        latitude = latitude,
+        longitude = longitude,
+        address = address,
+        sourceAction = sourceAction,
+        relatedFileId = fileId,
+        timestamp = now
+      )
+    )
+  }
+
+  fun getAllUsersFlow(): Flow<List<UserEntity>> {
+    return database.userDao().getAllUsersFlow()
+  }
+
+  fun getRecentLocationLogsFlow(limit: Int = 100): Flow<List<com.example.data.model.UserLocationLogEntity>> {
+    return database.userLocationLogDao().getRecentLocationLogsFlow(limit)
+  }
+
+  fun getLocationLogsForRmFlow(rmCode: String, limit: Int = 50): Flow<List<com.example.data.model.UserLocationLogEntity>> {
+    return database.userLocationLogDao().getLocationLogsForRmFlow(rmCode, limit)
+  }
+}

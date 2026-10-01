@@ -1,0 +1,6 @@
+{
+  "name": "RM File Management Suite",
+  "description": "RM File Management & Operations Suite with role-based access, customer file tracking, and live location monitoring.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
