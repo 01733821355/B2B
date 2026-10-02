@@ -946,33 +946,6 @@ class EblRepository(
     Result.success(Unit)
   }
 
-  suspend fun resetRmPassword(rmCode: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
-    val currentUser = authRepository.currentUser.value
-      ?: return@withContext Result.failure(Exception("Unauthorized."))
-
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Access denied."))
-    }
-
-    val salt = SecurityUtils.generateSalt()
-    val hash = SecurityUtils.hashPassword(newPassword.trim(), salt)
-    database.userDao().updatePassword(rmCode, hash, salt, mustChange = true)
-
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "PASSWORD_RESET",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Admin reset password for RM $rmCode (Must change on next login)."
-      )
-    )
-
-    Result.success(Unit)
-  }
-
   // 4. Audit Logs
   fun getAuditLogsFlow(): Flow<List<AuditLogEntity>> {
     val currentUser = authRepository.currentUser.value ?: return emptyFlow()
@@ -1090,8 +1063,8 @@ class EblRepository(
             put("pendingDocuments", f.pendingDocuments)
             put("cpvRemarks", f.cpvRemarks)
             put("submissionAddress", f.submissionAddress ?: "")
-            put("submissionLat", f.submissionLat ?: 0.0)
-            put("submissionLng", f.submissionLng ?: 0.0)
+            put("submissionLat", f.submissionLatitude ?: 0.0)
+            put("submissionLng", f.submissionLongitude ?: 0.0)
             put("updatedAt", DateUtils.formatDateTime(f.updatedAt))
           }
           filesArray.put(fObj)

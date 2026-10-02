@@ -653,18 +653,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun resetRmPassword(rmCode: String, newPass: String, onResult: (Boolean, String?) -> Unit) {
-    viewModelScope.launch {
-      val res = eblRepository.resetRmPassword(rmCode, newPass)
-      res.onSuccess {
-        _uiMessage.emit("Password reset for RM $rmCode.")
-        onResult(true, null)
-      }.onFailure { err ->
-        onResult(false, err.message)
-      }
-    }
-  }
-
   fun resetRmPassword(rmCode: String, newPassword: String, onResult: (Boolean, String?) -> Unit) {
     viewModelScope.launch {
       val res = eblRepository.resetRmPassword(rmCode, newPassword)
@@ -686,27 +674,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.updateRmUser(rmCode, name, mobile, email, officeAddress)
+      val res = eblRepository.updateRm(rmCode, name, mobile, email, officeAddress)
       res.onSuccess {
         _uiMessage.emit("RM $rmCode updated successfully.")
-        onResult(true, null)
-      }.onFailure { err ->
-        onResult(false, err.message)
-      }
-    }
-  }
-
-  fun setRmTargets(
-    rmCode: String,
-    creditCardTarget: Int,
-    corporateCardTarget: Int,
-    b2bTarget: Int,
-    onResult: (Boolean, String?) -> Unit
-  ) {
-    viewModelScope.launch {
-      val res = eblRepository.setRmTargets(rmCode, creditCardTarget, corporateCardTarget, b2bTarget)
-      res.onSuccess {
-        _uiMessage.emit("Target updated for RM $rmCode.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)

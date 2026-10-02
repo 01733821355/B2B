@@ -38,6 +38,7 @@ fun VoiceInputField(
   modifier: Modifier = Modifier,
   placeholder: String = "",
   leadingIcon: @Composable (() -> Unit)? = null,
+  trailingIcon: @Composable (() -> Unit)? = null,
   singleLine: Boolean = true,
   maxLines: Int = 1,
   enabled: Boolean = true,
@@ -69,6 +70,9 @@ fun VoiceInputField(
     leadingIcon = leadingIcon,
     trailingIcon = {
       Row(verticalAlignment = Alignment.CenterVertically) {
+        if (trailingIcon != null) {
+          trailingIcon()
+        }
         if (value.isNotEmpty() && !readOnly) {
           IconButton(
             onClick = { onValueChange("") },
