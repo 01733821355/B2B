@@ -110,6 +110,7 @@ fun EblMainApp(viewModel: AppViewModel) {
   val scope = rememberCoroutineScope()
 
   var showPasswordDialog by remember { mutableStateOf(false) }
+  var showRmSmsInboxModal by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
   val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -244,6 +245,8 @@ fun EblMainApp(viewModel: AppViewModel) {
               target = rmTarget,
               selectedTimeFilter = timeFilter,
               recentFiles = files,
+              unreadSmsCount = unreadSmsCount,
+              onOpenSmsInbox = { showRmSmsInboxModal = true },
               onTimeFilterChange = { viewModel.selectedTimeFilter.value = it },
               onAddNewFile = { viewModel.navigateTo(Screen.CustomerForm(null)) },
               onViewAllFiles = {
@@ -378,6 +381,16 @@ fun EblMainApp(viewModel: AppViewModel) {
           }
         }
       }
+    )
+  }
+
+  if (showRmSmsInboxModal) {
+    com.example.ui.common.SmsNotificationsDialog(
+      isRmView = true,
+      smsList = rmSmsList,
+      onDismiss = { showRmSmsInboxModal = false },
+      onMarkRead = { viewModel.markSmsAsRead(it) },
+      onMarkAllRead = { viewModel.markAllSmsAsRead() }
     )
   }
 }

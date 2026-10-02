@@ -19,21 +19,24 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
           cache: 'gradle'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Prepare Android Build Environment
+      - name: Prepare Android Build Environment & Keystore
         run: |
-          echo "Setting up environment files and keystore..."
+          echo "Setting up environment files, licenses, and keystore..."
           # Create .env if missing to satisfy secrets plugin
           if [ ! -f ".env" ]; then
             if [ -f ".env.example" ]; then
@@ -42,6 +45,10 @@ jobs:
               touch .env
             fi
           fi
+
+          # Accept Android licenses and ensure compileSdk 36 is present
+          yes | sdkmanager --licenses || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
           # Generate debug.keystore if missing to satisfy signingConfigs.debugConfig
           if [ ! -f "debug.keystore" ]; then
@@ -56,15 +63,16 @@ jobs:
               -validity 10000 \
               -dname "CN=Android Debug,O=Android,C=US"
           fi
-
-          # Accept Android licenses if needed
-          if [ -n "$ANDROID_SDK_ROOT" ] && [ -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          fi
+          chmod +x ./gradlew || true
 
       - name: Build Debug APK
         run: |
-          gradle :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache
+          chmod +x ./gradlew || true
+          if [ -f "./gradlew" ]; then
+            ./gradlew :app:assembleDebug --stacktrace --no-daemon
+          else
+            gradle :app:assembleDebug --stacktrace --no-daemon
+          fi
 
       - name: Verify APK Output
         run: |
@@ -88,7 +96,7 @@ jobs:
           body: |
             ### Direct Android APK Download
             - **File:** `app-debug.apk`
-            - **Target:** Android 7.0+ (Nougat through Android 15/16)
+            - **Target:** Android 7.0+ (Nougat through Android 16)
             - **Build ID:** Run #${{ github.run_number }}
 
             **How to install on phone:**

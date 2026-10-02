@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -25,6 +26,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -174,6 +176,58 @@ fun RmDashboardScreen(
               Spacer(modifier = Modifier.width(4.dp))
               Text("Report", fontSize = 12.sp)
             }
+          }
+        }
+      }
+    }
+
+    // Unread SMS Alert Card from Admin/Mentor
+    if (unreadSmsCount > 0) {
+      item {
+        Card(
+          shape = RoundedCornerShape(10.dp),
+          colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF87171)),
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clickable { onOpenSmsInbox() }
+            .testTag("rm_unread_sms_alert_card")
+        ) {
+          Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              modifier = Modifier.weight(1f)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(36.dp)
+                  .clip(CircleShape)
+                  .background(Color(0xFFDC2626)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(Icons.Default.Sms, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+              }
+              Column {
+                Text(
+                  text = "SMS Alert from Admin/Mentor ($unreadSmsCount Unread)",
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 13.sp,
+                  color = Color(0xFF991B1B)
+                )
+                Text(
+                  text = "Your customer file or profile was updated/deleted. Tap to view details.",
+                  fontSize = 11.sp,
+                  color = Color(0xFF7F1D1D)
+                )
+              }
+            }
+            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFFDC2626))
           }
         }
       }
@@ -520,9 +574,15 @@ fun RmDashboardScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
               )
               Text(
-                text = "Mobile: ${file.mobile} • Updated: ${DateUtils.formatDateOnly(file.updatedAt)}",
-                fontSize = 11.sp,
+                text = "Created: ${DateUtils.formatDateTime(file.createdAt)}",
+                fontSize = 10.sp,
                 color = Color.Gray
+              )
+              Text(
+                text = "Mobile: ${file.mobile} • Updated: ${DateUtils.formatDateTime(file.updatedAt)}",
+                fontSize = 11.sp,
+                color = EblNavyPrimary,
+                fontWeight = FontWeight.Medium
               )
             }
             Icon(
