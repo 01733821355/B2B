@@ -1132,6 +1132,16 @@ class EblRepository(
             if (!response.isSuccessful) {
               throw Exception("HTTP ${response.code}: ${response.message}")
             }
+            val respBodyStr = response.body?.string() ?: ""
+            if (respBodyStr.isNotBlank()) {
+              try {
+                val respJson = JSONObject(respBodyStr)
+                val sheetFiles = respJson.optJSONArray("latestFiles") ?: respJson.optJSONArray("files")
+                if (sheetFiles != null && sheetFiles.length() > 0) {
+                  processSheetFiles(sheetFiles)
+                }
+              } catch (_: Exception) {}
+            }
           }
         } catch (e: Exception) {
           // If remote webhook call fails, report the clear error to user and record it
@@ -1189,6 +1199,176 @@ class EblRepository(
       )
       Result.failure(e)
     }
+  }
+
+  suspend fun pullDataFromGoogleSheets(): Result<String> = withContext(Dispatchers.IO) {
+    val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    if (currentStatus.appsScriptUrl.isBlank() || !currentStatus.appsScriptUrl.startsWith("http")) {
+      return@withContext Result.failure(Exception("Apps Script Web App URL is not configured. Please paste URL and save connector."))
+    }
+
+    try {
+      val payload = JSONObject().apply {
+        put("action", "FETCH_SHEET_DATA")
+        put("spreadsheetId", currentStatus.spreadsheetId)
+        put("secretKey", currentStatus.syncSecretKey)
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder()
+        .url(currentStatus.appsScriptUrl)
+        .post(requestBody)
+        .build()
+
+      val respStr = httpClient.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) {
+          throw Exception("HTTP ${response.code}: ${response.message}")
+        }
+        response.body?.string() ?: ""
+      }
+
+      val json = JSONObject(respStr)
+      val filesArray = json.optJSONArray("files") ?: json.optJSONArray("latestFiles") ?: JSONArray()
+      val updatedCount = processSheetFiles(filesArray)
+
+      val now = DateUtils.currentDhakaMillis()
+      val msg = "Pulled ${filesArray.length()} rows from Google Sheets. $updatedCount record(s) updated locally."
+      database.appSettingDao().insertOrUpdateSyncStatus(
+        currentStatus.copy(
+          lastSyncTimestamp = now,
+          lastSyncStatus = "SUCCESS",
+          lastSyncMessage = msg
+        )
+      )
+
+      database.auditLogDao().insertLog(
+        AuditLogEntity(
+          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+          userId = authRepository.currentUser.value?.rmCode ?: "SYSTEM",
+          role = authRepository.currentUser.value?.role ?: "MENTOR",
+          action = "PULL_SHEETS",
+          timestamp = now,
+          details = msg
+        )
+      )
+
+      Result.success(msg)
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
+  private suspend fun processSheetFiles(sheetFilesJson: JSONArray): Int {
+    var updatedCount = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetFilesJson.length()) {
+      val obj = sheetFilesJson.optJSONObject(i) ?: continue
+      val fileId = obj.optString("fileId").trim()
+      val ccNumber = obj.optString("ccNumber").trim()
+      val targetId = if (fileId.isNotBlank()) fileId else ccNumber
+      if (targetId.isBlank()) continue
+
+      val existing = database.customerFileDao().getFileById(targetId)
+      val appStatus = obj.optString("applicationStatus", existing?.applicationStatus ?: "Submitted")
+      val activeStatus = obj.optString("activeStatus", existing?.activeStatus ?: "Y")
+      val remarks = obj.optString("remarks", existing?.remarks ?: "")
+      val pendingDocs = obj.optString("pendingDocuments", existing?.pendingDocuments ?: "")
+      val rmCode = obj.optString("assignedRmCode", existing?.assignedRmCode ?: "104393").trim().uppercase()
+      val custName = obj.optString("customerName", existing?.customerName ?: "Customer")
+
+      if (existing != null) {
+        val hasStatusChanged = existing.applicationStatus != appStatus
+        val hasActiveChanged = existing.activeStatus != activeStatus
+        val hasRemarksChanged = existing.remarks != remarks
+        val hasDocsChanged = existing.pendingDocuments != pendingDocs
+        val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber != ccNumber
+
+        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged) {
+          val updated = existing.copy(
+            applicationStatus = appStatus,
+            activeStatus = activeStatus,
+            remarks = remarks,
+            pendingDocuments = pendingDocs,
+            ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
+            updatedAt = now,
+            updatedBy = "GoogleSheets_Sync"
+          )
+          database.customerFileDao().updateFile(updated)
+          updatedCount++
+
+          // Send SMS to RM if status or active was changed from Google Sheets!
+          if (hasStatusChanged || hasActiveChanged) {
+            val targetRmUser = database.userDao().getUser(existing.assignedRmCode)
+            val rmMobile = targetRmUser?.mobile ?: ""
+            val rmName = targetRmUser?.name ?: existing.assignedRmCode
+            val formattedTime = DateUtils.formatDateTime(now)
+            val changeNote = if (hasStatusChanged) "Status -> $appStatus" else "Active -> $activeStatus"
+            val smsMessage = "[EBL Alert] Dear $rmName (${existing.assignedRmCode}), your customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
+
+            var smsStatus = "DELIVERED"
+            if (context != null && rmMobile.isNotBlank()) {
+              val sentHardware = SmsService.sendSms(context, rmMobile, smsMessage)
+              smsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
+            }
+
+            database.smsNotificationDao().insertSms(
+              SmsNotificationEntity(
+                recipientRmCode = existing.assignedRmCode,
+                recipientMobile = rmMobile,
+                recipientName = rmName,
+                triggeredByRole = "SHEETS_SYNC",
+                triggeredByCode = "Admin_Sheets",
+                actionType = "UPDATE",
+                targetType = "CUSTOMER_FILE",
+                fileId = existing.fileId,
+                customerName = existing.customerName,
+                messageText = smsMessage,
+                sentTimestamp = now,
+                status = smsStatus,
+                isRead = false
+              )
+            )
+
+            context?.let { ctx ->
+              NotificationHelper.sendRmFileUpdateNotification(
+                context = ctx,
+                targetRmCode = existing.assignedRmCode,
+                ccNumber = existing.ccNumber.ifBlank { existing.fileId },
+                customerName = existing.customerName,
+                changeDetails = "Google Sheet Update: $changeNote",
+                updatedByRole = "ADMIN"
+              )
+            }
+          }
+        }
+      } else {
+        // New file row added in Google Sheets
+        val newFile = CustomerFileEntity(
+          fileId = targetId,
+          customerName = custName,
+          companyName = obj.optString("companyName", "N/A"),
+          officeAddress = obj.optString("officeAddress", ""),
+          mobile = obj.optString("mobile", ""),
+          altMobile = "",
+          email = obj.optString("email", ""),
+          productType = obj.optString("productType", "Credit Card"),
+          applicationStatus = appStatus,
+          activeStatus = activeStatus,
+          assignedRmCode = rmCode,
+          ccNumber = ccNumber,
+          pendingDocuments = pendingDocs,
+          remarks = remarks,
+          cpvStatus = obj.optString("cpvRemarks", "Pending"),
+          createdAt = now,
+          updatedAt = now,
+          createdBy = "GoogleSheets",
+          updatedBy = "GoogleSheets_Sync",
+          isSynced = true
+        )
+        database.customerFileDao().insertFile(newFile)
+        updatedCount++
+      }
+    }
+    return updatedCount
   }
 
   // 7. CSV Export Utility

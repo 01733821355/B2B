@@ -16,6 +16,7 @@ import com.example.data.repository.AuthRepository
 import com.example.data.repository.EblRepository
 import com.example.util.DateUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -268,9 +269,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  val isRealtimeAutoSyncEnabled = MutableStateFlow(true)
+  val isSyncingInProgress = MutableStateFlow(false)
+
+  fun toggleRealtimeAutoSync(enabled: Boolean) {
+    isRealtimeAutoSyncEnabled.value = enabled
+  }
+
   init {
     viewModelScope.launch {
       DatabaseInitializer.initializeIfNeeded(database)
+    }
+
+    // Continuous Real-Time Bi-Directional Auto-Sync Loop
+    // Automatically synchronizes both ways with Google Sheets in the background
+    viewModelScope.launch {
+      while (true) {
+        delay(4000) // 4 seconds continuous live sync interval
+        if (isRealtimeAutoSyncEnabled.value && currentUser.value != null) {
+          try {
+            isSyncingInProgress.value = true
+            eblRepository.triggerGoogleSheetsSync()
+            eblRepository.pullDataFromGoogleSheets()
+          } catch (_: Exception) {
+          } finally {
+            isSyncingInProgress.value = false
+          }
+        }
+      }
     }
   }
 
@@ -710,6 +736,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onResult(true, msg)
       }.onFailure { err ->
         _uiMessage.emit("Sync Error: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun pullDataFromGoogleSheets(onResult: (Boolean, String?) -> Unit) {
+    viewModelScope.launch {
+      val res = eblRepository.pullDataFromGoogleSheets()
+      res.onSuccess { msg ->
+        _uiMessage.emit(msg)
+        onResult(true, msg)
+      }.onFailure { err ->
+        _uiMessage.emit("Pull Error: ${err.message}")
         onResult(false, err.message)
       }
     }

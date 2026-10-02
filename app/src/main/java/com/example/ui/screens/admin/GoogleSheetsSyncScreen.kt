@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoMode
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
@@ -36,6 +39,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -45,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -78,10 +83,17 @@ fun GoogleSheetsSyncScreen(
   var isSavingUrl by remember { mutableStateOf(false) }
   var isSavingScriptUrl by remember { mutableStateOf(false) }
   var isSyncingNow by remember { mutableStateOf(false) }
+  var isPullingNow by remember { mutableStateOf(false) }
+  val isRealtimeAutoSyncEnabled by viewModel.isRealtimeAutoSyncEnabled.collectAsState()
+  val isSyncingInProgress by viewModel.isSyncingInProgress.collectAsState()
   var feedbackMessage by remember { mutableStateOf<String?>(null) }
   var showScriptCodeDialog by remember { mutableStateOf(false) }
 
   val appsScriptTemplate = """
+function doGet(e) {
+  return handleFetchFiles();
+}
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
@@ -101,6 +113,10 @@ function doPost(e) {
       var hr = fileSheet.getRange(1, 1, 1, headers.length);
       hr.setBackground('#0A192F').setFontColor('#FFFFFF').setFontWeight('bold');
       fileSheet.setFrozenRows(1);
+    }
+
+    if (data.action === 'FETCH_SHEET_DATA') {
+      return handleFetchFiles();
     }
     
     // 2. Auto-create & format 'RM_Location_Logs' Tab
@@ -150,7 +166,8 @@ function doPost(e) {
     
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
-      syncedCount: (data.files ? data.files.length : 0)
+      syncedCount: (data.files ? data.files.length : 0),
+      latestFiles: extractAllSheetFiles(fileSheet)
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -158,6 +175,44 @@ function doPost(e) {
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function handleFetchFiles() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var fileSheet = ss.getSheetByName('Customer_Files');
+  var files = fileSheet ? extractAllSheetFiles(fileSheet) : [];
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'success',
+    filesCount: files.length,
+    files: files
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function extractAllSheetFiles(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (!row[0] && !row[1]) continue;
+    list.push({
+      ccNumber: String(row[0] || ''),
+      fileId: String(row[1] || row[0] || ''),
+      customerName: String(row[2] || ''),
+      companyName: String(row[3] || ''),
+      officeAddress: String(row[4] || ''),
+      mobile: String(row[5] || ''),
+      email: String(row[6] || ''),
+      productType: String(row[7] || ''),
+      applicationStatus: String(row[8] || ''),
+      activeStatus: String(row[9] || ''),
+      assignedRmCode: String(row[10] || ''),
+      pendingDocuments: String(row[11] || ''),
+      cpvRemarks: String(row[12] || ''),
+      submissionAddress: String(row[13] || ''),
+      updatedAt: String(row[16] || '')
+    });
+  }
+  return list;
 }
 """.trimIndent()
 
@@ -217,6 +272,79 @@ function doPost(e) {
           fontSize = 12.sp,
           color = Color(0xFFE2E8F0),
           lineHeight = 16.sp
+        )
+      }
+    }
+
+    Spacer(modifier = Modifier.height(14.dp))
+
+    // Real-Time Continuous 2-Way Auto-Sync Card (Hands-free automatic polling every 4s)
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(
+        containerColor = if (isRealtimeAutoSyncEnabled) Color(0xFFF0FDF4) else MaterialTheme.colorScheme.surface
+      ),
+      border = androidx.compose.foundation.BorderStroke(
+        1.dp,
+        if (isRealtimeAutoSyncEnabled) Color(0xFF86EFAC) else Color(0xFFE2E8F0)
+      )
+    ) {
+      Row(
+        modifier = Modifier.padding(14.dp).fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          modifier = Modifier.weight(1f)
+        ) {
+          Box(
+            modifier = Modifier
+              .size(36.dp)
+              .clip(CircleShape)
+              .background(if (isRealtimeAutoSyncEnabled) Color(0xFF16A34A) else Color.Gray),
+            contentAlignment = Alignment.Center
+          ) {
+            Icon(
+              imageVector = if (isSyncingInProgress) Icons.Default.Refresh else Icons.Default.Sync,
+              contentDescription = null,
+              tint = Color.White,
+              modifier = Modifier.size(20.dp)
+            )
+          }
+          Column {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text(
+                text = "Continuous Live Auto-Sync",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                color = if (isRealtimeAutoSyncEnabled) Color(0xFF14532D) else MaterialTheme.colorScheme.onSurface
+              )
+              if (isSyncingInProgress) {
+                Text(
+                  text = "• Syncing now...",
+                  fontSize = 10.sp,
+                  color = Color(0xFF16A34A),
+                  fontWeight = FontWeight.Bold
+                )
+              }
+            }
+            Text(
+              text = if (isRealtimeAutoSyncEnabled)
+                "প্রতি ৪ সেকেন্ডে অ্যাপ এবং গুগল শিট স্বয়ংক্রিয়ভাবে সিঙ্ক হচ্ছে (ম্যানুয়ালি পুশ বা পুল চাপার প্রয়োজন নেই)।"
+              else
+                "অটো-সিঙ্ক বন্ধ রয়েছে। স্বয়ংক্রিয় সিঙ্ক চালু করতে টগল করুন।",
+              fontSize = 11.sp,
+              color = Color.DarkGray
+            )
+          }
+        }
+
+        Switch(
+          checked = isRealtimeAutoSyncEnabled,
+          onCheckedChange = { viewModel.toggleRealtimeAutoSync(it) }
         )
       }
     }
@@ -613,28 +741,57 @@ function doPost(e) {
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Manual 1-Tap Sync Now Button
-        Button(
-          onClick = {
-            isSyncingNow = true
-            viewModel.triggerGoogleSheetsSync { success, msg ->
-              isSyncingNow = false
-              feedbackMessage = msg
-            }
-          },
-          enabled = !isSyncingNow,
-          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.fillMaxWidth().testTag("btn_sync_now")
+        // Two-Way Sync Action Buttons
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-          if (isSyncingNow) {
-            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Syncing Records...", fontSize = 12.sp)
-          } else {
-            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Sync All Data Now", fontSize = 12.sp)
+          Button(
+            onClick = {
+              isSyncingNow = true
+              viewModel.triggerGoogleSheetsSync { success, msg ->
+                isSyncingNow = false
+                feedbackMessage = msg
+              }
+            },
+            enabled = !isSyncingNow && !isPullingNow,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f).testTag("btn_sync_now")
+          ) {
+            if (isSyncingNow) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Pushing...", fontSize = 11.sp)
+            } else {
+              Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Push to Sheet", fontSize = 11.sp)
+            }
+          }
+
+          Button(
+            onClick = {
+              isPullingNow = true
+              viewModel.pullDataFromGoogleSheets { success, msg ->
+                isPullingNow = false
+                feedbackMessage = msg
+              }
+            },
+            enabled = !isSyncingNow && !isPullingNow,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f).testTag("btn_pull_sheets")
+          ) {
+            if (isPullingNow) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Pulling...", fontSize = 11.sp)
+            } else {
+              Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Pull from Sheet", fontSize = 11.sp)
+            }
           }
         }
       }
