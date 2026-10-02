@@ -16,7 +16,7 @@ interface CustomerFileDao {
   @Query("SELECT * FROM customer_files WHERE fileId = :fileId LIMIT 1")
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?>
 
-  @Query("SELECT * FROM customer_files WHERE assignedRmCode = :rmCode AND isDeleted = 0 ORDER BY updatedAt DESC")
+  @Query("SELECT * FROM customer_files WHERE UPPER(TRIM(assignedRmCode)) = UPPER(TRIM(:rmCode)) AND isDeleted = 0 ORDER BY updatedAt DESC")
   fun getFilesForRmFlow(rmCode: String): Flow<List<CustomerFileEntity>>
 
   @Query("SELECT * FROM customer_files WHERE isDeleted = 0 ORDER BY updatedAt DESC")

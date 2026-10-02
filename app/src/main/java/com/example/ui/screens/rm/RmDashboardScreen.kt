@@ -18,28 +18,37 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Handshake
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomerFileEntity
+import com.example.data.model.RmTargetEntity
 import com.example.data.model.UserEntity
 import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
@@ -65,8 +74,25 @@ fun RmDashboardScreen(
   onViewPendingDocs: () -> Unit = {},
   onFileClick: (CustomerFileEntity) -> Unit,
   onDownloadReport: () -> Unit,
+  target: RmTargetEntity? = null,
+  onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
+
+  // Auto-detect and sync RM live location in background
+  LaunchedEffect(Unit) {
+    if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+      try {
+        val loc = com.example.util.LocationHelper.getCurrentLocation(context)
+        onUpdateLocation(loc.latitude, loc.longitude, loc.address)
+      } catch (_: Exception) {}
+    }
+  }
+
+  val ccTarget = target?.creditCardTarget ?: 20
+  val corpTarget = target?.corporateCardTarget ?: 10
+  val b2bTarget = target?.b2bTarget ?: 15
   Box(
     modifier = modifier
       .fillMaxSize()
@@ -157,6 +183,168 @@ fun RmDashboardScreen(
         selectedFilter = selectedTimeFilter,
         onFilterSelected = onTimeFilterChange
       )
+    }
+
+    // TARGET VS ACHIEVEMENT SECTION (Admin-Assigned Monthly Quotas)
+    item {
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Default.TrendingUp, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "Target vs Achievement",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+            }
+            Surface(
+              shape = RoundedCornerShape(4.dp),
+              color = Color(0xFFEFF6FF)
+            ) {
+              Text(
+                text = "Admin Assigned Goals",
+                fontSize = 10.sp,
+                color = Color(0xFF1D4ED8),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // 3 Columns: Credit Card, Corporate Card, B2B
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            // Credit Card Goal
+            val ccAchieved = stats.creditCardCount
+            val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFF0FDF4),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+              modifier = Modifier.weight(1f)
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                  Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
+                  Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                  progress = { ccProgress },
+                  modifier = Modifier.fillMaxWidth().height(6.dp),
+                  color = Color(0xFF16A34A),
+                  trackColor = Color(0xFFDCFCE7)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = "${(ccProgress * 100).toInt()}% Done",
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF15803D)
+                )
+              }
+            }
+
+            // Corporate Card Goal
+            val corpAchieved = stats.corporateCardCount
+            val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFEFF6FF),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+              modifier = Modifier.weight(1f)
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                  Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
+                  Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                  progress = { corpProgress },
+                  modifier = Modifier.fillMaxWidth().height(6.dp),
+                  color = Color(0xFF2563EB),
+                  trackColor = Color(0xFFDBEAFE)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = "${(corpProgress * 100).toInt()}% Done",
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF1D4ED8)
+                )
+              }
+            }
+
+            // B2B Goal
+            val b2bAchieved = stats.b2bCount
+            val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFFAF5FF),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF)),
+              modifier = Modifier.weight(1f)
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.Handshake, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.Bottom) {
+                  Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7E22CE))
+                  Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                LinearProgressIndicator(
+                  progress = { b2bProgress },
+                  modifier = Modifier.fillMaxWidth().height(6.dp),
+                  color = Color(0xFF9333EA),
+                  trackColor = Color(0xFFF3E8FF)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = "${(b2bProgress * 100).toInt()}% Done",
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF7E22CE)
+                )
+              }
+            }
+          }
+        }
+      }
     }
 
     // KPI Metrics Section

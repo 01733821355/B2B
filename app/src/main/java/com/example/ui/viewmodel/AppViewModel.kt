@@ -55,13 +55,17 @@ data class KpiStats(
   val pendingDocumentsCount: Int = 0,
   val activeY: Int = 0,
   val activeN: Int = 0,
-  val activeC: Int = 0
+  val activeC: Int = 0,
+  val creditCardCount: Int = 0,
+  val corporateCardCount: Int = 0,
+  val b2bCount: Int = 0
 )
 
 data class RmPerformanceRow(
   val rmCode: String,
   val rmName: String,
-  val stats: KpiStats
+  val stats: KpiStats,
+  val target: com.example.data.model.RmTargetEntity? = null
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -202,19 +206,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     computeStats(activeFiles)
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), KpiStats())
 
+  val allTargets: StateFlow<List<com.example.data.model.RmTargetEntity>> = database.rmTargetDao().getAllTargetsFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
   // RM-wise performance breakdown for Admin / Mentor
   val rmPerformanceList: StateFlow<List<RmPerformanceRow>> = combine(
     authorizedFilesFlow,
     allRms,
-    selectedTimeFilter
-  ) { files, rms, timeFilter ->
+    selectedTimeFilter,
+    allTargets
+  ) { files, rms, timeFilter, targets ->
     val activeFiles = files.filter { !it.isDeleted && DateUtils.matchesTimeFilter(it.updatedAt, timeFilter) }
     rms.map { rm ->
       val rmFiles = activeFiles.filter { it.assignedRmCode == rm.rmCode }
+      val target = targets.find { it.rmCode == rm.rmCode }
       RmPerformanceRow(
         rmCode = rm.rmCode,
         rmName = rm.name,
-        stats = computeStats(rmFiles)
+        stats = computeStats(rmFiles),
+        target = target
       )
     }
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -238,8 +248,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var activeY = 0
     var activeN = 0
     var activeC = 0
+    var creditCardCount = 0
+    var corporateCardCount = 0
+    var b2bCount = 0
 
     for (f in files) {
+      val p = f.productType.lowercase()
+      when {
+        p.contains("corporate") -> corporateCardCount++
+        p.contains("credit") -> creditCardCount++
+        p.contains("b2b") -> b2bCount++
+      }
       when (f.applicationStatus.lowercase()) {
         "collected" -> collected++
         "submitted" -> submitted++
@@ -276,7 +295,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       pendingDocumentsCount = pendingDocsCount,
       activeY = activeY,
       activeN = activeN,
-      activeC = activeC
+      activeC = activeC,
+      creditCardCount = creditCardCount,
+      corporateCardCount = corporateCardCount,
+      b2bCount = b2bCount
     )
   }
 
@@ -522,14 +544,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     mobile: String,
     email: String,
     officeAddress: String,
+    newPassword: String? = null,
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.updateRm(rmCode, name, mobile, email, officeAddress)
+      val res = eblRepository.updateRm(rmCode, name, mobile, email, officeAddress, newPassword)
       res.onSuccess {
         _uiMessage.emit("RM $rmCode details updated.")
         onResult(true, null)
       }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun setRmTargets(
+    rmCode: String,
+    creditCardTarget: Int,
+    corporateCardTarget: Int,
+    b2bTarget: Int,
+    onResult: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.setRmTargets(rmCode, creditCardTarget, corporateCardTarget, b2bTarget)
+      res.onSuccess {
+        _uiMessage.emit("Monthly targets updated for RM $rmCode.")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to set targets: ${err.message}")
         onResult(false, err.message)
       }
     }
@@ -557,6 +599,57 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
   }
+
+  fun resetRmPassword(rmCode: String, newPassword: String, onResult: (Boolean, String?) -> Unit) {
+    viewModelScope.launch {
+      val res = eblRepository.resetRmPassword(rmCode, newPassword)
+      res.onSuccess {
+        _uiMessage.emit("Password reset successfully for RM $rmCode.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun updateRmProfile(
+    rmCode: String,
+    name: String,
+    mobile: String,
+    email: String,
+    officeAddress: String,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.updateRmUser(rmCode, name, mobile, email, officeAddress)
+      res.onSuccess {
+        _uiMessage.emit("RM $rmCode updated successfully.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun setRmTargets(
+    rmCode: String,
+    creditCardTarget: Int,
+    corporateCardTarget: Int,
+    b2bTarget: Int,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.setRmTargets(rmCode, creditCardTarget, corporateCardTarget, b2bTarget)
+      res.onSuccess {
+        _uiMessage.emit("Target updated for RM $rmCode.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun getTargetForRmFlow(rmCode: String) = eblRepository.getTargetForRmFlow(rmCode)
 
   fun triggerSyncNow() {
     viewModelScope.launch {

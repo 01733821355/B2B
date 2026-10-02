@@ -24,7 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
@@ -112,16 +115,46 @@ fun CustomerFileFormScreen(
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var fileId by remember { mutableStateOf(editFileId ?: SecurityUtils.generateFileId(currentUser.rmCode)) }
 
-  val cpvPhotoPickerLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia()
-  ) { uri ->
-    if (uri != null) {
+  val statusPhotoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+  ) { uris ->
+    uris.forEachIndexed { idx, uri ->
+      viewModel.addAttachment(
+        fileId = fileId,
+        category = "Status Update Photo",
+        fileName = "Status_Update_${System.currentTimeMillis()}_${idx + 1}.jpg",
+        fileType = "image/jpeg",
+        fileSizeBytes = 450 * 1024L,
+        fileUri = uri.toString()
+      )
+    }
+  }
+
+  val cpvMultiPhotoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+  ) { uris ->
+    uris.forEachIndexed { idx, uri ->
       viewModel.addAttachment(
         fileId = fileId,
         category = "CPV Photo",
-        fileName = "CPV_Photo_${System.currentTimeMillis()}.jpg",
+        fileName = "CPV_Photo_${System.currentTimeMillis()}_${idx + 1}.jpg",
         fileType = "image/jpeg",
         fileSizeBytes = 512 * 1024L,
+        fileUri = uri.toString()
+      )
+    }
+  }
+
+  val othersPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+  ) { uris ->
+    uris.forEachIndexed { idx, uri ->
+      viewModel.addAttachment(
+        fileId = fileId,
+        category = "Other Document",
+        fileName = "Doc_Attachment_${System.currentTimeMillis()}_${idx + 1}.jpg",
+        fileType = "image/jpeg",
+        fileSizeBytes = 400 * 1024L,
         fileUri = uri.toString()
       )
     }
@@ -301,7 +334,7 @@ fun CustomerFileFormScreen(
       }
 
       viewModel.saveCustomerFile(
-        fileId = if (editFileId != null) fileId else null,
+        fileId = fileId,
         customerName = customerName,
         companyName = companyName,
         officeAddress = officeAddress,
@@ -325,6 +358,7 @@ fun CustomerFileFormScreen(
       ) { success, targetId ->
         isSaving = false
         if (success && targetId != null) {
+          viewModel.resetFilters()
           onSaveSuccess(targetId)
         } else {
           errorMessage = "Failed to save customer file. Please check permissions."
@@ -624,6 +658,93 @@ fun CustomerFileFormScreen(
           }
         }
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Status Update Photos Upload Box
+        val statusPhotos = attachments.filter { it.category == "Status Update Photo" }
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = Color(0xFFF0F9FF),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBAE6FD)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Status Update Photos", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0369A1))
+              }
+              Text(
+                text = if (statusPhotos.isEmpty()) "Optional photo proofs" else "✓ ${statusPhotos.size} photo(s)",
+                fontSize = 11.sp,
+                color = if (statusPhotos.isEmpty()) Color.Gray else Color(0xFF0284C7),
+                fontWeight = if (statusPhotos.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
+              )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+              text = "Upload sanction letter, query slips, client receipts, or verification photos for status '$selectedApplicationStatus'.",
+              fontSize = 10.sp,
+              color = Color.DarkGray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+              onClick = {
+                statusPhotoPickerLauncher.launch(
+                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+              },
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.fillMaxWidth().testTag("upload_status_photos_btn")
+            ) {
+              Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Upload Status Photo(s) [Multiple]", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            }
+
+            if (statusPhotos.isNotEmpty()) {
+              Spacer(modifier = Modifier.height(8.dp))
+              FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                statusPhotos.forEach { photo ->
+                  Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.White,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF7DD3FC)),
+                    modifier = Modifier.clickable { previewAttachment = photo }
+                  ) {
+                    Row(
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Text(photo.fileName.take(16) + if (photo.fileName.length > 16) "..." else "", fontSize = 10.sp)
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Remove",
+                        tint = Color.Red,
+                        modifier = Modifier.size(14.dp).clickable {
+                          viewModel.deleteAttachment(photo.attachmentId, fileId)
+                        }
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // Active Status
@@ -763,7 +884,69 @@ fun CustomerFileFormScreen(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // SECTION G: Document & Image Attachments
+    // SECTION: ADDITIONAL SUPPORTING DOCUMENTS
+    Text(
+      text = "Additional Supporting Documents",
+      fontSize = 15.sp,
+      fontWeight = FontWeight.Bold,
+      color = EblNavyDark
+    )
+    Text(
+      text = "Attach client KYC papers, trade licenses, salary slips, or other relevant files.",
+      fontSize = 11.sp,
+      color = Color.Gray
+    )
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // Supporting Documents (Green Card)
+    val otherDocs = attachments.filter { it.category != "Status Update Photo" && it.category != "CPV Photo" }
+    Card(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable {
+          othersPickerLauncher.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+          )
+        }
+        .testTag("upload_others_doc"),
+      shape = RoundedCornerShape(14.dp),
+      colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
+      border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF34D399))
+    ) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(vertical = 16.dp, horizontal = 16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+      ) {
+        Box(
+          modifier = Modifier
+            .size(44.dp)
+            .background(Color(0xFF059669), CircleShape),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(Icons.Default.AttachFile, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+          text = "Upload Supporting Documents",
+          fontWeight = FontWeight.Bold,
+          fontSize = 13.sp,
+          color = Color(0xFF064E3B)
+        )
+        Text(
+          text = if (otherDocs.isEmpty()) "Tap to attach NID, Trade License, Bank Docs [Multiple]" else "✓ ${otherDocs.size} Document(s) Attached (Tap to Add More)",
+          fontSize = 11.sp,
+          color = Color(0xFF059669),
+          fontWeight = if (otherDocs.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
+        )
+      }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // SECTION H: CPV (CONTACT POINT VERIFICATION) STATUS - MATCHING SCREENSHOT
     Card(
       modifier = Modifier.fillMaxWidth(),
       shape = RoundedCornerShape(12.dp),
@@ -776,27 +959,201 @@ fun CustomerFileFormScreen(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Text(
-            text = "G. Attachments (${attachments.size})",
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = EblNavyDark
-          )
-          OutlinedButton(
-            onClick = { showAddAttachmentDialog = true },
-            modifier = Modifier.testTag("btn_add_attachment")
-          ) {
-            Icon(Icons.Default.AttachFile, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Add Document", fontSize = 12.sp)
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = Color(0xFF9333EA), modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "H. CPV (CONTACT POINT VERIFICATION) STATUS",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
           }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(14.dp))
 
-        if (attachments.isEmpty()) {
-          Text("No attachments uploaded yet.", fontSize = 12.sp, color = Color.Gray)
-        } else {
+        // CPV Status Dropdown
+        ExposedDropdownMenuBox(
+          expanded = cpvExpanded,
+          onExpandedChange = { cpvExpanded = !cpvExpanded },
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          OutlinedTextField(
+            value = selectedCpvStatus,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("CPV Status") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = cpvExpanded) },
+            modifier = Modifier.fillMaxWidth().menuAnchor().testTag("form_cpv_status")
+          )
+          ExposedDropdownMenu(
+            expanded = cpvExpanded,
+            onDismissRequest = { cpvExpanded = false }
+          ) {
+            cpvStatusOptions.forEach { opt ->
+              DropdownMenuItem(
+                text = { Text(opt) },
+                onClick = {
+                  selectedCpvStatus = opt
+                  cpvExpanded = false
+                }
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // CPV Verification Date
+        VoiceInputField(
+          value = cpvDate,
+          onValueChange = { cpvDate = it },
+          label = "CPV Verification Date",
+          placeholder = "e.g. 2026-10-15",
+          leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EblNavyPrimary) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "form_cpv_date"
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // CPV Verified Address with Auto-Detect Location Button
+        VoiceInputField(
+          value = cpvAddress,
+          onValueChange = { cpvAddress = it },
+          label = "CPV Verified Address",
+          placeholder = "Physical address verified in person (or click Auto-Detect)...",
+          leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Red) },
+          trailingIcon = {
+            TextButton(
+              onClick = {
+                if (LocationHelper.hasLocationPermission(context)) {
+                  coroutineScope.launch {
+                    try {
+                      val loc = LocationHelper.getCurrentLocation(context)
+                      cpvAddress = loc.address
+                    } catch (_: Exception) {}
+                  }
+                } else {
+                  locationPermissionLauncher.launch(
+                    arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+                  )
+                }
+              }
+            ) {
+              Text("Auto-Detect", fontSize = 11.sp, color = Color(0xFF2563EB))
+            }
+          },
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "form_cpv_address"
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // CPV Remarks & Field Verification Notes
+        VoiceInputField(
+          value = cpvRemarks,
+          onValueChange = { cpvRemarks = it },
+          label = "CPV Remarks & Field Verification Notes",
+          placeholder = "Officer remarks on premises, neighboring inquiries...",
+          singleLine = false,
+          maxLines = 3,
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "form_cpv_remarks"
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Two Action Buttons matching screenshot: Upload CPV Photo & Upload CPV Report / Doc
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          OutlinedButton(
+            onClick = {
+              cpvMultiPhotoPickerLauncher.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+              )
+            },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f).testTag("upload_cpv_photo_btn")
+          ) {
+            Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Upload CPV Photos", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          }
+
+          OutlinedButton(
+            onClick = { showAddAttachmentDialog = true },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f).testTag("upload_cpv_doc_btn")
+          ) {
+            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Upload CPV Doc", fontSize = 11.sp)
+          }
+        }
+
+        // CPV Photos Preview Flow
+        val cpvPhotosInCard = attachments.filter { it.category == "CPV Photo" }
+        if (cpvPhotosInCard.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(10.dp))
+          Text(
+            text = "✓ ${cpvPhotosInCard.size} Verification Photo(s) Attached:",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF7E22CE)
+          )
+          Spacer(modifier = Modifier.height(6.dp))
+          FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            cpvPhotosInCard.forEach { photo ->
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFFAF5FF),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC084FC)),
+                modifier = Modifier.clickable { previewAttachment = photo }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF9333EA), modifier = Modifier.size(14.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(photo.fileName.take(16) + if (photo.fileName.length > 16) "..." else "", fontSize = 10.sp, color = Color(0xFF581C87))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Remove",
+                    tint = Color.Red,
+                    modifier = Modifier.size(14.dp).clickable {
+                      viewModel.deleteAttachment(photo.attachmentId, fileId)
+                    }
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Attachments Master List
+    if (attachments.isNotEmpty()) {
+      Spacer(modifier = Modifier.height(16.dp))
+      Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Text("Attached Files (${attachments.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(8.dp))
           attachments.forEach { att ->
             Row(
               modifier = Modifier
@@ -812,136 +1169,19 @@ fun CustomerFileFormScreen(
                 imageVector = if (att.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
                 contentDescription = null,
                 tint = EblNavyPrimary,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
               )
               Spacer(modifier = Modifier.width(10.dp))
               Column(modifier = Modifier.weight(1f)) {
                 Text(att.fileName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                Text("${att.category} • ${(att.fileSizeBytes / 1024)} KB • By ${att.uploadedBy}", fontSize = 10.sp, color = Color.Gray)
+                Text("${att.category} • ${(att.fileSizeBytes / 1024)} KB", fontSize = 10.sp, color = Color.Gray)
               }
-              IconButton(
-                onClick = {
-                  viewModel.deleteAttachment(att.attachmentId, fileId)
-                }
-              ) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(18.dp))
+              IconButton(onClick = { viewModel.deleteAttachment(att.attachmentId, fileId) }) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(16.dp))
               }
             }
           }
         }
-      }
-    }
-
-    Spacer(modifier = Modifier.height(16.dp))
-
-    // SECTION H: CPV STATUS
-    Card(
-      modifier = Modifier.fillMaxWidth(),
-      shape = RoundedCornerShape(12.dp),
-      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-      Column(modifier = Modifier.padding(16.dp)) {
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Image, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = "Contact Point Verification (CPV)",
-              fontSize = 15.sp,
-              fontWeight = FontWeight.Bold,
-              color = EblNavyDark
-            )
-          }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-        Text(
-          text = "Attach field verification photograph and enter verification remarks.",
-          fontSize = 11.sp,
-          color = Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // CPV Photo Add Button & Badge
-        val cpvPhotos = attachments.filter { it.category == "CPV Photo" }
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Button(
-            onClick = {
-              cpvPhotoPickerLauncher.launch(
-                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-              )
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.testTag("btn_add_cpv_photo")
-          ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Add CPV Photo", fontSize = 12.sp)
-          }
-
-          if (cpvPhotos.isNotEmpty()) {
-            androidx.compose.material3.Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = Color(0xFFDCFCE7),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC))
-            ) {
-              Text(
-                text = "✓ ${cpvPhotos.size} Photo(s) Attached",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF15803D),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-              )
-            }
-          }
-        }
-
-        if (cpvPhotos.isNotEmpty()) {
-          Spacer(modifier = Modifier.height(8.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            cpvPhotos.take(4).forEach { photo ->
-              Card(
-                modifier = Modifier
-                  .size(60.dp)
-                  .clickable { previewAttachment = photo },
-                shape = RoundedCornerShape(6.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
-              ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                  Icon(Icons.Default.Image, contentDescription = null, tint = EblNavyPrimary)
-                }
-              }
-            }
-          }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // CPV Remarks Field
-        VoiceInputField(
-          value = cpvRemarks,
-          onValueChange = { cpvRemarks = it },
-          label = "CPV Remarks / Notes",
-          placeholder = "Enter CPV verification findings or notes...",
-          singleLine = false,
-          maxLines = 3,
-          modifier = Modifier.fillMaxWidth(),
-          testTag = "form_cpv_remarks"
-        )
       }
     }
 

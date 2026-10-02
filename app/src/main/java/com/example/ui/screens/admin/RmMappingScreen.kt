@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.ToggleOff
 import androidx.compose.material.icons.filled.ToggleOn
 import androidx.compose.material3.AlertDialog
@@ -71,11 +72,13 @@ fun RmMappingScreen(
   modifier: Modifier = Modifier
 ) {
   val allRms by viewModel.allRms.collectAsState()
+  val allTargets by viewModel.allTargets.collectAsState()
   var searchRmQuery by remember { mutableStateOf("") }
 
   var showAddDialog by remember { mutableStateOf(false) }
   var editingRm by remember { mutableStateOf<UserEntity?>(null) }
   var resetPasswordRm by remember { mutableStateOf<UserEntity?>(null) }
+  var settingTargetsRm by remember { mutableStateOf<UserEntity?>(null) }
   var showExportDialog by remember { mutableStateOf(false) }
   var exportedCsvContent by remember { mutableStateOf("") }
 
@@ -313,6 +316,82 @@ fun RmMappingScreen(
                 color = Color.Gray
               )
             }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Targets summary for this RM
+            val thisTarget = allTargets.find { it.rmCode == rm.rmCode }
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFF1F5F9),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = "Targets -> CC: ${thisTarget?.creditCardTarget ?: 20} | Corp: ${thisTarget?.corporateCardTarget ?: 10} | B2B: ${thisTarget?.b2bTarget ?: 15}",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Medium,
+                  color = EblNavyDark
+                )
+                if (currentUser.role == "ADMIN") {
+                  Text(
+                    text = "Set Target",
+                    fontSize = 11.sp,
+                    color = Color(0xFF2563EB),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { settingTargetsRm = rm }
+                  )
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Direct Action Buttons
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              OutlinedButton(
+                onClick = { editingRm = rm },
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f)
+              ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("Edit Info", fontSize = 11.sp)
+              }
+
+              OutlinedButton(
+                onClick = { resetPasswordRm = rm },
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                modifier = Modifier.weight(1f)
+              ) {
+                Icon(Icons.Default.Key, contentDescription = null, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("Password", fontSize = 11.sp)
+              }
+
+              if (currentUser.role == "ADMIN") {
+                OutlinedButton(
+                  onClick = { settingTargetsRm = rm },
+                  shape = RoundedCornerShape(6.dp),
+                  contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                  modifier = Modifier.weight(1f)
+                ) {
+                  Icon(Icons.Default.TrendingUp, contentDescription = null, modifier = Modifier.size(13.dp))
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text("Targets", fontSize = 11.sp)
+                }
+              }
+            }
           }
         }
       }
@@ -437,6 +516,7 @@ fun RmMappingScreen(
     var editMobile by remember { mutableStateOf(editingRm!!.mobile) }
     var editEmail by remember { mutableStateOf(editingRm!!.email) }
     var editAddress by remember { mutableStateOf(editingRm!!.officeAddress) }
+    var editNewPassword by remember { mutableStateOf("") }
 
     AlertDialog(
       onDismissRequest = { editingRm = null },
@@ -476,20 +556,28 @@ fun RmMappingScreen(
             modifier = Modifier.fillMaxWidth(),
             testTag = "edit_rm_address"
           )
-          if (currentUser.role == "ADMIN") {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-              text = "Note: Changes made by Admin require Mentor approval before the RM can log in.",
-              fontSize = 11.sp,
-              color = Color(0xFFB45309)
-            )
-          }
+          Spacer(modifier = Modifier.height(8.dp))
+          VoiceInputField(
+            value = editNewPassword,
+            onValueChange = { editNewPassword = it },
+            label = "Change Password (leave blank to keep current)",
+            placeholder = "Type new password if changing...",
+            modifier = Modifier.fillMaxWidth(),
+            testTag = "edit_rm_password"
+          )
         }
       },
       confirmButton = {
         Button(
           onClick = {
-            viewModel.updateRm(editingRm!!.rmCode, editName, editMobile, editEmail, editAddress) { success, _ ->
+            viewModel.updateRm(
+              rmCode = editingRm!!.rmCode,
+              name = editName,
+              mobile = editMobile,
+              email = editEmail,
+              officeAddress = editAddress,
+              newPassword = editNewPassword.ifBlank { null }
+            ) { success, _ ->
               if (success) editingRm = null
             }
           },
@@ -500,6 +588,68 @@ fun RmMappingScreen(
       },
       dismissButton = {
         OutlinedButton(onClick = { editingRm = null }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Set RM Targets Dialog
+  if (settingTargetsRm != null) {
+    val existingTarget = allTargets.find { it.rmCode == settingTargetsRm!!.rmCode }
+    var ccTargetInput by remember { mutableStateOf((existingTarget?.creditCardTarget ?: 20).toString()) }
+    var corpTargetInput by remember { mutableStateOf((existingTarget?.corporateCardTarget ?: 10).toString()) }
+    var b2bTargetInput by remember { mutableStateOf((existingTarget?.b2bTarget ?: 15).toString()) }
+
+    AlertDialog(
+      onDismissRequest = { settingTargetsRm = null },
+      title = { Text("Set Targets for ${settingTargetsRm!!.name}", fontWeight = FontWeight.Bold) },
+      text = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Text("Define monthly KPI quotas for RM Code: ${settingTargetsRm!!.rmCode}", fontSize = 12.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          OutlinedTextField(
+            value = ccTargetInput,
+            onValueChange = { ccTargetInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("Credit Card Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+            value = corpTargetInput,
+            onValueChange = { corpTargetInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("Corporate Card Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+            value = b2bTargetInput,
+            onValueChange = { b2bTargetInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("B2B Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val cc = ccTargetInput.toIntOrNull() ?: 20
+            val corp = corpTargetInput.toIntOrNull() ?: 10
+            val b2b = b2bTargetInput.toIntOrNull() ?: 15
+            viewModel.setRmTargets(settingTargetsRm!!.rmCode, cc, corp, b2b) { success, _ ->
+              if (success) settingTargetsRm = null
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Save Targets")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { settingTargetsRm = null }) {
           Text("Cancel")
         }
       }

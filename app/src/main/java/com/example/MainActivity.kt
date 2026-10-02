@@ -228,10 +228,13 @@ fun EblMainApp(viewModel: AppViewModel) {
             val stats by viewModel.kpiStats.collectAsState()
             val timeFilter by viewModel.selectedTimeFilter.collectAsState()
             val files by viewModel.filteredFiles.collectAsState()
+            val allTargets by viewModel.allTargets.collectAsState()
+            val rmTarget = allTargets.find { it.rmCode == user.rmCode }
 
             RmDashboardScreen(
               user = user,
               stats = stats,
+              target = rmTarget,
               selectedTimeFilter = timeFilter,
               recentFiles = files,
               onTimeFilterChange = { viewModel.selectedTimeFilter.value = it },
@@ -245,7 +248,10 @@ fun EblMainApp(viewModel: AppViewModel) {
                 viewModel.navigateTo(Screen.CustomerList)
               },
               onFileClick = { f -> viewModel.navigateTo(Screen.CustomerForm(f.fileId)) },
-              onDownloadReport = { viewModel.navigateTo(Screen.Reports) }
+              onDownloadReport = { viewModel.navigateTo(Screen.Reports) },
+              onUpdateLocation = { lat, lng, addr ->
+                viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
+              }
             )
           }
 

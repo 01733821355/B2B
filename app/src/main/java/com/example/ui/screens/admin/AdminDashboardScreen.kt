@@ -18,14 +18,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -35,9 +39,16 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,7 +79,7 @@ fun AdminDashboardScreen(
   val stats by viewModel.kpiStats.collectAsState()
   val selectedTimeFilter by viewModel.selectedTimeFilter.collectAsState()
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
-  val syncStatus by viewModel.syncStatus.collectAsState()
+  var targetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
 
   LazyColumn(
     modifier = modifier
@@ -223,11 +234,11 @@ fun AdminDashboardScreen(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text("RM Officer", modifier = Modifier.weight(1.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-            Text("Files", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-            Text("Apprv", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
-            Text("Subm", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
-            Text("Decl", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB91C1C))
-            Text("Q/STC", modifier = Modifier.weight(0.9f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2410C))
+            Text("Subm", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            Text("STC", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
+            Text("Apprv", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+            Text("Decl", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB91C1C))
+            Text("Q/RTS", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2410C))
           }
 
           if (rmPerformanceList.isEmpty()) {
@@ -239,7 +250,7 @@ fun AdminDashboardScreen(
             }
           } else {
             rmPerformanceList.forEach { row ->
-              Row(
+              Column(
                 modifier = Modifier
                   .fillMaxWidth()
                   .clickable {
@@ -247,18 +258,56 @@ fun AdminDashboardScreen(
                     onRmRowClicked(row.rmCode)
                   }
                   .padding(horizontal = 12.dp, vertical = 10.dp)
-                  .testTag("rm_row_${row.rmCode}"),
-                verticalAlignment = Alignment.CenterVertically
+                  .testTag("rm_row_${row.rmCode}")
               ) {
-                Column(modifier = Modifier.weight(1.8f)) {
-                  Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-                  Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray)
+                // Main Status Metrics Row
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Column(modifier = Modifier.weight(1.8f)) {
+                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                    Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray)
+                  }
+                  Text("${row.stats.totalFiles}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
+                  Text("${row.stats.approved}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                  Text("${row.stats.declined}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, color = Color(0xFFB91C1C))
+                  Text("${row.stats.query + row.stats.returnToSource}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, color = Color(0xFFC2410C))
                 }
-                Text("${row.stats.totalFiles}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                Text("${row.stats.approved}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
-                Text("${row.stats.submitted}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, color = Color(0xFF1D4ED8))
-                Text("${row.stats.declined + row.stats.returnToSource}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, color = Color(0xFFB91C1C))
-                Text("${row.stats.query + row.stats.stc}", modifier = Modifier.weight(0.9f), fontSize = 12.sp, color = Color(0xFFC2410C))
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Product Category Breakdown & Target vs Achievement Row
+                val ccTarget = row.target?.creditCardTarget ?: 20
+                val corpTarget = row.target?.corporateCardTarget ?: 10
+                val b2bTarget = row.target?.b2bTarget ?: 15
+
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
+                      Text("CC: ${row.stats.creditCardCount}/$ccTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                    }
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
+                      Text("Corp: ${row.stats.corporateCardCount}/$corpTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                    }
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
+                      Text("B2B: ${row.stats.b2bCount}/$b2bTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                    }
+                  }
+
+                  Text(
+                    text = "⚙ Set Target",
+                    fontSize = 11.sp,
+                    color = Color(0xFF2563EB),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { targetSettingRow = row }
+                  )
+                }
               }
               HorizontalDivider(color = Color(0xFFF1F5F9))
             }
@@ -270,5 +319,67 @@ fun AdminDashboardScreen(
     item {
       Spacer(modifier = Modifier.height(28.dp))
     }
+  }
+
+  // Set RM Targets Dialog for Admin
+  if (targetSettingRow != null) {
+    val row = targetSettingRow!!
+    var ccInput by remember { mutableStateOf((row.target?.creditCardTarget ?: 20).toString()) }
+    var corpInput by remember { mutableStateOf((row.target?.corporateCardTarget ?: 10).toString()) }
+    var b2bInput by remember { mutableStateOf((row.target?.b2bTarget ?: 15).toString()) }
+
+    AlertDialog(
+      onDismissRequest = { targetSettingRow = null },
+      title = { Text("Set Targets: ${row.rmName}", fontWeight = FontWeight.Bold) },
+      text = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Text("Assign monthly targets for RM Code: ${row.rmCode}", fontSize = 12.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          OutlinedTextField(
+            value = ccInput,
+            onValueChange = { ccInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("Credit Card Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+            value = corpInput,
+            onValueChange = { corpInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("Corporate Card Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+            value = b2bInput,
+            onValueChange = { b2bInput = it.filter { ch -> ch.isDigit() } },
+            label = { Text("B2B Monthly Target") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val cc = ccInput.toIntOrNull() ?: 20
+            val corp = corpInput.toIntOrNull() ?: 10
+            val b2b = b2bInput.toIntOrNull() ?: 15
+            viewModel.setRmTargets(row.rmCode, cc, corp, b2b) { success, _ ->
+              if (success) targetSettingRow = null
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Save Targets")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { targetSettingRow = null }) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 }

@@ -77,6 +77,7 @@ fun MentorDashboardScreen(
   val auditLogs by viewModel.auditLogs.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
+  val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
 
   var showDeletedRecordsDialog by remember { mutableStateOf(false) }
   var showEditAppNameDialog by remember { mutableStateOf(false) }
@@ -447,6 +448,106 @@ fun MentorDashboardScreen(
         stats = stats,
         onKpiClick = { onNavigate(Screen.GlobalDatabase) }
       )
+    }
+
+    // RM-Wise Performance Breakdown for Mentor
+    item {
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(14.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Column {
+              Text(
+                text = "RM-Wise Performance & Target Achievement",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+              Text(
+                text = "STC, Approvals, Declines, Query/RTS and category quotas",
+                fontSize = 10.sp,
+                color = Color.Gray
+              )
+            }
+          }
+
+          // Table Header
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .background(Color(0xFFE8EEF5))
+              .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text("RM Officer", modifier = Modifier.weight(1.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            Text("Subm", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            Text("STC", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
+            Text("Apprv", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+            Text("Decl", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB91C1C))
+            Text("Q/RTS", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2410C))
+          }
+
+          if (rmPerformanceList.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) {
+              Text("No RM officers found.", color = Color.Gray, fontSize = 12.sp)
+            }
+          } else {
+            rmPerformanceList.forEach { row ->
+              Column(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable {
+                    viewModel.selectedRmCodeFilter.value = row.rmCode
+                    onNavigate(Screen.GlobalDatabase)
+                  }
+                  .padding(horizontal = 12.dp, vertical = 8.dp)
+              ) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                  Column(modifier = Modifier.weight(1.8f)) {
+                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                    Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray)
+                  }
+                  Text("${row.stats.totalFiles}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
+                  Text("${row.stats.approved}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                  Text("${row.stats.declined}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, color = Color(0xFFB91C1C))
+                  Text("${row.stats.query + row.stats.returnToSource}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, color = Color(0xFFC2410C))
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val ccTarget = row.target?.creditCardTarget ?: 20
+                val corpTarget = row.target?.corporateCardTarget ?: 10
+                val b2bTarget = row.target?.b2bTarget ?: 15
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
+                    Text("CC: ${row.stats.creditCardCount}/$ccTarget", fontSize = 10.sp, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                  }
+                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
+                    Text("Corp: ${row.stats.corporateCardCount}/$corpTarget", fontSize = 10.sp, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                  }
+                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
+                    Text("B2B: ${row.stats.b2bCount}/$b2bTarget", fontSize = 10.sp, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                  }
+                }
+              }
+              HorizontalDivider(color = Color(0xFFF1F5F9))
+            }
+          }
+        }
+      }
     }
 
     // Mentor Governance Panel (Soft Delete Recovery / Permanent Purge)

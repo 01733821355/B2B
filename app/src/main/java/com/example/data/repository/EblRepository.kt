@@ -6,6 +6,7 @@ import com.example.data.model.AppSettingEntity
 import com.example.data.model.AuditLogEntity
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.FileAttachmentEntity
+import com.example.data.model.RmTargetEntity
 import com.example.data.model.SyncStatusEntity
 import com.example.data.model.UserEntity
 import com.example.util.DateUtils
@@ -13,9 +14,11 @@ import com.example.util.NotificationHelper
 import com.example.util.SecurityUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,22 +43,58 @@ class EblRepository(
     .build()
 
   // 1. Customer Files Access Control
+  @OptIn(ExperimentalCoroutinesApi::class)
   fun getAuthorizedFilesFlow(): Flow<List<CustomerFileEntity>> {
-    val currentUser = authRepository.currentUser.value ?: return emptyFlow()
-    return if (currentUser.role == "RM") {
-      database.customerFileDao().getFilesForRmFlow(currentUser.rmCode)
-    } else {
-      database.customerFileDao().getAllActiveFilesFlow()
+    return authRepository.currentUser.flatMapLatest { currentUser ->
+      if (currentUser == null) {
+        database.customerFileDao().getAllActiveFilesFlow()
+      } else if (currentUser.role == "RM") {
+        database.customerFileDao().getFilesForRmFlow(currentUser.rmCode)
+      } else {
+        database.customerFileDao().getAllActiveFilesFlow()
+      }
     }
   }
 
+  @OptIn(ExperimentalCoroutinesApi::class)
   fun getAllFilesIncludingDeletedFlow(): Flow<List<CustomerFileEntity>> {
-    val currentUser = authRepository.currentUser.value ?: return emptyFlow()
-    return if (currentUser.role == "MENTOR") {
-      database.customerFileDao().getAllFilesIncludingDeletedFlow()
-    } else {
-      getAuthorizedFilesFlow()
+    return authRepository.currentUser.flatMapLatest { currentUser ->
+      if (currentUser == null) {
+        database.customerFileDao().getAllFilesIncludingDeletedFlow()
+      } else if (currentUser.role == "MENTOR") {
+        database.customerFileDao().getAllFilesIncludingDeletedFlow()
+      } else if (currentUser.role == "RM") {
+        database.customerFileDao().getFilesForRmFlow(currentUser.rmCode)
+      } else {
+        database.customerFileDao().getAllActiveFilesFlow()
+      }
     }
+  }
+
+  // RM Target vs Achievement
+  fun getTargetForRmFlow(rmCode: String): Flow<RmTargetEntity?> {
+    return database.rmTargetDao().getTargetForRmFlow(rmCode)
+  }
+
+  suspend fun getTargetForRm(rmCode: String): RmTargetEntity = withContext(Dispatchers.IO) {
+    database.rmTargetDao().getTargetForRm(rmCode) ?: RmTargetEntity(rmCode = rmCode)
+  }
+
+  suspend fun setRmTargets(
+    rmCode: String,
+    creditCardTarget: Int,
+    corporateCardTarget: Int,
+    b2bTarget: Int
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val target = RmTargetEntity(
+      rmCode = rmCode,
+      creditCardTarget = creditCardTarget,
+      corporateCardTarget = corporateCardTarget,
+      b2bTarget = b2bTarget,
+      updatedAt = System.currentTimeMillis()
+    )
+    database.rmTargetDao().insertOrUpdateTarget(target)
+    Result.success(Unit)
   }
 
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?> {
@@ -95,25 +134,24 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
 
     // RM can only save their own RM code
-    val resolvedRmCode = if (currentUser.role == "RM") {
+    val resolvedRmCode = (if (currentUser.role == "RM") {
       currentUser.rmCode
     } else {
       assignedRmCode.ifBlank { currentUser.rmCode }
-    }
+    }).trim().uppercase()
 
     val now = DateUtils.currentDhakaMillis()
-    val isNew = fileId.isNullOrBlank()
-
-    val targetFileId = if (isNew) {
+    val targetFileId = if (fileId.isNullOrBlank()) {
       SecurityUtils.generateFileId(resolvedRmCode)
     } else {
-      fileId!!
+      fileId.trim()
     }
 
-    val existing = if (!isNew) database.customerFileDao().getFileById(targetFileId) else null
+    val existing = database.customerFileDao().getFileById(targetFileId)
+    val isNew = existing == null
 
     // Check authorization for edit
-    if (existing != null && currentUser.role == "RM" && existing.assignedRmCode != currentUser.rmCode) {
+    if (existing != null && currentUser.role == "RM" && !existing.assignedRmCode.trim().equals(currentUser.rmCode.trim(), ignoreCase = true)) {
       return@withContext Result.failure(Exception("You do not have permission to modify this record."))
     }
 
@@ -450,8 +488,8 @@ class EblRepository(
       mobile = mobile.trim(),
       email = email.trim(),
       officeAddress = officeAddress.trim(),
-      accountStatus = "PENDING_APPROVAL",
-      mustChangePassword = true,
+      accountStatus = "ACTIVE",
+      mustChangePassword = false,
       createdAt = now,
       authUid = "AUTH_RM_$cleanRmCode"
     )
@@ -462,17 +500,12 @@ class EblRepository(
         logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
         userId = currentUser.rmCode,
         role = currentUser.role,
-        action = "RM_ASSIGN_PENDING",
+        action = "RM_ASSIGN_ACTIVE",
         rmCode = cleanRmCode,
         timestamp = now,
-        details = "Admin assigned RM account for ${name.trim()} (Code: $cleanRmCode). Status: PENDING_APPROVAL."
+        details = "Admin created active RM account for ${name.trim()} (Code: $cleanRmCode)."
       )
     )
-
-    // Notify Mentor that a new RM assignment is pending for approval
-    context?.let { ctx ->
-      NotificationHelper.sendNewRmApprovalNotification(ctx, name.trim(), cleanRmCode)
-    }
 
     Result.success(newUser)
   }
@@ -482,7 +515,8 @@ class EblRepository(
     name: String,
     mobile: String,
     email: String,
-    officeAddress: String
+    officeAddress: String,
+    newPassword: String? = null
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -494,16 +528,29 @@ class EblRepository(
     val existing = database.userDao().getUser(rmCode)
       ?: return@withContext Result.failure(Exception("RM user not found."))
 
-    // If Admin edits RM, it requires Mentor's re-approval
-    val targetStatus = if (currentUser.role == "ADMIN") "PENDING_APPROVAL" else existing.accountStatus
+    val targetStatus = existing.accountStatus
 
-    val updated = existing.copy(
-      name = name.trim(),
-      mobile = mobile.trim(),
-      email = email.trim(),
-      officeAddress = officeAddress.trim(),
-      accountStatus = targetStatus
-    )
+    val updated = if (!newPassword.isNullOrBlank()) {
+      val salt = SecurityUtils.generateSalt()
+      val hash = SecurityUtils.hashPassword(newPassword.trim(), salt)
+      existing.copy(
+        name = name.trim(),
+        mobile = mobile.trim(),
+        email = email.trim(),
+        officeAddress = officeAddress.trim(),
+        passwordHash = hash,
+        salt = salt,
+        mustChangePassword = false
+      )
+    } else {
+      existing.copy(
+        name = name.trim(),
+        mobile = mobile.trim(),
+        email = email.trim(),
+        officeAddress = officeAddress.trim(),
+        accountStatus = targetStatus
+      )
+    }
 
     database.userDao().updateUser(updated)
     database.auditLogDao().insertLog(
@@ -514,7 +561,7 @@ class EblRepository(
         action = "RM_UPDATE",
         rmCode = rmCode,
         timestamp = DateUtils.currentDhakaMillis(),
-        details = "Updated profile for RM $rmCode (Status: $targetStatus)."
+        details = "Updated profile for RM $rmCode" + if (!newPassword.isNullOrBlank()) " (password changed)" else ""
       )
     )
 
@@ -589,6 +636,31 @@ class EblRepository(
         rmCode = rmCode,
         timestamp = DateUtils.currentDhakaMillis(),
         details = "Mentor rejected RM account $rmCode. Reason: ${reason.ifBlank { "Not specified" }}."
+      )
+    )
+    Result.success(Unit)
+  }
+
+  suspend fun resetRmPassword(rmCode: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied."))
+    }
+    val existing = database.userDao().getUser(rmCode)
+      ?: return@withContext Result.failure(Exception("RM not found."))
+    val salt = SecurityUtils.generateSalt()
+    val hash = SecurityUtils.hashPassword(newPassword, salt)
+    database.userDao().updatePassword(rmCode, hash, salt, mustChange = false)
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_PASSWORD_RESET",
+        rmCode = rmCode,
+        timestamp = DateUtils.currentDhakaMillis(),
+        details = "${currentUser.role} reset password for RM $rmCode (${existing.name})."
       )
     )
     Result.success(Unit)

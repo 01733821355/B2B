@@ -37,6 +37,9 @@ interface UserDao {
   @Query("UPDATE users SET accountStatus = :status WHERE rmCode = :rmCode")
   suspend fun updateStatus(rmCode: String, status: String)
 
+  @Query("UPDATE users SET name = :name, mobile = :mobile, email = :email, officeAddress = :officeAddress WHERE rmCode = :rmCode")
+  suspend fun updateUserDetails(rmCode: String, name: String, mobile: String, email: String, officeAddress: String)
+
   @Query("UPDATE users SET lastLogin = :timestamp, isOnline = 1 WHERE rmCode = :rmCode")
   suspend fun updateLastLogin(rmCode: String, timestamp: Long)
 
