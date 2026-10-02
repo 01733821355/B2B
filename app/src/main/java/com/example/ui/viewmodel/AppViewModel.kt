@@ -9,11 +9,13 @@ import com.example.data.model.AppSettingEntity
 import com.example.data.model.AuditLogEntity
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.FileAttachmentEntity
+import com.example.data.model.SmsNotificationEntity
 import com.example.data.model.SyncStatusEntity
 import com.example.data.model.UserEntity
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.EblRepository
 import com.example.util.DateUtils
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -22,6 +24,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -228,6 +232,41 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       )
     }
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  // SMS Notifications State
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val rmSmsNotifications: StateFlow<List<SmsNotificationEntity>> = currentUser.flatMapLatest { user ->
+    if (user != null && user.role == "RM") {
+      eblRepository.getSmsForRmFlow(user.rmCode)
+    } else {
+      emptyFlow()
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  @OptIn(ExperimentalCoroutinesApi::class)
+  val unreadSmsCount: StateFlow<Int> = currentUser.flatMapLatest { user ->
+    if (user != null && user.role == "RM") {
+      eblRepository.getUnreadSmsCountFlow(user.rmCode)
+    } else {
+      emptyFlow()
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+  val allSmsNotifications: StateFlow<List<SmsNotificationEntity>> = eblRepository.getAllSmsFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  fun markSmsAsRead(id: Long) {
+    viewModelScope.launch {
+      eblRepository.markSmsAsRead(id)
+    }
+  }
+
+  fun markAllSmsAsRead() {
+    val user = currentUser.value ?: return
+    viewModelScope.launch {
+      eblRepository.markAllSmsAsReadForRm(user.rmCode)
+    }
+  }
 
   init {
     viewModelScope.launch {

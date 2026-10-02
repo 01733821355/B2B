@@ -9,6 +9,7 @@ import com.example.data.dao.AuditLogDao
 import com.example.data.dao.CustomerFileDao
 import com.example.data.dao.FileAttachmentDao
 import com.example.data.dao.RmTargetDao
+import com.example.data.dao.SmsNotificationDao
 import com.example.data.dao.UserDao
 import com.example.data.dao.UserLocationLogDao
 import com.example.data.model.AppSettingEntity
@@ -16,6 +17,7 @@ import com.example.data.model.AuditLogEntity
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.FileAttachmentEntity
 import com.example.data.model.RmTargetEntity
+import com.example.data.model.SmsNotificationEntity
 import com.example.data.model.SyncStatusEntity
 import com.example.data.model.UserEntity
 import com.example.data.model.UserLocationLogEntity
@@ -29,9 +31,10 @@ import com.example.data.model.UserLocationLogEntity
     AppSettingEntity::class,
     SyncStatusEntity::class,
     UserLocationLogEntity::class,
-    RmTargetEntity::class
+    RmTargetEntity::class,
+    SmsNotificationEntity::class
   ],
-  version = 4,
+  version = 5,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -42,6 +45,7 @@ abstract class AppDatabase : RoomDatabase() {
   abstract fun appSettingDao(): AppSettingDao
   abstract fun userLocationLogDao(): UserLocationLogDao
   abstract fun rmTargetDao(): RmTargetDao
+  abstract fun smsNotificationDao(): SmsNotificationDao
 
   companion object {
     @Volatile

@@ -12,7 +12,9 @@ object DateUtils {
   val DHAKA_ZONE: ZoneId = ZoneId.of("Asia/Dhaka")
 
   private val DISPLAY_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a")
+  private val DISPLAY_FORMATTER_WITH_SEC = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm:ss a")
   private val DATE_ONLY_FORMATTER = DateTimeFormatter.ofPattern("dd MMM yyyy")
+  private val TIME_ONLY_FORMATTER = DateTimeFormatter.ofPattern("hh:mm a")
   private val ISO_DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
   fun currentDhakaMillis(): Long {
@@ -28,6 +30,26 @@ object DateUtils {
     return try {
       val ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), DHAKA_ZONE)
       ldt.format(DISPLAY_FORMATTER)
+    } catch (_: Exception) {
+      "Invalid Date"
+    }
+  }
+
+  fun formatDateTimeWithSeconds(millis: Long?): String {
+    if (millis == null || millis <= 0) return "N/A"
+    return try {
+      val ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), DHAKA_ZONE)
+      ldt.format(DISPLAY_FORMATTER_WITH_SEC)
+    } catch (_: Exception) {
+      "Invalid Date"
+    }
+  }
+
+  fun formatTimeOnly(millis: Long?): String {
+    if (millis == null || millis <= 0) return "N/A"
+    return try {
+      val ldt = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), DHAKA_ZONE)
+      ldt.format(TIME_ONLY_FORMATTER)
     } catch (_: Exception) {
       "Invalid Date"
     }

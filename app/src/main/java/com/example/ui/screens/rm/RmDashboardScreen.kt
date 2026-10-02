@@ -75,6 +75,8 @@ fun RmDashboardScreen(
   onFileClick: (CustomerFileEntity) -> Unit,
   onDownloadReport: () -> Unit,
   target: RmTargetEntity? = null,
+  unreadSmsCount: Int = 0,
+  onOpenSmsInbox: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier
 ) {

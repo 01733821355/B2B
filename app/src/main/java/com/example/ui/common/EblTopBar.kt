@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -44,6 +45,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.SmsNotificationEntity
 import com.example.data.model.UserEntity
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
@@ -64,9 +66,14 @@ fun EblTopBar(
   onChangePassword: () -> Unit,
   onSyncClicked: () -> Unit = {},
   pendingSyncCount: Int = 0,
+  unreadSmsCount: Int = 0,
+  smsList: List<SmsNotificationEntity> = emptyList(),
+  onMarkSmsRead: (Long) -> Unit = {},
+  onMarkAllSmsRead: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   var showMenu by remember { mutableStateOf(false) }
+  var showSmsDialog by remember { mutableStateOf(false) }
   var dhakaTimeText by remember { mutableStateOf("") }
 
   LaunchedEffect(Unit) {
@@ -189,6 +196,37 @@ fun EblTopBar(
       }
 
       if (user != null) {
+        // SMS Notifications Action Button
+        IconButton(
+          onClick = { showSmsDialog = true },
+          modifier = Modifier.testTag("top_bar_sms_button")
+        ) {
+          if (unreadSmsCount > 0 && user.role == "RM") {
+            BadgedBox(
+              badge = {
+                Badge(
+                  containerColor = Color(0xFFDC2626),
+                  contentColor = Color.White
+                ) {
+                  Text(unreadSmsCount.toString(), fontSize = 9.sp)
+                }
+              }
+            ) {
+              Icon(
+                imageVector = Icons.Default.Sms,
+                contentDescription = "SMS Inbox",
+                tint = Color.White
+              )
+            }
+          } else {
+            Icon(
+              imageVector = Icons.Default.Sms,
+              contentDescription = if (user.role == "RM") "SMS Inbox" else "RM SMS Logs",
+              tint = Color.White.copy(alpha = 0.9f)
+            )
+          }
+        }
+
         // Profile Menu
         Box {
           IconButton(
@@ -244,4 +282,14 @@ fun EblTopBar(
       }
     }
   )
+
+  if (showSmsDialog && user != null) {
+    SmsNotificationsDialog(
+      isRmView = user.role == "RM",
+      smsList = smsList,
+      onDismiss = { showSmsDialog = false },
+      onMarkRead = onMarkSmsRead,
+      onMarkAllRead = onMarkAllSmsRead
+    )
+  }
 }

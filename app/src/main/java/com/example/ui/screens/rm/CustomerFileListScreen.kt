@@ -332,6 +332,25 @@ fun CustomerFileListScreen(
                 }
               }
 
+              Spacer(modifier = Modifier.height(4.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = "Created: ${DateUtils.formatDateTime(file.createdAt)}",
+                  fontSize = 10.sp,
+                  color = Color.Gray
+                )
+                Text(
+                  text = "Updated: ${DateUtils.formatDateTime(file.updatedAt)}",
+                  fontSize = 10.sp,
+                  color = EblNavyPrimary,
+                  fontWeight = FontWeight.Medium
+                )
+              }
+
               if (file.pendingDocuments.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Surface(

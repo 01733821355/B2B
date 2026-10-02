@@ -102,6 +102,9 @@ fun EblMainApp(viewModel: AppViewModel) {
   val currentScreen by viewModel.currentScreen.collectAsState()
   val syncStatus by viewModel.syncStatus.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
+  val unreadSmsCount by viewModel.unreadSmsCount.collectAsState()
+  val rmSmsList by viewModel.rmSmsNotifications.collectAsState()
+  val allSmsList by viewModel.allSmsNotifications.collectAsState()
 
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
@@ -188,7 +191,11 @@ fun EblMainApp(viewModel: AppViewModel) {
         onLogout = { viewModel.logout() },
         onChangePassword = { showPasswordDialog = true },
         onSyncClicked = { viewModel.navigateTo(Screen.GoogleSheetsSync) },
-        pendingSyncCount = syncStatus?.pendingRecordsCount ?: 0
+        pendingSyncCount = syncStatus?.pendingRecordsCount ?: 0,
+        unreadSmsCount = unreadSmsCount,
+        smsList = if (user.role == "RM") rmSmsList else allSmsList,
+        onMarkSmsRead = { viewModel.markSmsAsRead(it) },
+        onMarkAllSmsRead = { viewModel.markAllSmsAsRead() }
       )
     },
     bottomBar = {
