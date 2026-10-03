@@ -1472,12 +1472,13 @@ fun CustomerFileFormScreen(
   }
 
   // Full-featured Preview & Download Attachment Dialog
-  if (previewAttachment != null) {
+  val currentPreview = previewAttachment
+  if (currentPreview != null) {
     AttachmentViewerDialog(
-      attachment = previewAttachment!!,
+      attachment = currentPreview,
       onDismiss = { previewAttachment = null },
       onDelete = {
-        viewModel.deleteAttachment(previewAttachment!!.attachmentId, fileId)
+        viewModel.deleteAttachment(currentPreview.attachmentId, fileId)
         previewAttachment = null
       }
     )
