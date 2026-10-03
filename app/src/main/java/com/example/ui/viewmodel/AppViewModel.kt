@@ -282,15 +282,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Continuous Real-Time Bi-Directional Auto-Sync Loop
-    // Automatically synchronizes both ways with Google Sheets in the background
+    // Automatically synchronizes both ways with Google Sheets in the background every 3 seconds
     viewModelScope.launch {
       while (true) {
-        delay(4000) // 4 seconds continuous live sync interval
-        if (isRealtimeAutoSyncEnabled.value && currentUser.value != null) {
+        delay(3000) // 3 seconds continuous live sync interval
+        if (isRealtimeAutoSyncEnabled.value) {
           try {
             isSyncingInProgress.value = true
-            eblRepository.triggerGoogleSheetsSync()
+            // 1. ALWAYS PULL FIRST! This brings in any manual changes from Google Sheets,
+            // new RMs, updated file statuses, and universal settings changed by other phones.
             eblRepository.pullDataFromGoogleSheets()
+
+            // 2. Then, push any locally modified files or settings if logged in
+            if (currentUser.value != null) {
+              eblRepository.triggerGoogleSheetsSync()
+            }
           } catch (_: Exception) {
           } finally {
             isSyncingInProgress.value = false
@@ -392,8 +398,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = authRepository.login(usernameInput, passwordInput, latitude, longitude, address)
+      var res = authRepository.login(usernameInput, passwordInput, latitude, longitude, address)
+      if (res.isFailure) {
+        // If login failed, pull fresh data (RMs, passwords, settings) from Google Sheets and retry!
+        // This ensures ANY RM or Admin/Mentor logging in on ANY phone succeeds immediately!
+        try {
+          eblRepository.pullDataFromGoogleSheets()
+          res = authRepository.login(usernameInput, passwordInput, latitude, longitude, address)
+        } catch (_: Exception) {}
+      }
       res.onSuccess { user ->
+        // Pull latest sheet data immediately upon successful login so all files, stats and SMS are fresh!
+        viewModelScope.launch {
+          try {
+            eblRepository.pullDataFromGoogleSheets()
+          } catch (_: Exception) {}
+        }
         screenBackstack.clear()
         when (user.role) {
           "RM" -> _currentScreen.value = Screen.RmDashboard

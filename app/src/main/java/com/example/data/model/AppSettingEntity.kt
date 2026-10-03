@@ -21,6 +21,6 @@ data class SyncStatusEntity(
   val lastSyncStatus: String = "IDLE", // IDLE, IN_PROGRESS, SUCCESS, ERROR
   val lastSyncMessage: String = "Initial state. Ready for synchronization.",
   val pendingRecordsCount: Int = 0,
-  val appsScriptUrl: String = "",
+  val appsScriptUrl: String = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec",
   val syncSecretKey: String = ""
 )

@@ -131,8 +131,8 @@ fun RmMappingScreen(
           Text("Export", fontSize = 11.sp)
         }
 
-        // Only Admin can assign/provision new RM accounts
-        if (currentUser.role == "ADMIN") {
+        // Admin or Mentor can assign/provision new RM accounts
+        if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
           Button(
             onClick = { showAddDialog = true },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
@@ -467,9 +467,9 @@ fun RmMappingScreen(
             testTag = "add_rm_password"
           )
           Text(
-            text = "Notice: Assigned RM will be in 'Pending Approval' status until Mentor verifies and approves. Mentor will receive an instant notification.",
+            text = "Notice: Assigned RM will be created as ACTIVE and immediately synced to Google Sheets in 'RM_Details' tab. The RM can log in on ANY mobile device with this RM Code and password.",
             fontSize = 11.sp,
-            color = Color(0xFFB45309),
+            color = Color(0xFF047857),
             modifier = Modifier.padding(top = 6.dp)
           )
         }
@@ -499,7 +499,7 @@ fun RmMappingScreen(
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           modifier = Modifier.testTag("btn_confirm_add_rm")
         ) {
-          Text("Assign & Request Approval")
+          Text("Create & Sync to Sheet")
         }
       },
       dismissButton = {

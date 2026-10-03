@@ -14,6 +14,20 @@ import kotlinx.coroutines.withContext
 object DatabaseInitializer {
 
   suspend fun initializeIfNeeded(database: AppDatabase) = withContext(Dispatchers.IO) {
+    val targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+
+    // Ensure SyncStatus is always configured with user's Web App URL on any phone
+    val existingStatus = database.appSettingDao().getSyncStatus()
+    if (existingStatus == null || existingStatus.appsScriptUrl != targetWebAppUrl) {
+      database.appSettingDao().insertOrUpdateSyncStatus(
+        (existingStatus ?: SyncStatusEntity()).copy(
+          appsScriptUrl = targetWebAppUrl,
+          lastSyncStatus = "READY",
+          lastSyncMessage = "Ready for live bi-directional sync."
+        )
+      )
+    }
+
     val existingUsers = database.userDao().getAllUsers()
     if (existingUsers.isNotEmpty()) {
       return@withContext
@@ -553,7 +567,7 @@ object DatabaseInitializer {
       lastSyncStatus = "SUCCESS",
       lastSyncMessage = "Synchronized customer files and RM mapping entries to Google Sheets.",
       pendingRecordsCount = 0,
-      appsScriptUrl = "",
+      appsScriptUrl = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec",
       syncSecretKey = ""
     )
     database.appSettingDao().insertOrUpdateSyncStatus(syncStatus)

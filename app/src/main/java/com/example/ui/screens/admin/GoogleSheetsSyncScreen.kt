@@ -83,7 +83,12 @@ fun GoogleSheetsSyncScreen(
       if (status.spreadsheetId.isNotBlank()) "https://docs.google.com/spreadsheets/d/${status.spreadsheetId}/edit" else ""
     )
   }
-  var inputAppsScriptUrl by remember(status.appsScriptUrl) { mutableStateOf(status.appsScriptUrl) }
+  var inputAppsScriptUrl by remember(status.appsScriptUrl) {
+    mutableStateOf(
+      if (status.appsScriptUrl.isNotBlank()) status.appsScriptUrl
+      else "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+    )
+  }
   var isSavingUrl by remember { mutableStateOf(false) }
   var isSavingScriptUrl by remember { mutableStateOf(false) }
   var isSyncingNow by remember { mutableStateOf(false) }
@@ -94,84 +99,332 @@ fun GoogleSheetsSyncScreen(
   var showScriptCodeDialog by remember { mutableStateOf(false) }
 
   val appsScriptTemplate = """
+/**
+ * EBL Sales & RM Suite - 7-Tab Multi-Device Bi-Directional Auto-Sync Web App
+ * Tabs: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs
+ *
+ * FEATURES:
+ * 1. Supports Manual Editing directly in Google Sheets without data loss!
+ * 2. onEdit trigger stamps 'Manual_Sheet_Edit' to prevent auto-sync overwriting manual edits.
+ * 3. doGet returns full multi-tab JSON for any connected browser or mobile app.
+ * 4. Full multi-device real-time sync for RMs, Targets, Customer Files, and Universal Settings.
+ */
+
 function doGet(e) {
-  return handleFetchFiles();
+  return handleFetchAllData();
+}
+
+function onEdit(e) {
+  try {
+    if (!e || !e.range) return;
+    var range = e.range;
+    var sheet = range.getSheet();
+    var sheetName = sheet.getName();
+    var row = range.getRow();
+    if (row <= 1) return; // Header row ignored
+
+    var nowStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+
+    if (sheetName === 'Customer_Files' || sheetName === 'Files') {
+      sheet.getRange(row, 18).setValue(nowStr); // Last Updated
+      sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
+    } else if (sheetName === 'RM_Details' || sheetName === 'RM_Directory') {
+      sheet.getRange(row, 14).setValue(nowStr); // Last Updated
+    } else if (sheetName === 'Universal_Settings' || sheetName === 'Settings') {
+      sheet.getRange(row, 4).setValue('Manual_Sheet_Edit'); // Last Updated By
+      sheet.getRange(row, 5).setValue(nowStr); // Last Updated At
+    }
+  } catch (err) {}
 }
 
 function doPost(e) {
   try {
-    var data = JSON.parse(e.postData.contents);
+    var contents = e.postData ? e.postData.contents : '{}';
+    var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
+
     // 1. Auto-create & format 'Customer_Files' Tab
-    var fileSheet = ss.getSheetByName('Customer_Files');
-    if (!fileSheet) {
-      fileSheet = ss.insertSheet('Customer_Files');
-      var headers = [
-        'CC-Number', 'File ID', 'Customer Name', 'Company Name',
-        'Office Address', 'Mobile', 'Email', 'Product Type',
-        'Status', 'Active', 'Assigned RM', 'Pending Documents',
-        'CPV Remarks', 'GPS Location Address', 'GPS Lat', 'GPS Lng', 'Last Updated'
-      ];
-      fileSheet.appendRow(headers);
-      var hr = fileSheet.getRange(1, 1, 1, headers.length);
-      hr.setBackground('#0A192F').setFontColor('#FFFFFF').setFontWeight('bold');
-      fileSheet.setFrozenRows(1);
-    }
+    var fileSheet = getOrCreateSheet(ss, 'Customer_Files', [
+      'CC-Number', 'File ID', 'Customer Name', 'Company Name',
+      'Office Address', 'Mobile', 'Email', 'Product Type',
+      'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
+      'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng',
+      'Last Updated', 'Updated By'
+    ], '#0A192F');
+
+    // 2. Auto-create & format 'RM_Details' Tab
+    var rmSheet = getOrCreateSheet(ss, 'RM_Details', [
+      'RM Code', 'Full Name', 'Mobile', 'Email',
+      'Office Address', 'Role', 'Account Status',
+      'Credit Card Target', 'Corporate Card Target', 'B2B Target',
+      'Password Hash', 'Salt', 'Created At', 'Last Updated'
+    ], '#1E3A8A');
+
+    // 3. Auto-create & format 'Universal_Settings' Tab
+    var settingsSheet = getOrCreateSheet(ss, 'Universal_Settings', [
+      'Setting Key', 'Setting Value', 'Description', 'Last Updated By', 'Last Updated At'
+    ], '#065F46');
+
+    // 4. Auto-create & format 'Audit_Trail' Tab
+    var auditSheet = getOrCreateSheet(ss, 'Audit_Trail', [
+      'Log ID', 'User / RM Code', 'Role', 'Action Type', 'Target ID / File ID', 'Details', 'Timestamp'
+    ], '#7C2D12');
+
+    // 5. Auto-create & format 'Attachments' Tab
+    var attachSheet = getOrCreateSheet(ss, 'Attachments', [
+      'Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp'
+    ], '#4C1D95');
+
+    // 6. Auto-create & format 'SMS_Notifications' Tab
+    var smsSheet = getOrCreateSheet(ss, 'SMS_Notifications', [
+      'Notification ID', 'Recipient RM Code', 'Recipient Name', 'Recipient Mobile',
+      'Triggered By Role', 'Triggered By Code', 'Action Type', 'Target ID',
+      'Message Text', 'Delivery Status', 'Timestamp'
+    ], '#991B1B');
+
+    // 7. Auto-create & format 'RM_Location_Logs' Tab
+    var locSheet = getOrCreateSheet(ss, 'RM_Location_Logs', [
+      'RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Source Action'
+    ], '#0F766E');
 
     if (data.action === 'FETCH_SHEET_DATA') {
-      return handleFetchFiles();
+      return handleFetchAllData();
     }
-    
-    // 2. Auto-create & format 'RM_Location_Logs' Tab
-    var locSheet = ss.getSheetByName('RM_Location_Logs');
-    if (!locSheet) {
-      locSheet = ss.insertSheet('RM_Location_Logs');
-      var locHeaders = ['RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Trigger Action'];
-      locSheet.appendRow(locHeaders);
-      var lr = locSheet.getRange(1, 1, 1, locHeaders.length);
-      lr.setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
-      locSheet.setFrozenRows(1);
-    }
-    
-    // 3. Upsert Files Data by CC-Number / File ID
+
+    // Upsert Customer Files (ONLY files sent by app - NEVER overwrite manual sheet edits)
     if (data.files && data.files.length > 0) {
-      var existingData = fileSheet.getDataRange().getValues();
-      var idRowMap = {};
-      for (var r = 1; r < existingData.length; r++) {
-        var key = existingData[r][0] || existingData[r][1];
-        if (key) idRowMap[key] = r + 1;
+      var fileExistingData = fileSheet.getDataRange().getValues();
+      var fileIdRowMap = {};
+      for (var r = 1; r < fileExistingData.length; r++) {
+        var key = String(fileExistingData[r][1] || fileExistingData[r][0] || '').trim();
+        if (key) fileIdRowMap[key] = r + 1;
       }
-      
+
       data.files.forEach(function(f) {
+        var matchKey = String(f.fileId || f.ccNumber || '').trim();
+        if (!matchKey) return;
+
         var row = [
-          f.ccNumber, f.fileId, f.customerName, f.companyName,
-          f.officeAddress, f.mobile, f.email, f.productType,
-          f.applicationStatus, f.activeStatus, f.assignedRmCode,
-          f.pendingDocuments, f.cpvRemarks, f.submissionAddress,
-          f.submissionLat, f.submissionLng, f.updatedAt
+          f.ccNumber || '',
+          f.fileId || '',
+          f.customerName || '',
+          f.companyName || '',
+          f.officeAddress || '',
+          f.mobile || '',
+          f.email || '',
+          f.productType || '',
+          f.applicationStatus || 'Submitted',
+          f.activeStatus || 'N',
+          f.assignedRmCode || '',
+          f.pendingDocuments || '',
+          f.cpvRemarks || '',
+          f.cpvStatus || 'Pending',
+          f.submissionAddress || '',
+          f.submissionLat || 0.0,
+          f.submissionLng || 0.0,
+          f.updatedAt || '',
+          f.updatedBy || 'App'
         ];
-        var match = f.ccNumber || f.fileId;
-        if (idRowMap[match]) {
-          fileSheet.getRange(idRowMap[match], 1, 1, row.length).setValues([row]);
+
+        if (fileIdRowMap[matchKey]) {
+          var rowIndex = fileIdRowMap[matchKey];
+          var existingRow = fileExistingData[rowIndex - 1];
+          var existingUpdatedBy = String(existingRow[18] || '');
+          var existingUpdatedAt = String(existingRow[17] || '');
+          var appUpdatedAt = String(f.updatedAt || '');
+
+          // If row was edited manually in Google Sheet, NEVER overwrite with older/equal app data!
+          if (existingUpdatedBy === 'Manual_Sheet_Edit' && (!appUpdatedAt || existingUpdatedAt >= appUpdatedAt)) {
+            // Keep manual sheet edits safe!
+          } else {
+            fileSheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+          }
         } else {
           fileSheet.appendRow(row);
-          idRowMap[match] = fileSheet.getLastRow();
+          fileIdRowMap[matchKey] = fileSheet.getLastRow();
         }
       });
     }
-    
-    // 4. Record Location Logs
-    if (data.locations && data.locations.length > 0) {
-      data.locations.forEach(function(l) {
-        locSheet.appendRow([l.rmCode, l.userName, l.latitude, l.longitude, l.address, l.timestamp, l.sourceAction]);
+
+    // Upsert RM Details (Sync RMs with passwords and targets across all mobile apps)
+    if (data.rms && data.rms.length > 0) {
+      var rmExistingData = rmSheet.getDataRange().getValues();
+      var rmIdRowMap = {};
+      for (var r2 = 1; r2 < rmExistingData.length; r2++) {
+        var rmKey = String(rmExistingData[r2][0] || '').trim().toUpperCase();
+        if (rmKey) rmIdRowMap[rmKey] = r2 + 1;
+      }
+
+      data.rms.forEach(function(rm) {
+        var cleanCode = String(rm.rmCode || '').trim().toUpperCase();
+        if (!cleanCode) return;
+        var row = [
+          cleanCode,
+          rm.name || '',
+          rm.mobile || '',
+          rm.email || '',
+          rm.officeAddress || '',
+          rm.role || 'RM',
+          rm.accountStatus || 'ACTIVE',
+          rm.creditCardTarget || 15,
+          rm.corporateCardTarget || 5,
+          rm.b2bTarget || 2,
+          rm.passwordHash || '',
+          rm.salt || '',
+          rm.createdAt || '',
+          rm.updatedAt || ''
+        ];
+        if (rmIdRowMap[cleanCode]) {
+          var rmRowIndex = rmIdRowMap[cleanCode];
+          var existingRmRow = rmExistingData[rmRowIndex - 1];
+          if (!row[10] && existingRmRow[10]) row[10] = existingRmRow[10];
+          if (!row[11] && existingRmRow[11]) row[11] = existingRmRow[11];
+          rmSheet.getRange(rmRowIndex, 1, 1, row.length).setValues([row]);
+        } else {
+          rmSheet.appendRow(row);
+          rmIdRowMap[cleanCode] = rmSheet.getLastRow();
+        }
       });
     }
-    
+
+    // Upsert Universal Settings
+    if (data.settings && data.settings.length > 0) {
+      var setExistingData = settingsSheet.getDataRange().getValues();
+      var setMap = {};
+      for (var s = 1; s < setExistingData.length; s++) {
+        var sKey = String(setExistingData[s][0] || '').trim();
+        if (sKey) setMap[sKey] = s + 1;
+      }
+      data.settings.forEach(function(st) {
+        var key = String(st.settingKey || '').trim();
+        if (!key) return;
+        var row = [key, st.settingValue || '', st.description || '', st.updatedBy || 'App', st.updatedAt || ''];
+        if (setMap[key]) {
+          var setRowIndex = setMap[key];
+          var existingSetRow = setExistingData[setRowIndex - 1];
+          if (String(existingSetRow[3] || '') === 'Manual_Sheet_Edit') {
+            // Keep manual sheet edit safe
+          } else {
+            settingsSheet.getRange(setRowIndex, 1, 1, row.length).setValues([row]);
+          }
+        } else {
+          settingsSheet.appendRow(row);
+          setMap[key] = settingsSheet.getLastRow();
+        }
+      });
+    }
+
+    // Record Audit Trails
+    if (data.auditLogs && data.auditLogs.length > 0) {
+      data.auditLogs.forEach(function(al) {
+        auditSheet.appendRow([
+          al.logId || '',
+          al.userId || '',
+          al.role || '',
+          al.action || '',
+          al.targetId || '',
+          al.details || '',
+          al.timestamp || ''
+        ]);
+      });
+    }
+
+    // Record File Attachments Metadata
+    if (data.attachments && data.attachments.length > 0) {
+      var attData = attachSheet.getDataRange().getValues();
+      var attMap = {};
+      for (var a = 1; a < attData.length; a++) {
+        var aId = String(attData[a][0] || '').trim();
+        if (aId) attMap[aId] = true;
+      }
+      data.attachments.forEach(function(at) {
+        var atId = String(at.attachmentId || '').trim();
+        if (!attMap[atId]) {
+          attachSheet.appendRow([
+            atId,
+            at.fileId || '',
+            at.fileName || '',
+            at.category || '',
+            at.fileSize || 0,
+            at.uploadedBy || '',
+            at.uploadedAt || ''
+          ]);
+          attMap[atId] = true;
+        }
+      });
+    }
+
+    // Record SMS Notifications
+    if (data.sms && data.sms.length > 0) {
+      var smsData = smsSheet.getDataRange().getValues();
+      var smsMap = {};
+      for (var sm = 1; sm < smsData.length; sm++) {
+        var smsId = String(smsData[sm][0] || '').trim();
+        if (smsId) smsMap[smsId] = true;
+      }
+      data.sms.forEach(function(s) {
+        var sId = String(s.id || s.sentTimestamp || '').trim();
+        if (!smsMap[sId]) {
+          smsSheet.appendRow([
+            sId,
+            s.recipientRmCode || '',
+            s.recipientName || '',
+            s.recipientMobile || '',
+            s.triggeredByRole || '',
+            s.triggeredByCode || '',
+            s.actionType || '',
+            s.fileId || s.targetType || '',
+            s.messageText || '',
+            s.status || 'DELIVERED',
+            s.sentTimestamp || ''
+          ]);
+          smsMap[sId] = true;
+        }
+      });
+    }
+
+    // Record Location Logs
+    if (data.locations && data.locations.length > 0) {
+      data.locations.forEach(function(l) {
+        locSheet.appendRow([
+          l.rmCode || '',
+          l.userName || '',
+          l.latitude || 0,
+          l.longitude || 0,
+          l.address || '',
+          l.timestamp || '',
+          l.sourceAction || ''
+        ]);
+      });
+    }
+
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
-      syncedCount: (data.files ? data.files.length : 0),
-      latestFiles: extractAllSheetFiles(fileSheet)
+      files: extractAllSheetFiles(fileSheet),
+      rms: extractAllSheetRms(rmSheet),
+      settings: extractAllSheetSettings(settingsSheet)
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleFetchAllData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var fileSheet = ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files');
+    var rmSheet = ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory');
+    var settingsSheet = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      files: fileSheet ? extractAllSheetFiles(fileSheet) : [],
+      rms: rmSheet ? extractAllSheetRms(rmSheet) : [],
+      settings: settingsSheet ? extractAllSheetSettings(settingsSheet) : []
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -181,15 +434,18 @@ function doPost(e) {
   }
 }
 
-function handleFetchFiles() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var fileSheet = ss.getSheetByName('Customer_Files');
-  var files = fileSheet ? extractAllSheetFiles(fileSheet) : [];
-  return ContentService.createTextOutput(JSON.stringify({
-    status: 'success',
-    filesCount: files.length,
-    files: files
-  })).setMimeType(ContentService.MimeType.JSON);
+function getOrCreateSheet(ss, sheetName, headers, headerColor) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+    var hr = sheet.getRange(1, 1, 1, headers.length);
+    hr.setBackground(headerColor || '#0A192F')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 function extractAllSheetFiles(sheet) {
@@ -207,13 +463,56 @@ function extractAllSheetFiles(sheet) {
       mobile: String(row[5] || ''),
       email: String(row[6] || ''),
       productType: String(row[7] || ''),
-      applicationStatus: String(row[8] || ''),
-      activeStatus: String(row[9] || ''),
+      applicationStatus: String(row[8] || 'Submitted'),
+      activeStatus: String(row[9] || 'N'),
       assignedRmCode: String(row[10] || ''),
       pendingDocuments: String(row[11] || ''),
       cpvRemarks: String(row[12] || ''),
-      submissionAddress: String(row[13] || ''),
-      updatedAt: String(row[16] || '')
+      cpvStatus: String(row[13] || 'Pending'),
+      submissionAddress: String(row[14] || ''),
+      updatedAt: String(row[17] || ''),
+      updatedBy: String(row[18] || 'Sheet')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetRms(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      rmCode: String(row[0] || '').trim().toUpperCase(),
+      name: String(row[1] || ''),
+      mobile: String(row[2] || ''),
+      email: String(row[3] || ''),
+      officeAddress: String(row[4] || ''),
+      role: String(row[5] || 'RM'),
+      accountStatus: String(row[6] || 'ACTIVE'),
+      creditCardTarget: parseInt(row[7]) || 15,
+      corporateCardTarget: parseInt(row[8]) || 5,
+      b2bTarget: parseInt(row[9]) || 2,
+      passwordHash: String(row[10] || ''),
+      salt: String(row[11] || ''),
+      createdAt: String(row[12] || ''),
+      updatedAt: String(row[13] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetSettings(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      settingKey: String(row[0] || '').trim(),
+      settingValue: String(row[1] || ''),
+      description: String(row[2] || '')
     });
   }
   return list;
@@ -674,8 +973,9 @@ function extractAllSheetFiles(sheet) {
             Text("২. ওপরের 'Copy Script Code' বাটনে চাপ দিয়ে কোডটি কপি করে Apps Script-এ পেস্ট করুন।", fontSize = 11.sp, color = Color.DarkGray)
             Text("৩. Deploy > New deployment সিলেক্ট করুন, Type দিন 'Web app'।", fontSize = 11.sp, color = Color.DarkGray)
             Text("৪. 'Who has access' অপশনে 'Anyone' নির্বাচন করে Deploy চাপুন।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৫. পাওয়া Web App URL-টি কপি করে এখানে পেস্ট করে 'Save Connector' চাপুন।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৬. ব্যস! অ্যাপ স্বয়ংক্রিয়ভাবে 'Customer_Files' ও 'RM_Location_Logs' ট্যাব ও হেডার তৈরি করবে।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
+            Text("৫. আপনার Web App URL-টি স্বয়ংক্রিয়ভাবে ডিফল্ট কনফিগার করা আছে।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৬. শিটে ম্যানুয়ালি এডিট করা যাবে (onEdit স্বয়ংক্রিয়ভাবে সেভ রাখবে, কোনো ডাটা মুছে যাবে না)।", fontSize = 11.sp, color = Color(0xFF0369A1))
+            Text("৭. স্বয়ংক্রিয়ভাবে তৈরি হবে ৭টি ট্যাব: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
           }
         }
       }

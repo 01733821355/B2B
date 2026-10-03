@@ -131,6 +131,7 @@ class EblRepository(
       )
     }
 
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -697,6 +698,15 @@ class EblRepository(
     )
 
     database.userDao().insertUser(newUser)
+    database.rmTargetDao().insertOrUpdateTarget(
+      RmTargetEntity(
+        rmCode = cleanRmCode,
+        creditCardTarget = 15,
+        corporateCardTarget = 5,
+        b2bTarget = 2,
+        updatedAt = now
+      )
+    )
     database.auditLogDao().insertLog(
       AuditLogEntity(
         logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
@@ -708,6 +718,10 @@ class EblRepository(
         details = "Admin created active RM account for ${name.trim()} (Code: $cleanRmCode)."
       )
     )
+
+    applicationScope.launch {
+      triggerGoogleSheetsSync()
+    }
 
     Result.success(newUser)
   }
@@ -815,6 +829,7 @@ class EblRepository(
       )
     )
 
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -850,6 +865,7 @@ class EblRepository(
       )
     }
 
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -871,6 +887,7 @@ class EblRepository(
         details = "Mentor rejected RM account $rmCode. Reason: ${reason.ifBlank { "Not specified" }}."
       )
     )
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -896,6 +913,7 @@ class EblRepository(
         details = "${currentUser.role} reset password for RM $rmCode (${existing.name})."
       )
     )
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -919,6 +937,7 @@ class EblRepository(
       updatedAt = DateUtils.currentDhakaMillis()
     )
     database.appSettingDao().insertOrUpdateSetting(setting)
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -943,6 +962,7 @@ class EblRepository(
       )
     )
 
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -987,6 +1007,7 @@ class EblRepository(
         details = "Updated setting '$key'."
       )
     )
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -1028,26 +1049,38 @@ class EblRepository(
 
   suspend fun triggerGoogleSheetsSync(): Result<String> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
-      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    val syncedBy = currentUser?.rmCode ?: "APP_BACKGROUND_SYNC"
 
     val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+    val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+      "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+    }
+
     database.appSettingDao().insertOrUpdateSyncStatus(
       currentStatus.copy(
+        appsScriptUrl = activeWebAppUrl,
         lastSyncStatus = "IN_PROGRESS",
-        lastSyncMessage = "Preparing payload and connecting to Google Sheets..."
+        lastSyncMessage = "Connecting 7-tab payload with Google Sheets..."
       )
     )
 
     try {
       val allFiles = database.customerFileDao().getAllActiveFiles()
       val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
-      val recentLogs = database.auditLogDao().getAllLogs()
+      val filesToPush = if (currentStatus.lastSyncTimestamp == null || currentStatus.lastSyncStatus == "IDLE") allFiles else unsyncedFiles
+
+      val allUsers = database.userDao().getAllUsers()
+      val allRms = allUsers.filter { it.role == "RM" }
+      val allTargets = database.rmTargetDao().getAllTargets()
+      val allSettings = database.appSettingDao().getAllSettings()
+      val recentLogs = database.auditLogDao().getAllLogs().take(50)
+      val allAttachments = database.fileAttachmentDao().getAllAttachments()
       val recentLocations = database.userLocationLogDao().getRecentLocationLogs(50)
 
       // If an Apps Script Web App URL is provided, send real HTTP request
-      if (currentStatus.appsScriptUrl.isNotBlank() && currentStatus.appsScriptUrl.startsWith("http")) {
+      if (activeWebAppUrl.isNotBlank() && activeWebAppUrl.startsWith("http")) {
         val filesArray = org.json.JSONArray()
-        for (f in allFiles) {
+        for (f in filesToPush) {
           val fObj = JSONObject().apply {
             put("ccNumber", f.ccNumber.ifBlank { f.fileId })
             put("fileId", f.fileId)
@@ -1062,12 +1095,72 @@ class EblRepository(
             put("assignedRmCode", f.assignedRmCode)
             put("pendingDocuments", f.pendingDocuments)
             put("cpvRemarks", f.cpvRemarks)
+            put("cpvStatus", f.cpvStatus)
             put("submissionAddress", f.submissionAddress ?: "")
             put("submissionLat", f.submissionLatitude ?: 0.0)
             put("submissionLng", f.submissionLongitude ?: 0.0)
             put("updatedAt", DateUtils.formatDateTime(f.updatedAt))
+            put("updatedBy", f.updatedBy)
           }
           filesArray.put(fObj)
+        }
+
+        val rmsArray = org.json.JSONArray()
+        for (rm in allRms) {
+          val target = allTargets.find { it.rmCode == rm.rmCode }
+          rmsArray.put(JSONObject().apply {
+            put("rmCode", rm.rmCode)
+            put("name", rm.name)
+            put("mobile", rm.mobile)
+            put("email", rm.email)
+            put("officeAddress", rm.officeAddress)
+            put("role", rm.role)
+            put("accountStatus", rm.accountStatus)
+            put("creditCardTarget", target?.creditCardTarget ?: 15)
+            put("corporateCardTarget", target?.corporateCardTarget ?: 5)
+            put("b2bTarget", target?.b2bTarget ?: 2)
+            put("passwordHash", rm.passwordHash)
+            put("salt", rm.salt)
+            put("createdAt", DateUtils.formatDateTime(rm.createdAt))
+            put("updatedAt", DateUtils.formatDateTime(target?.updatedAt ?: rm.createdAt))
+          })
+        }
+
+        val settingsArray = org.json.JSONArray()
+        for (s in allSettings) {
+          settingsArray.put(JSONObject().apply {
+            put("settingKey", s.settingKey)
+            put("settingValue", s.settingValue)
+            put("description", "Universal Setting - Auto-synced across all mobile apps")
+            put("updatedBy", s.updatedBy)
+            put("updatedAt", DateUtils.formatDateTime(s.updatedAt))
+          })
+        }
+
+        val auditLogsArray = org.json.JSONArray()
+        for (l in recentLogs) {
+          auditLogsArray.put(JSONObject().apply {
+            put("logId", l.logId)
+            put("userId", l.userId)
+            put("role", l.role)
+            put("action", l.action)
+            put("targetId", l.fileId ?: l.rmCode ?: "")
+            put("details", l.details)
+            put("timestamp", DateUtils.formatDateTime(l.timestamp))
+          })
+        }
+
+        val attachmentsArray = org.json.JSONArray()
+        for (att in allAttachments) {
+          attachmentsArray.put(JSONObject().apply {
+            put("attachmentId", att.attachmentId)
+            put("fileId", att.fileId)
+            put("fileName", att.fileName)
+            put("category", att.category)
+            put("fileSize", att.fileSize)
+            put("uploadedBy", att.uploadedBy)
+            put("uploadedAt", DateUtils.formatDateTime(att.uploadedAt))
+          })
         }
 
         val locationsArray = org.json.JSONArray()
@@ -1083,20 +1176,45 @@ class EblRepository(
           })
         }
 
+        val recentSms = database.smsNotificationDao().getAllSms().take(50)
+        val smsArray = org.json.JSONArray()
+        for (s in recentSms) {
+          smsArray.put(JSONObject().apply {
+            put("id", s.id)
+            put("recipientRmCode", s.recipientRmCode)
+            put("recipientName", s.recipientName)
+            put("recipientMobile", s.recipientMobile)
+            put("triggeredByRole", s.triggeredByRole)
+            put("triggeredByCode", s.triggeredByCode)
+            put("actionType", s.actionType)
+            put("targetType", s.targetType)
+            put("fileId", s.fileId ?: "")
+            put("customerName", s.customerName ?: "")
+            put("messageText", s.messageText)
+            put("sentTimestamp", DateUtils.formatDateTime(s.sentTimestamp))
+            put("status", s.status)
+          })
+        }
+
         val payload = JSONObject().apply {
           put("action", "SYNC_ALL_DATA")
           put("spreadsheetId", currentStatus.spreadsheetId)
           put("secretKey", currentStatus.syncSecretKey)
           put("timestamp", DateUtils.currentDhakaMillis())
-          put("syncedBy", currentUser.rmCode)
+          put("syncedBy", syncedBy)
           put("filesCount", filesArray.length())
           put("files", filesArray)
+          put("rms", rmsArray)
+          put("settings", settingsArray)
+          put("auditLogs", auditLogsArray)
+          put("attachments", attachmentsArray)
+          put("sms", smsArray)
           put("locations", locationsArray)
         }
 
         val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
         val request = Request.Builder()
-          .url(currentStatus.appsScriptUrl)
+          .url(activeWebAppUrl)
           .post(requestBody)
           .build()
 
@@ -1113,11 +1231,18 @@ class EblRepository(
                 if (sheetFiles != null && sheetFiles.length() > 0) {
                   processSheetFiles(sheetFiles)
                 }
+                val sheetRms = respJson.optJSONArray("rms")
+                if (sheetRms != null && sheetRms.length() > 0) {
+                  processSheetRms(sheetRms)
+                }
+                val sheetSettings = respJson.optJSONArray("settings")
+                if (sheetSettings != null && sheetSettings.length() > 0) {
+                  processSheetSettings(sheetSettings)
+                }
               } catch (_: Exception) {}
             }
           }
         } catch (e: Exception) {
-          // If remote webhook call fails, report the clear error to user and record it
           val errorMsg = "Remote sync error: ${e.message ?: "Failed to reach Apps Script endpoint"}"
           database.appSettingDao().insertOrUpdateSyncStatus(
             currentStatus.copy(
@@ -1131,32 +1256,22 @@ class EblRepository(
         }
       }
 
-      // Mark unsynced files as synced locally
-      val unsyncedIds = unsyncedFiles.map { it.fileId }
-      if (unsyncedIds.isNotEmpty()) {
-        database.customerFileDao().markFilesSynced(unsyncedIds)
+      // Mark pushed files as synced locally
+      val pushedIds = filesToPush.map { it.fileId }
+      if (pushedIds.isNotEmpty()) {
+        database.customerFileDao().markFilesSynced(pushedIds)
       }
 
       val now = DateUtils.currentDhakaMillis()
-      val successMsg = "Successfully synchronized ${unsyncedIds.size} records to Spreadsheet (${currentStatus.spreadsheetId})."
+      val successMsg = "Synchronized ${pushedIds.size} file records, ${allRms.size} RMs & Universal Settings to Spreadsheet."
 
       database.appSettingDao().insertOrUpdateSyncStatus(
         currentStatus.copy(
+          appsScriptUrl = activeWebAppUrl,
           lastSyncTimestamp = now,
           lastSyncStatus = "SUCCESS",
           lastSyncMessage = successMsg,
           pendingRecordsCount = 0
-        )
-      )
-
-      database.auditLogDao().insertLog(
-        AuditLogEntity(
-          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-          userId = currentUser.rmCode,
-          role = currentUser.role,
-          action = "SYNC_SHEETS",
-          timestamp = now,
-          details = "Google Sheets sync completed for ${unsyncedIds.size} records."
         )
       )
 
@@ -1176,8 +1291,8 @@ class EblRepository(
 
   suspend fun pullDataFromGoogleSheets(): Result<String> = withContext(Dispatchers.IO) {
     val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
-    if (currentStatus.appsScriptUrl.isBlank() || !currentStatus.appsScriptUrl.startsWith("http")) {
-      return@withContext Result.failure(Exception("Apps Script Web App URL is not configured. Please paste URL and save connector."))
+    val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+      "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
     }
 
     try {
@@ -1188,7 +1303,7 @@ class EblRepository(
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder()
-        .url(currentStatus.appsScriptUrl)
+        .url(activeWebAppUrl)
         .post(requestBody)
         .build()
 
@@ -1201,26 +1316,22 @@ class EblRepository(
 
       val json = JSONObject(respStr)
       val filesArray = json.optJSONArray("files") ?: json.optJSONArray("latestFiles") ?: JSONArray()
-      val updatedCount = processSheetFiles(filesArray)
+      val updatedFilesCount = processSheetFiles(filesArray)
+
+      val rmsArray = json.optJSONArray("rms") ?: JSONArray()
+      val updatedRmsCount = processSheetRms(rmsArray)
+
+      val settingsArray = json.optJSONArray("settings") ?: JSONArray()
+      val updatedSettingsCount = processSheetSettings(settingsArray)
 
       val now = DateUtils.currentDhakaMillis()
-      val msg = "Pulled ${filesArray.length()} rows from Google Sheets. $updatedCount record(s) updated locally."
+      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s) updated."
       database.appSettingDao().insertOrUpdateSyncStatus(
         currentStatus.copy(
+          appsScriptUrl = activeWebAppUrl,
           lastSyncTimestamp = now,
           lastSyncStatus = "SUCCESS",
           lastSyncMessage = msg
-        )
-      )
-
-      database.auditLogDao().insertLog(
-        AuditLogEntity(
-          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-          userId = authRepository.currentUser.value?.rmCode ?: "SYSTEM",
-          role = authRepository.currentUser.value?.role ?: "MENTOR",
-          action = "PULL_SHEETS",
-          timestamp = now,
-          details = msg
         )
       )
 
@@ -1228,6 +1339,121 @@ class EblRepository(
     } catch (e: Exception) {
       Result.failure(e)
     }
+  }
+
+  private suspend fun processSheetRms(sheetRmsJson: JSONArray): Int {
+    var updatedCount = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetRmsJson.length()) {
+      val obj = sheetRmsJson.optJSONObject(i) ?: continue
+      val code = obj.optString("rmCode").trim().uppercase()
+      if (code.isBlank() || code == "ADMIN0" || code == "MENTOR0") continue
+
+      val name = obj.optString("name", "Relationship Manager").trim()
+      val mobile = obj.optString("mobile", "").trim()
+      val email = obj.optString("email", "").trim()
+      val office = obj.optString("officeAddress", "Dhaka Branch").trim()
+      val role = obj.optString("role", "RM").trim()
+      val status = obj.optString("accountStatus", "ACTIVE").trim()
+      val ccTarget = obj.optInt("creditCardTarget", 15)
+      val corpTarget = obj.optInt("corporateCardTarget", 5)
+      val b2bTarget = obj.optInt("b2bTarget", 2)
+
+      val sheetHash = obj.optString("passwordHash", "").trim()
+      val sheetSalt = obj.optString("salt", "").trim()
+
+      val existing = database.userDao().getUser(code)
+      if (existing != null) {
+        val hashToUse = if (sheetHash.isNotBlank()) sheetHash else existing.passwordHash
+        val saltToUse = if (sheetSalt.isNotBlank()) sheetSalt else existing.salt
+        val hasChanges = existing.name != name || existing.mobile != mobile ||
+                         existing.email != email || existing.officeAddress != office ||
+                         existing.accountStatus != status ||
+                         (sheetHash.isNotBlank() && existing.passwordHash != sheetHash)
+        if (hasChanges) {
+          database.userDao().updateUser(
+            existing.copy(
+              name = name,
+              mobile = mobile,
+              email = email,
+              officeAddress = office,
+              accountStatus = status,
+              passwordHash = hashToUse,
+              salt = saltToUse
+            )
+          )
+          updatedCount++
+        }
+      } else {
+        val (finalHash, finalSalt) = if (sheetHash.isNotBlank() && sheetSalt.isNotBlank()) {
+          Pair(sheetHash, sheetSalt)
+        } else {
+          val salt = SecurityUtils.generateSalt()
+          Pair(SecurityUtils.hashPassword("#123456A", salt), salt)
+        }
+        val newUser = UserEntity(
+          rmCode = code,
+          name = name,
+          role = role,
+          passwordHash = finalHash,
+          salt = finalSalt,
+          mobile = mobile,
+          email = email,
+          officeAddress = office,
+          accountStatus = status,
+          mustChangePassword = false,
+          createdAt = now,
+          authUid = "AUTH_RM_$code"
+        )
+        database.userDao().insertUser(newUser)
+        updatedCount++
+      }
+
+      val existingTarget = database.rmTargetDao().getTargetForRm(code)
+      if (existingTarget == null) {
+        database.rmTargetDao().insertOrUpdateTarget(
+          RmTargetEntity(code, ccTarget, corpTarget, b2bTarget, now)
+        )
+      } else if (existingTarget.creditCardTarget != ccTarget ||
+                 existingTarget.corporateCardTarget != corpTarget ||
+                 existingTarget.b2bTarget != b2bTarget) {
+        database.rmTargetDao().insertOrUpdateTarget(
+          existingTarget.copy(
+            creditCardTarget = ccTarget,
+            corporateCardTarget = corpTarget,
+            b2bTarget = b2bTarget,
+            updatedAt = now
+          )
+        )
+        updatedCount++
+      }
+    }
+    return updatedCount
+  }
+
+  private suspend fun processSheetSettings(sheetSettingsJson: JSONArray): Int {
+    var updatedCount = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetSettingsJson.length()) {
+      val obj = sheetSettingsJson.optJSONObject(i) ?: continue
+      val key = obj.optString("settingKey").trim()
+      val value = obj.optString("settingValue").trim()
+      if (key.isBlank()) continue
+
+      val existing = database.appSettingDao().getSetting(key)
+      if (existing == null || existing.settingValue != value) {
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity(
+            settingKey = key,
+            settingValue = value,
+            updatedBy = "GoogleSheets_Universal",
+            updatedAt = now
+          )
+        )
+        updatedCount++
+      }
+    }
+    return updatedCount
   }
 
   private suspend fun processSheetFiles(sheetFilesJson: JSONArray): Int {
@@ -1268,13 +1494,18 @@ class EblRepository(
           database.customerFileDao().updateFile(updated)
           updatedCount++
 
-          // Send SMS to RM if status or active was changed from Google Sheets!
-          if (hasStatusChanged || hasActiveChanged) {
+          // Send SMS to RM if status, active, remarks or documents were changed from Google Sheets!
+          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged) {
             val targetRmUser = database.userDao().getUser(existing.assignedRmCode)
             val rmMobile = targetRmUser?.mobile ?: ""
             val rmName = targetRmUser?.name ?: existing.assignedRmCode
             val formattedTime = DateUtils.formatDateTime(now)
-            val changeNote = if (hasStatusChanged) "Status -> $appStatus" else "Active -> $activeStatus"
+            val changeNote = when {
+              hasStatusChanged -> "Status: $appStatus"
+              hasActiveChanged -> "Active Status: $activeStatus"
+              hasRemarksChanged -> "CPV Remarks Updated"
+              else -> "Pending Docs Updated"
+            }
             val smsMessage = "[EBL Alert] Dear $rmName (${existing.assignedRmCode}), your customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
 
             var smsStatus = "DELIVERED"
