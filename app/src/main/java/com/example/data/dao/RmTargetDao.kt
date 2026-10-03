@@ -18,6 +18,9 @@ interface RmTargetDao {
   @Query("SELECT * FROM rm_targets")
   fun getAllTargetsFlow(): Flow<List<RmTargetEntity>>
 
+  @Query("SELECT * FROM rm_targets")
+  suspend fun getAllTargets(): List<RmTargetEntity>
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertOrUpdateTarget(target: RmTargetEntity)
 }

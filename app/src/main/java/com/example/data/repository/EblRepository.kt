@@ -1157,7 +1157,7 @@ class EblRepository(
             put("fileId", att.fileId)
             put("fileName", att.fileName)
             put("category", att.category)
-            put("fileSize", att.fileSize)
+            put("fileSize", att.fileSizeBytes)
             put("uploadedBy", att.uploadedBy)
             put("uploadedAt", DateUtils.formatDateTime(att.uploadedAt))
           })

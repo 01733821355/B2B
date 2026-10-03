@@ -21,6 +21,9 @@ interface SmsNotificationDao {
   @Query("SELECT * FROM sms_notifications ORDER BY sentTimestamp DESC")
   fun getAllSmsFlow(): Flow<List<SmsNotificationEntity>>
 
+  @Query("SELECT * FROM sms_notifications ORDER BY sentTimestamp DESC")
+  suspend fun getAllSms(): List<SmsNotificationEntity>
+
   @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND isRead = 0")
   fun getUnreadSmsCountFlow(rmCode: String): Flow<Int>
 
