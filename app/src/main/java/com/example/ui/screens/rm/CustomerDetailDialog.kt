@@ -29,7 +29,11 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Visibility
+import com.example.data.model.FileAttachmentEntity
+import com.example.ui.common.AttachmentViewerDialog
+import com.example.util.AttachmentHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -78,6 +82,7 @@ fun CustomerDetailDialog(
   val scrollState = rememberScrollState()
   val attachmentsFlow = viewModel.eblRepository.getAttachmentsForFileFlow(file.fileId)
   val attachments by attachmentsFlow.collectAsState(initial = emptyList())
+  var selectedAttachmentForView by remember { mutableStateOf<FileAttachmentEntity?>(null) }
 
   Dialog(
     onDismissRequest = onDismiss,
@@ -255,12 +260,15 @@ fun CustomerDetailDialog(
           if (attachments.isEmpty()) {
             Text("No attachments uploaded for this file.", fontSize = 12.sp, color = Color.Gray)
           } else {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
             attachments.forEach { att ->
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
                   .padding(vertical = 3.dp)
-                  .background(Color(0xFFF1F5F9), RoundedCornerShape(6.dp))
+                  .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
+                  .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                  .clickable { selectedAttachmentForView = att }
                   .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {
@@ -268,12 +276,28 @@ fun CustomerDetailDialog(
                   imageVector = if (att.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
                   contentDescription = null,
                   tint = EblNavyPrimary,
-                  modifier = Modifier.size(18.dp)
+                  modifier = Modifier.size(22.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Column {
-                  Text(att.fileName, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                  Text("${att.category} • ${(att.fileSizeBytes / 1024)} KB", fontSize = 10.sp, color = Color.Gray)
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(att.fileName, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                  Text("${att.category} • ${(att.fileSizeBytes / 1024).coerceAtLeast(1)} KB", fontSize = 10.sp, color = Color.Gray)
+                }
+
+                // Quick View button
+                IconButton(
+                  onClick = { selectedAttachmentForView = att },
+                  modifier = Modifier.size(32.dp)
+                ) {
+                  Icon(Icons.Default.Visibility, contentDescription = "View", tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
+                }
+
+                // Quick Download button
+                IconButton(
+                  onClick = { AttachmentHelper.downloadAttachment(ctx, att) },
+                  modifier = Modifier.size(32.dp)
+                ) {
+                  Icon(Icons.Default.Download, contentDescription = "Download", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
                 }
               }
             }
@@ -309,6 +333,14 @@ fun CustomerDetailDialog(
         }
       }
     }
+  }
+
+  // Attachment Viewer & Downloader Dialog
+  if (selectedAttachmentForView != null) {
+    AttachmentViewerDialog(
+      attachment = selectedAttachmentForView!!,
+      onDismiss = { selectedAttachmentForView = null }
+    )
   }
 }
 

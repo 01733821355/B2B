@@ -36,11 +36,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Visibility
+import com.example.ui.common.AttachmentViewerDialog
+import com.example.util.AttachmentHelper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -117,48 +122,115 @@ fun CustomerFileFormScreen(
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var fileId by remember { mutableStateOf(editFileId ?: SecurityUtils.generateFileId(currentUser.rmCode)) }
 
+  var selectedCategoryForUpload by remember { mutableStateOf("NID") }
+
   val statusPhotoPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
   ) { uris ->
-    uris.forEachIndexed { idx, uri ->
-      viewModel.addAttachment(
-        fileId = fileId,
-        category = "Status Update Photo",
-        fileName = "Status_Update_${System.currentTimeMillis()}_${idx + 1}.jpg",
-        fileType = "image/jpeg",
-        fileSizeBytes = 450 * 1024L,
-        fileUri = uri.toString()
-      )
+    coroutineScope.launch {
+      uris.forEach { uri ->
+        val saved = AttachmentHelper.saveUriToInternalStorage(
+          context = context,
+          sourceUri = uri,
+          preferredCategory = "Status Update Photo"
+        )
+        viewModel.addAttachment(
+          fileId = fileId,
+          category = "Status Update Photo",
+          fileName = saved.fileName,
+          fileType = saved.fileType,
+          fileSizeBytes = saved.fileSizeBytes,
+          fileUri = saved.fileUri
+        )
+      }
     }
   }
 
   val cpvMultiPhotoPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
   ) { uris ->
-    uris.forEachIndexed { idx, uri ->
-      viewModel.addAttachment(
-        fileId = fileId,
-        category = "CPV Photo",
-        fileName = "CPV_Photo_${System.currentTimeMillis()}_${idx + 1}.jpg",
-        fileType = "image/jpeg",
-        fileSizeBytes = 512 * 1024L,
-        fileUri = uri.toString()
-      )
+    coroutineScope.launch {
+      uris.forEach { uri ->
+        val saved = AttachmentHelper.saveUriToInternalStorage(
+          context = context,
+          sourceUri = uri,
+          preferredCategory = "CPV Photo"
+        )
+        viewModel.addAttachment(
+          fileId = fileId,
+          category = "CPV Photo",
+          fileName = saved.fileName,
+          fileType = saved.fileType,
+          fileSizeBytes = saved.fileSizeBytes,
+          fileUri = saved.fileUri
+        )
+      }
     }
   }
 
   val othersPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
   ) { uris ->
-    uris.forEachIndexed { idx, uri ->
-      viewModel.addAttachment(
-        fileId = fileId,
-        category = "Other Document",
-        fileName = "Doc_Attachment_${System.currentTimeMillis()}_${idx + 1}.jpg",
-        fileType = "image/jpeg",
-        fileSizeBytes = 400 * 1024L,
-        fileUri = uri.toString()
-      )
+    coroutineScope.launch {
+      uris.forEach { uri ->
+        val saved = AttachmentHelper.saveUriToInternalStorage(
+          context = context,
+          sourceUri = uri,
+          preferredCategory = "Other Document"
+        )
+        viewModel.addAttachment(
+          fileId = fileId,
+          category = "Other Document",
+          fileName = saved.fileName,
+          fileType = saved.fileType,
+          fileSizeBytes = saved.fileSizeBytes,
+          fileUri = saved.fileUri
+        )
+      }
+    }
+  }
+
+  val generalDocumentPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenMultipleDocuments()
+  ) { uris ->
+    coroutineScope.launch {
+      uris.forEach { uri ->
+        val saved = AttachmentHelper.saveUriToInternalStorage(
+          context = context,
+          sourceUri = uri,
+          preferredCategory = selectedCategoryForUpload
+        )
+        viewModel.addAttachment(
+          fileId = fileId,
+          category = selectedCategoryForUpload,
+          fileName = saved.fileName,
+          fileType = saved.fileType,
+          fileSizeBytes = saved.fileSizeBytes,
+          fileUri = saved.fileUri
+        )
+      }
+    }
+  }
+
+  val customCategoryPhotoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 10)
+  ) { uris ->
+    coroutineScope.launch {
+      uris.forEach { uri ->
+        val saved = AttachmentHelper.saveUriToInternalStorage(
+          context = context,
+          sourceUri = uri,
+          preferredCategory = selectedCategoryForUpload
+        )
+        viewModel.addAttachment(
+          fileId = fileId,
+          category = selectedCategoryForUpload,
+          fileName = saved.fileName,
+          fileType = saved.fileType,
+          fileSizeBytes = saved.fileSizeBytes,
+          fileUri = saved.fileUri
+        )
+      }
     }
   }
   var customerName by remember { mutableStateOf("") }
@@ -904,14 +976,7 @@ fun CustomerFileFormScreen(
     // Supporting Documents (Green Card)
     val otherDocs = attachments.filter { it.category != "Status Update Photo" && it.category != "CPV Photo" }
     Card(
-      modifier = Modifier
-        .fillMaxWidth()
-        .clickable {
-          othersPickerLauncher.launch(
-            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-          )
-        }
-        .testTag("upload_others_doc"),
+      modifier = Modifier.fillMaxWidth().testTag("upload_others_doc"),
       shape = RoundedCornerShape(14.dp),
       colors = CardDefaults.cardColors(containerColor = Color(0xFFF0FDF4)),
       border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF34D399))
@@ -919,7 +984,7 @@ fun CustomerFileFormScreen(
       Column(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(vertical = 16.dp, horizontal = 16.dp),
+          .padding(vertical = 14.dp, horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
       ) {
         Box(
@@ -938,11 +1003,87 @@ fun CustomerFileFormScreen(
           color = Color(0xFF064E3B)
         )
         Text(
-          text = if (otherDocs.isEmpty()) "Tap to attach NID, Trade License, Bank Docs [Multiple]" else "✓ ${otherDocs.size} Document(s) Attached (Tap to Add More)",
+          text = if (otherDocs.isEmpty()) "Attach NID, Trade License, Bank Statements, PDF/Word [Multiple]" else "✓ ${otherDocs.size} Document(s) Attached (Tap to Add More)",
           fontSize = 11.sp,
           color = Color(0xFF059669),
           fontWeight = if (otherDocs.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
         )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Button(
+            onClick = {
+              selectedCategoryForUpload = "General Document"
+              generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            modifier = Modifier.weight(1f).height(38.dp)
+          ) {
+            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("PDF / ফাইল", fontSize = 11.sp)
+          }
+
+          Button(
+            onClick = {
+              othersPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+            modifier = Modifier.weight(1f).height(38.dp)
+          ) {
+            Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("ছবি / ফটো", fontSize = 11.sp)
+          }
+        }
+
+        if (otherDocs.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(10.dp))
+          FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            otherDocs.forEach { doc ->
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6EE7B7)),
+                modifier = Modifier.clickable { previewAttachment = doc }
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(
+                    if (doc.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
+                    contentDescription = null,
+                    tint = Color(0xFF059669),
+                    modifier = Modifier.size(14.dp)
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(
+                    text = doc.fileName.take(14) + if (doc.fileName.length > 14) "..." else "",
+                    fontSize = 10.sp,
+                    color = Color(0xFF065F46)
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Icon(
+                    Icons.Default.Close,
+                    contentDescription = "Remove",
+                    tint = Color.Red,
+                    modifier = Modifier.size(14.dp).clickable {
+                      viewModel.deleteAttachment(doc.attachmentId, fileId)
+                    }
+                  )
+                }
+              }
+            }
+          }
+        }
       }
     }
 
@@ -1178,6 +1319,14 @@ fun CustomerFileFormScreen(
                 Text(att.fileName, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 Text("${att.category} • ${(att.fileSizeBytes / 1024)} KB", fontSize = 10.sp, color = Color.Gray)
               }
+              // Quick View button
+              IconButton(onClick = { previewAttachment = att }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Visibility, contentDescription = "View", tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
+              }
+              // Quick Download button
+              IconButton(onClick = { AttachmentHelper.downloadAttachment(context, att) }, modifier = Modifier.size(32.dp)) {
+                Icon(Icons.Default.Download, contentDescription = "Download", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
+              }
               IconButton(onClick = { viewModel.deleteAttachment(att.attachmentId, fileId) }) {
                 Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color.Red, modifier = Modifier.size(16.dp))
               }
@@ -1244,11 +1393,50 @@ fun CustomerFileFormScreen(
               )
             }
           }
-          Spacer(modifier = Modifier.height(10.dp))
+
+          Spacer(modifier = Modifier.height(14.dp))
+          Text("Choose File Source from Device:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // 1. Pick PDF / Word / Any Document from Phone Storage
+          Button(
+            onClick = {
+              selectedCategoryForUpload = catInput
+              showAddAttachmentDialog = false
+              generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            modifier = Modifier.fillMaxWidth().testTag("btn_pick_document_file")
+          ) {
+            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("PDF / Word / ফাইল নির্বাচন করুন", fontSize = 12.sp)
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // 2. Pick Photos from Gallery
+          Button(
+            onClick = {
+              selectedCategoryForUpload = catInput
+              showAddAttachmentDialog = false
+              customCategoryPhotoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+            modifier = Modifier.fillMaxWidth().testTag("btn_pick_gallery_photo")
+          ) {
+            Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("ছবি / গ্যালারি থেকে নির্বাচন করুন", fontSize = 12.sp)
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+          Text("বা ম্যানুয়ালি নাম লিখুন:", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(4.dp))
           VoiceInputField(
             value = fileNameInput,
             onValueChange = { fileNameInput = it },
-            label = "File Name",
+            label = "Document Note / Name",
             placeholder = "e.g. NID_Front_Back.pdf",
             modifier = Modifier.fillMaxWidth(),
             testTag = "input_attachment_name"
@@ -1266,13 +1454,13 @@ fun CustomerFileFormScreen(
               fileName = name,
               fileType = if (isPdf) "application/pdf" else "image/jpeg",
               fileSizeBytes = (200..1200).random() * 1024L,
-              fileUri = "content://ebl.storage/$fileId/$name"
+              fileUri = ""
             )
             showAddAttachmentDialog = false
           },
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
         ) {
-          Text("Attach File")
+          Text("সংরক্ষণ করুন")
         }
       },
       dismissButton = {
@@ -1283,61 +1471,14 @@ fun CustomerFileFormScreen(
     )
   }
 
-  // Preview Attachment Dialog
+  // Full-featured Preview & Download Attachment Dialog
   if (previewAttachment != null) {
-    AlertDialog(
-      onDismissRequest = { previewAttachment = null },
-      title = { Text(previewAttachment!!.fileName, fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-      text = {
-        Column(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-          Box(
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(180.dp)
-              .background(Color(0xFFE2E8F0), RoundedCornerShape(8.dp)),
-            contentAlignment = Alignment.Center
-          ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-              Icon(
-                imageVector = if (previewAttachment!!.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
-                contentDescription = null,
-                tint = EblNavyPrimary,
-                modifier = Modifier.size(54.dp)
-              )
-              Spacer(modifier = Modifier.height(8.dp))
-              Text(
-                text = "Secure Document Preview",
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp,
-                color = EblNavyDark
-              )
-              Text(
-                text = "${previewAttachment!!.category} • ${(previewAttachment!!.fileSizeBytes / 1024)} KB",
-                fontSize = 11.sp,
-                color = Color.Gray
-              )
-            }
-          }
-          Spacer(modifier = Modifier.height(12.dp))
-          Text(
-            text = "Uploaded By: ${previewAttachment!!.uploadedBy} on ${DateUtils.formatDateTime(previewAttachment!!.uploadedAt)}",
-            fontSize = 11.sp,
-            color = Color.DarkGray
-          )
-          Text(
-            text = "Storage Path: ${previewAttachment!!.storagePath}",
-            fontSize = 10.sp,
-            color = Color.Gray
-          )
-        }
-      },
-      confirmButton = {
-        Button(onClick = { previewAttachment = null }) {
-          Text("Close Preview")
-        }
+    AttachmentViewerDialog(
+      attachment = previewAttachment!!,
+      onDismiss = { previewAttachment = null },
+      onDelete = {
+        viewModel.deleteAttachment(previewAttachment!!.attachmentId, fileId)
+        previewAttachment = null
       }
     )
   }
