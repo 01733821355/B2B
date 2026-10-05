@@ -99,8 +99,12 @@ class AuthRepository(private val database: AppDatabase) {
     val user = _currentUser.value
     if (user != null) {
       val now = DateUtils.currentDhakaMillis()
-      val logoutLoc = user.lastLocationAddress.ifBlank {
-        if (user.lastLatitude != null && user.lastLongitude != null) "Lat: ${user.lastLatitude}, Lng: ${user.lastLongitude}" else "Dhaka Operations"
+      val logoutLoc = if (!user.lastLocationAddress.isNullOrBlank()) {
+        user.lastLocationAddress
+      } else if (user.lastLatitude != null && user.lastLongitude != null) {
+        "Lat: ${user.lastLatitude}, Lng: ${user.lastLongitude}"
+      } else {
+        "Dhaka Operations"
       }
       database.auditLogDao().insertLog(
         AuditLogEntity(
