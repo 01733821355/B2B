@@ -35,4 +35,10 @@ interface SmsNotificationDao {
 
   @Query("DELETE FROM sms_notifications WHERE id = :id")
   suspend fun deleteSms(id: Long)
+
+  @Query("DELETE FROM sms_notifications WHERE recipientRmCode = :rmCode")
+  suspend fun clearSmsForRm(rmCode: String)
+
+  @Query("DELETE FROM sms_notifications")
+  suspend fun clearAllSms()
 }

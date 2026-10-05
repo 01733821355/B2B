@@ -49,21 +49,24 @@ sealed class Screen {
 
 data class KpiStats(
   val totalFiles: Int = 0,
-  val collected: Int = 0,
+  val stc: Int = 0, // STC / Production Done (Primary Achievement)
   val submitted: Int = 0,
   val approved: Int = 0,
-  val declined: Int = 0,
+  val collected: Int = 0,
   val query: Int = 0,
   val returnToSource: Int = 0,
+  val declined: Int = 0,
   val condition: Int = 0,
-  val stc: Int = 0,
   val pendingDocumentsCount: Int = 0,
   val activeY: Int = 0,
   val activeN: Int = 0,
   val activeC: Int = 0,
   val creditCardCount: Int = 0,
   val corporateCardCount: Int = 0,
-  val b2bCount: Int = 0
+  val b2bCount: Int = 0,
+  val stcCreditCardCount: Int = 0,
+  val stcCorporateCardCount: Int = 0,
+  val stcB2bCount: Int = 0
 )
 
 data class RmPerformanceRow(
@@ -269,6 +272,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun clearSmsForCurrentRm() {
+    val user = currentUser.value ?: return
+    viewModelScope.launch {
+      eblRepository.clearSmsForRm(user.rmCode)
+    }
+  }
+
+  fun clearAllSms() {
+    viewModelScope.launch {
+      eblRepository.clearAllSms()
+    }
+  }
+
+  fun deleteSms(id: Long) {
+    viewModelScope.launch {
+      eblRepository.deleteSms(id)
+    }
+  }
+
   val isRealtimeAutoSyncEnabled = MutableStateFlow(true)
   val isSyncingInProgress = MutableStateFlow(false)
 
@@ -279,6 +301,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   init {
     viewModelScope.launch {
       DatabaseInitializer.initializeIfNeeded(database)
+      database.auditLogDao().purgeNonAuthLogs()
     }
 
     // Continuous Real-Time Bi-Directional Auto-Sync Loop
@@ -322,23 +345,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var creditCardCount = 0
     var corporateCardCount = 0
     var b2bCount = 0
+    var stcCreditCardCount = 0
+    var stcCorporateCardCount = 0
+    var stcB2bCount = 0
 
     for (f in files) {
-      val p = f.productType.lowercase()
-      when {
-        p.contains("corporate") -> corporateCardCount++
-        p.contains("credit") -> creditCardCount++
-        p.contains("b2b") -> b2bCount++
+      val p = f.productType.trim().lowercase()
+      val isCorp = p.contains("corporate")
+      val isCredit = p.contains("credit") && !isCorp
+      val isB2b = p.contains("b2b")
+
+      if (isCorp) corporateCardCount++
+      else if (isCredit) creditCardCount++
+      if (isB2b) b2bCount++
+
+      val statusLower = f.applicationStatus.trim().lowercase()
+      val isStc = statusLower == "stc"
+
+      if (isStc) {
+        stc++
+        if (isCorp) stcCorporateCardCount++
+        else if (isCredit) stcCreditCardCount++
+        if (isB2b) stcB2bCount++
       }
-      when (f.applicationStatus.lowercase()) {
+
+      when (statusLower) {
         "collected" -> collected++
         "submitted" -> submitted++
         "approved" -> approved++
         "declined" -> declined++
         "query" -> query++
-        "return to source" -> returnToSource++
+        "return to source", "rts" -> returnToSource++
         "condition" -> condition++
-        "stc" -> stc++
       }
 
       when (f.activeStatus.uppercase()) {
@@ -355,21 +393,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     return KpiStats(
       totalFiles = files.size,
-      collected = collected,
+      stc = stc,
       submitted = submitted,
       approved = approved,
-      declined = declined,
+      collected = collected,
       query = query,
       returnToSource = returnToSource,
+      declined = declined,
       condition = condition,
-      stc = stc,
       pendingDocumentsCount = pendingDocsCount,
       activeY = activeY,
       activeN = activeN,
       activeC = activeC,
       creditCardCount = creditCardCount,
       corporateCardCount = corporateCardCount,
-      b2bCount = b2bCount
+      b2bCount = b2bCount,
+      stcCreditCardCount = stcCreditCardCount,
+      stcCorporateCardCount = stcCorporateCardCount,
+      stcB2bCount = stcB2bCount
     )
   }
 

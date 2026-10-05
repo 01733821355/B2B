@@ -25,6 +25,9 @@ import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Message
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -55,7 +58,9 @@ fun SmsNotificationsDialog(
   smsList: List<SmsNotificationEntity>,
   onDismiss: () -> Unit,
   onMarkRead: (Long) -> Unit = {},
-  onMarkAllRead: () -> Unit = {}
+  onMarkAllRead: () -> Unit = {},
+  onClearAll: () -> Unit = {},
+  onDeleteSms: (Long) -> Unit = {}
 ) {
   Dialog(
     onDismissRequest = onDismiss,
@@ -126,27 +131,50 @@ fun SmsNotificationsDialog(
         HorizontalDivider()
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Action Row for RM
-        if (isRmView && smsList.any { !it.isRead }) {
+        // Action Row with Clear SMS Option
+        if (smsList.isNotEmpty()) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text(
-              text = "${smsList.count { !it.isRead }} unread alert(s)",
-              fontSize = 12.sp,
-              fontWeight = FontWeight.SemiBold,
-              color = Color(0xFFDC2626)
-            )
+            if (isRmView && smsList.any { !it.isRead }) {
+              Text(
+                text = "${smsList.count { !it.isRead }} unread alert(s)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFDC2626)
+              )
+            } else {
+              Text(
+                text = "${smsList.size} SMS notification(s)",
+                fontSize = 12.sp,
+                color = Color.Gray
+              )
+            }
 
-            TextButton(
-              onClick = onMarkAllRead,
-              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
-            ) {
-              Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Mark All as Read", fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              if (isRmView && smsList.any { !it.isRead }) {
+                TextButton(
+                  onClick = onMarkAllRead,
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                  Icon(Icons.Default.DoneAll, contentDescription = null, modifier = Modifier.size(16.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("Mark All Read", fontSize = 11.sp)
+                }
+              }
+
+              TextButton(
+                onClick = onClearAll,
+                colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFDC2626)),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.testTag("btn_clear_all_sms")
+              ) {
+                Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Clear SMS", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              }
             }
           }
           Spacer(modifier = Modifier.height(6.dp))
@@ -169,7 +197,7 @@ fun SmsNotificationsDialog(
               )
               Spacer(modifier = Modifier.height(12.dp))
               Text(
-                text = if (isRmView) "No SMS notifications yet" else "No SMS records dispatched yet",
+                text = if (isRmView) "No SMS notifications" else "No SMS records dispatched yet",
                 fontWeight = FontWeight.Medium,
                 color = Color.Gray,
                 fontSize = 14.sp
@@ -193,7 +221,8 @@ fun SmsNotificationsDialog(
               SmsItemCard(
                 sms = sms,
                 isRmView = isRmView,
-                onMarkRead = { onMarkRead(sms.id) }
+                onMarkRead = { onMarkRead(sms.id) },
+                onDelete = { onDeleteSms(sms.id) }
               )
             }
           }
@@ -205,8 +234,24 @@ fun SmsNotificationsDialog(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
         ) {
+          if (smsList.isNotEmpty()) {
+            OutlinedButton(
+              onClick = onClearAll,
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_bottom_clear_sms")
+            ) {
+              Icon(Icons.Default.DeleteSweep, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color(0xFFDC2626))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Clear All SMS", fontSize = 12.sp)
+            }
+          } else {
+            Spacer(modifier = Modifier.width(1.dp))
+          }
+
           OutlinedButton(
             onClick = onDismiss,
             shape = RoundedCornerShape(8.dp)
@@ -223,7 +268,8 @@ fun SmsNotificationsDialog(
 private fun SmsItemCard(
   sms: SmsNotificationEntity,
   isRmView: Boolean,
-  onMarkRead: () -> Unit
+  onMarkRead: () -> Unit,
+  onDelete: () -> Unit
 ) {
   val isUnread = isRmView && !sms.isRead
   val cardBg = if (isUnread) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
@@ -238,7 +284,7 @@ private fun SmsItemCard(
       .testTag("sms_card_${sms.id}")
   ) {
     Column(modifier = Modifier.padding(12.dp)) {
-      // Header: Sender & Action Badge & Timestamp
+      // Header: Sender & Action Badge & Timestamp & Delete icon
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -246,7 +292,8 @@ private fun SmsItemCard(
       ) {
         Row(
           verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp)
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.weight(1f)
         ) {
           val badgeColor = when (sms.actionType.uppercase()) {
             "DELETE", "PERMANENT_DELETE" -> Color(0xFFDC2626)
@@ -273,16 +320,30 @@ private fun SmsItemCard(
             text = "From: ${sms.triggeredByRole} (${sms.triggeredByCode})",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
           )
         }
 
-        Text(
-          text = DateUtils.formatDateTime(sms.sentTimestamp),
-          fontSize = 11.sp,
-          color = Color.Gray,
-          fontWeight = FontWeight.Medium
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = DateUtils.formatDateTime(sms.sentTimestamp),
+            fontSize = 10.sp,
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
+          )
+          IconButton(
+            onClick = onDelete,
+            modifier = Modifier.size(24.dp).padding(start = 4.dp).testTag("btn_delete_sms_${sms.id}")
+          ) {
+            Icon(
+              Icons.Default.Delete,
+              contentDescription = "Delete",
+              tint = Color.Gray.copy(alpha = 0.6f),
+              modifier = Modifier.size(14.dp)
+            )
+          }
+        }
       }
 
       Spacer(modifier = Modifier.height(6.dp))

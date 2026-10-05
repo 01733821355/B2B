@@ -34,10 +34,12 @@ fun ApplicationStatusBadge(status: String, modifier: Modifier = Modifier) {
       .padding(horizontal = 8.dp, vertical = 3.dp)
   ) {
     Text(
-      text = status,
+      text = if (status.equals("return to source", ignoreCase = true)) "RTS (Return To Source)" else status,
       color = textColor,
       fontSize = 11.sp,
-      fontWeight = FontWeight.SemiBold
+      fontWeight = FontWeight.SemiBold,
+      maxLines = 1,
+      softWrap = false
     )
   }
 }
@@ -60,7 +62,9 @@ fun ActiveStatusBadge(status: String, modifier: Modifier = Modifier) {
       text = label,
       color = textColor,
       fontSize = 11.sp,
-      fontWeight = FontWeight.Medium
+      fontWeight = FontWeight.Medium,
+      maxLines = 1,
+      softWrap = false
     )
   }
 }
@@ -84,7 +88,9 @@ fun CpvStatusBadge(status: String, modifier: Modifier = Modifier) {
       text = "CPV: $status",
       color = textColor,
       fontSize = 10.sp,
-      fontWeight = FontWeight.Medium
+      fontWeight = FontWeight.Medium,
+      maxLines = 1,
+      softWrap = false
     )
   }
 }
@@ -108,7 +114,9 @@ fun AccountStatusBadge(status: String, modifier: Modifier = Modifier) {
       text = label,
       color = textColor,
       fontSize = 11.sp,
-      fontWeight = FontWeight.SemiBold
+      fontWeight = FontWeight.SemiBold,
+      maxLines = 1,
+      softWrap = false
     )
   }
 }

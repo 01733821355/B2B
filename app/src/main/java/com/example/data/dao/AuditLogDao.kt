@@ -23,4 +23,7 @@ interface AuditLogDao {
 
   @Query("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500")
   suspend fun getAllLogs(): List<AuditLogEntity>
+
+  @Query("DELETE FROM audit_logs WHERE action NOT IN ('LOGIN', 'LOGOUT')")
+  suspend fun purgeNonAuthLogs()
 }

@@ -70,6 +70,8 @@ fun EblTopBar(
   smsList: List<SmsNotificationEntity> = emptyList(),
   onMarkSmsRead: (Long) -> Unit = {},
   onMarkAllSmsRead: () -> Unit = {},
+  onClearSms: () -> Unit = {},
+  onDeleteSms: (Long) -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   var showMenu by remember { mutableStateOf(false) }
@@ -289,7 +291,9 @@ fun EblTopBar(
       smsList = smsList,
       onDismiss = { showSmsDialog = false },
       onMarkRead = onMarkSmsRead,
-      onMarkAllRead = onMarkAllSmsRead
+      onMarkAllRead = onMarkAllSmsRead,
+      onClearAll = onClearSms,
+      onDeleteSms = onDeleteSms
     )
   }
 }

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.ToggleOff
@@ -35,6 +36,9 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -90,62 +94,74 @@ fun RmMappingScreen(
     }
   }
 
-  Column(
+  Box(
     modifier = modifier
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
       .testTag("rm_mapping_screen")
   ) {
-    // Header
-    Row(
-      modifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 12.dp),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
+    Column(
+      modifier = Modifier.fillMaxSize()
     ) {
-      Column {
-        Text(
-          text = "RM Mapping & Account Provisioning",
-          fontSize = 17.sp,
-          fontWeight = FontWeight.Bold,
-          color = EblNavyDark
-        )
-        Text(
-          text = "${allRms.size} Relationship Officers Registered",
-          fontSize = 11.sp,
-          color = Color.Gray
-        )
-      }
-
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-          onClick = {
-            exportedCsvContent = viewModel.eblRepository.generateRmMappingsCsv(filteredRms)
-            showExportDialog = true
-          },
-          modifier = Modifier.testTag("btn_export_rm_csv")
+      // Header
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 12.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Export", fontSize = 11.sp)
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "RM Mapping & Accounts",
+              fontSize = 18.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
+            )
+            Text(
+              text = "${allRms.size} Relationship Officers Registered",
+              fontSize = 11.sp,
+              color = Color.Gray
+            )
+          }
+
+          OutlinedButton(
+            onClick = {
+              exportedCsvContent = viewModel.eblRepository.generateRmMappingsCsv(filteredRms)
+              showExportDialog = true
+            },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.testTag("btn_export_rm_csv")
+          ) {
+            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Export", fontSize = 11.sp, maxLines = 1, softWrap = false)
+          }
         }
 
-        // Admin or Mentor can assign/provision new RM accounts
+        // Admin or Mentor can assign/provision new RM accounts - ALWAYS VISIBLE PROMINENT FULL-WIDTH BUTTON!
         if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+          Spacer(modifier = Modifier.height(10.dp))
           Button(
             onClick = { showAddDialog = true },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.testTag("btn_add_new_rm")
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(44.dp)
+              .testTag("btn_add_new_rm")
           ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("+ Add New RM", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("+ Add New RM Officer", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
         }
       }
-    }
 
     // Voice-enabled Search bar
     VoiceInputField(
@@ -397,10 +413,25 @@ fun RmMappingScreen(
       }
 
       item {
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(80.dp))
       }
     }
   }
+
+  // Floating Action Button for Adding RM (Always visible in bottom corner)
+  if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+    ExtendedFloatingActionButton(
+      onClick = { showAddDialog = true },
+      icon = { Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White) },
+      text = { Text("Add RM", fontWeight = FontWeight.Bold, color = Color.White) },
+      containerColor = EblNavyPrimary,
+      modifier = Modifier
+        .align(Alignment.BottomEnd)
+        .padding(16.dp)
+        .testTag("fab_add_new_rm")
+    )
+  }
+}
 
   // Add RM Modal Dialog
   if (showAddDialog) {
@@ -414,7 +445,7 @@ fun RmMappingScreen(
 
     AlertDialog(
       onDismissRequest = { showAddDialog = false },
-      title = { Text("Assign New RM (Pending Approval)", fontWeight = FontWeight.Bold) },
+      title = { Text("Add New RM Officer", fontWeight = FontWeight.Bold) },
       text = {
         Column(modifier = Modifier.fillMaxWidth()) {
           if (addError != null) {

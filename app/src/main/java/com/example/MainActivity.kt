@@ -199,7 +199,11 @@ fun EblMainApp(viewModel: AppViewModel) {
         unreadSmsCount = unreadSmsCount,
         smsList = if (user.role == "RM") rmSmsList else allSmsList,
         onMarkSmsRead = { viewModel.markSmsAsRead(it) },
-        onMarkAllSmsRead = { viewModel.markAllSmsAsRead() }
+        onMarkAllSmsRead = { viewModel.markAllSmsAsRead() },
+        onClearSms = {
+          if (user.role == "RM") viewModel.clearSmsForCurrentRm() else viewModel.clearAllSms()
+        },
+        onDeleteSms = { viewModel.deleteSms(it) }
       )
     },
     bottomBar = {
@@ -393,7 +397,9 @@ fun EblMainApp(viewModel: AppViewModel) {
       smsList = rmSmsList,
       onDismiss = { showRmSmsInboxModal = false },
       onMarkRead = { viewModel.markSmsAsRead(it) },
-      onMarkAllRead = { viewModel.markAllSmsAsRead() }
+      onMarkAllRead = { viewModel.markAllSmsAsRead() },
+      onClearAll = { viewModel.clearSmsForCurrentRm() },
+      onDeleteSms = { viewModel.deleteSms(it) }
     )
   }
 }

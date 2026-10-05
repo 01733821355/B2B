@@ -187,6 +187,27 @@ function doPost(e) {
       'RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Source Action'
     ], '#0F766E');
 
+    // Handle File Deletions (Immediately removes rows from Google Sheets when deleted in app)
+    if (data.action === 'DELETE_FILE' || (data.deletedFileIds && data.deletedFileIds.length > 0)) {
+      var toDelete = data.deletedFileIds || [data.fileId, data.ccNumber].filter(Boolean);
+      var curFiles = fileSheet.getDataRange().getValues();
+      for (var d = curFiles.length - 1; d >= 1; d--) {
+        var rCc = String(curFiles[d][0] || '').trim();
+        var rFid = String(curFiles[d][1] || '').trim();
+        for (var k = 0; k < toDelete.length; k++) {
+          var targetK = String(toDelete[k] || '').trim();
+          if (targetK && (rFid === targetK || rCc === targetK)) {
+            fileSheet.deleteRow(d + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_FILE') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted file row from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     if (data.action === 'FETCH_SHEET_DATA') {
       return handleFetchAllData();
     }

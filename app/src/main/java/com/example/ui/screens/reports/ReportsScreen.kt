@@ -21,8 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.TableChart
+import com.example.util.ExcelReportGenerator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -80,6 +83,8 @@ fun ReportsScreen(
 
   var generatedPdfFile by remember { mutableStateOf<File?>(null) }
   var showPdfSuccessDialog by remember { mutableStateOf(false) }
+  var generatedExcelFile by remember { mutableStateOf<File?>(null) }
+  var showExcelSuccessDialog by remember { mutableStateOf(false) }
   var showPrintPreviewDialog by remember { mutableStateOf(false) }
 
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
@@ -91,37 +96,48 @@ fun ReportsScreen(
       .testTag("reports_screen")
   ) {
     // Header
-    Row(
+    Column(
       modifier = Modifier
         .fillMaxWidth()
-        .padding(horizontal = 16.dp, vertical = 12.dp),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
+        .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-      Column {
-        Text(
-          text = if (isPrivileged) "Operations & File Reports" else "My RM Performance Report",
-          fontSize = 17.sp,
-          fontWeight = FontWeight.Bold,
-          color = EblNavyDark
-        )
-        Text(
-          text = "${files.size} records in selected period",
-          fontSize = 11.sp,
-          color = Color.Gray
-        )
-      }
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = if (isPrivileged) "Operations & File Reports" else "My RM Performance Report",
+            fontSize = 17.sp,
+            fontWeight = FontWeight.Bold,
+            color = EblNavyDark
+          )
+          Text(
+            text = "${files.size} records in selected period",
+            fontSize = 11.sp,
+            color = Color.Gray
+          )
+        }
 
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(
           onClick = { showPrintPreviewDialog = true },
-          modifier = Modifier.testTag("btn_print_preview_report")
+          modifier = Modifier.testTag("btn_print_preview_report"),
+          shape = RoundedCornerShape(8.dp)
         ) {
           Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("Print", fontSize = 11.sp)
+          Text("Print", fontSize = 11.sp, maxLines = 1, softWrap = false)
         }
+      }
 
+      Spacer(modifier = Modifier.height(10.dp))
+
+      // Dedicated Action Row for PDF and Excel (No CSV!)
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
         Button(
           onClick = {
             val pdf = PdfReportGenerator.generatePdfReport(
@@ -136,11 +152,32 @@ fun ReportsScreen(
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.testTag("btn_export_pdf_report")
+          modifier = Modifier.weight(1f).height(42.dp).testTag("btn_export_pdf_report")
         ) {
-          Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("Export PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+          Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Export PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        }
+
+        Button(
+          onClick = {
+            val excel = ExcelReportGenerator.generateExcelReport(
+              context = context,
+              files = files,
+              currentUser = currentUser,
+              periodLabel = selectedTimeFilter.label,
+              customAppName = appCustomName
+            )
+            generatedExcelFile = excel
+            showExcelSuccessDialog = true
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
+          shape = RoundedCornerShape(8.dp),
+          modifier = Modifier.weight(1f).height(42.dp).testTag("btn_export_excel_report")
+        ) {
+          Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Export Excel", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -280,6 +317,38 @@ fun ReportsScreen(
       },
       dismissButton = {
         OutlinedButton(onClick = { showPdfSuccessDialog = false }) {
+          Text("Done")
+        }
+      }
+    )
+  }
+
+  // Excel Generated Success Dialog
+  if (showExcelSuccessDialog && generatedExcelFile != null) {
+    AlertDialog(
+      onDismissRequest = { showExcelSuccessDialog = false },
+      title = { Text("Excel Spreadsheet Generated", fontWeight = FontWeight.Bold) },
+      text = {
+        Column {
+          Text("Official Operations Excel spreadsheet has been generated successfully.", fontSize = 12.sp)
+          Spacer(modifier = Modifier.height(6.dp))
+          Text("File: ${generatedExcelFile!!.name} (${generatedExcelFile!!.length() / 1024} KB)", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          Text("Compatible with Microsoft Excel, Google Sheets, and WPS Office.", fontSize = 11.sp, color = Color(0xFF15803D))
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            ExcelReportGenerator.shareOrViewExcel(context, generatedExcelFile!!)
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+        ) {
+          Text("Open / Share Excel")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showExcelSuccessDialog = false }) {
           Text("Done")
         }
       }

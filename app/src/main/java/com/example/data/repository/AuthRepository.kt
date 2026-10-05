@@ -69,7 +69,8 @@ class AuthRepository(private val database: AppDatabase) {
       )
     }
     
-    // Log login audit
+    // Log login audit with time and location as specifically requested
+    val locDesc = if (!address.isNullOrBlank()) address else if (latitude != null && longitude != null) "Lat: $latitude, Lng: $longitude" else "Location: GPS Auto"
     database.auditLogDao().insertLog(
       AuditLogEntity(
         logId = "LOG-AUTH-${SecurityUtils.generateUniqueId().take(8)}",
@@ -78,7 +79,7 @@ class AuthRepository(private val database: AppDatabase) {
         action = "LOGIN",
         rmCode = if (user.role == "RM") user.rmCode else null,
         timestamp = now,
-        details = "User ${user.name} logged in successfully."
+        details = "${user.name} logged in. Time: ${DateUtils.formatDateTime(now)} | Location: $locDesc"
       )
     )
 
@@ -97,6 +98,10 @@ class AuthRepository(private val database: AppDatabase) {
   suspend fun logout() = withContext(Dispatchers.IO) {
     val user = _currentUser.value
     if (user != null) {
+      val now = DateUtils.currentDhakaMillis()
+      val logoutLoc = user.lastLocationAddress.ifBlank {
+        if (user.lastLatitude != null && user.lastLongitude != null) "Lat: ${user.lastLatitude}, Lng: ${user.lastLongitude}" else "Dhaka Operations"
+      }
       database.auditLogDao().insertLog(
         AuditLogEntity(
           logId = "LOG-LOGOUT-${SecurityUtils.generateUniqueId().take(8)}",
@@ -104,8 +109,8 @@ class AuthRepository(private val database: AppDatabase) {
           role = user.role,
           action = "LOGOUT",
           rmCode = if (user.role == "RM") user.rmCode else null,
-          timestamp = DateUtils.currentDhakaMillis(),
-          details = "User ${user.name} logged out."
+          timestamp = now,
+          details = "${user.name} logged out. Time: ${DateUtils.formatDateTime(now)} | Location: $logoutLoc"
         )
       )
     }
@@ -127,18 +132,6 @@ class AuthRepository(private val database: AppDatabase) {
     val newSalt = SecurityUtils.generateSalt()
     val newHash = SecurityUtils.hashPassword(newPassword.trim(), newSalt)
     database.userDao().updatePassword(user.rmCode, newHash, newSalt, mustChange = false)
-
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-PWD-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = user.rmCode,
-        role = user.role,
-        action = "PASSWORD_CHANGE",
-        rmCode = if (user.role == "RM") user.rmCode else null,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Password updated securely by user."
-      )
-    )
 
     _currentUser.value = user.copy(
       passwordHash = newHash,

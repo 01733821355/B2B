@@ -129,33 +129,36 @@ fun AdminDashboardScreen(
               onClick = { onNavigate(Screen.RmMapping) },
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
               modifier = Modifier.weight(1f).testTag("admin_nav_rm_mapping")
             ) {
               Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("RM Mapping", fontSize = 11.sp)
+              Text("RM Mapping", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(
               onClick = { onNavigate(Screen.GlobalDatabase) },
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
               modifier = Modifier.weight(1f).testTag("admin_nav_database")
             ) {
               Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Database", fontSize = 11.sp)
+              Text("Database", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(
               onClick = { onNavigate(Screen.RmMapping) },
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFDE047)),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
               modifier = Modifier.weight(1f).testTag("admin_nav_add_rm")
             ) {
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -234,12 +237,13 @@ fun AdminDashboardScreen(
               .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("RM Officer", modifier = Modifier.weight(1.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-            Text("Subm", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-            Text("STC", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
-            Text("Apprv", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
-            Text("Decl", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB91C1C))
-            Text("Q/RTS", modifier = Modifier.weight(0.8f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2410C))
+            Text("RM Officer", modifier = Modifier.weight(1.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+            Text("STC", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), maxLines = 1, softWrap = false)
+            Text("Subm", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+            Text("Apprv", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), maxLines = 1, softWrap = false)
+            Text("Query", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706), maxLines = 1, softWrap = false)
+            Text("RTS", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE11D48), maxLines = 1, softWrap = false)
+            Text("Decl", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626), maxLines = 1, softWrap = false)
           }
 
           if (rmPerformanceList.isEmpty()) {
@@ -266,15 +270,16 @@ fun AdminDashboardScreen(
                   modifier = Modifier.fillMaxWidth(),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Column(modifier = Modifier.weight(1.8f)) {
-                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-                    Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray)
+                  Column(modifier = Modifier.weight(1.7f)) {
+                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+                    Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray, maxLines = 1, softWrap = false)
                   }
-                  Text("${row.stats.totalFiles}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC026D3))
-                  Text("${row.stats.approved}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
-                  Text("${row.stats.declined}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, color = Color(0xFFB91C1C))
-                  Text("${row.stats.query + row.stats.returnToSource}", modifier = Modifier.weight(0.8f), fontSize = 12.sp, color = Color(0xFFC2410C))
+                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F766E))
+                  Text("${row.stats.submitted}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                  Text("${row.stats.approved}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF15803D))
+                  Text("${row.stats.query}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD97706))
+                  Text("${row.stats.returnToSource}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFE11D48))
+                  Text("${row.stats.declined}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFDC2626))
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
@@ -291,13 +296,13 @@ fun AdminDashboardScreen(
                 ) {
                   Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
-                      Text("CC: ${row.stats.creditCardCount}/$ccTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                      Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
-                      Text("Corp: ${row.stats.corporateCardCount}/$corpTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                      Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
-                      Text("B2B: ${row.stats.b2bCount}/$b2bTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp))
+                      Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                   }
 

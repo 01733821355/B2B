@@ -25,6 +25,9 @@ interface CustomerFileDao {
   @Query("SELECT * FROM customer_files WHERE isDeleted = 0 ORDER BY updatedAt DESC")
   suspend fun getAllActiveFiles(): List<CustomerFileEntity>
 
+  @Query("SELECT * FROM customer_files WHERE isDeleted = 1 ORDER BY updatedAt DESC")
+  suspend fun getAllDeletedFiles(): List<CustomerFileEntity>
+
   @Query("SELECT * FROM customer_files ORDER BY updatedAt DESC")
   fun getAllFilesIncludingDeletedFlow(): Flow<List<CustomerFileEntity>>
 

@@ -156,6 +156,18 @@ class EblRepository(
     database.smsNotificationDao().markAllAsReadForRm(rmCode)
   }
 
+  suspend fun deleteSms(id: Long) = withContext(Dispatchers.IO) {
+    database.smsNotificationDao().deleteSms(id)
+  }
+
+  suspend fun clearSmsForRm(rmCode: String) = withContext(Dispatchers.IO) {
+    database.smsNotificationDao().clearSmsForRm(rmCode)
+  }
+
+  suspend fun clearAllSms() = withContext(Dispatchers.IO) {
+    database.smsNotificationDao().clearAllSms()
+  }
+
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?> {
     return database.customerFileDao().getFileByIdFlow(fileId)
   }
@@ -267,32 +279,8 @@ class EblRepository(
 
     if (isNew || existing == null) {
       database.customerFileDao().insertFile(entity)
-      database.auditLogDao().insertLog(
-        AuditLogEntity(
-          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-          userId = currentUser.rmCode,
-          role = currentUser.role,
-          action = "FILE_CREATE",
-          fileId = targetFileId,
-          rmCode = resolvedRmCode,
-          timestamp = now,
-          details = "Created customer file for '$customerName' ($productType, CC: ${ccNumber.ifBlank { "N/A" }})."
-        )
-      )
     } else {
       database.customerFileDao().updateFile(entity)
-      database.auditLogDao().insertLog(
-        AuditLogEntity(
-          logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-          userId = currentUser.rmCode,
-          role = currentUser.role,
-          action = "FILE_UPDATE",
-          fileId = targetFileId,
-          rmCode = resolvedRmCode,
-          timestamp = now,
-          details = "Updated customer file ($applicationStatus, Active: $activeStatus, CC: ${ccNumber.ifBlank { "N/A" }})."
-        )
-      )
 
       // Notify RM via SMS & App Alert if updated by Admin or Mentor
       if ((currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && existing.assignedRmCode != currentUser.rmCode) {
@@ -381,6 +369,33 @@ class EblRepository(
     Result.success(entity)
   }
 
+  suspend fun syncFileDeletionToGoogleSheets(fileId: String, ccNumber: String?): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val delArray = org.json.JSONArray().apply {
+        put(fileId)
+        if (!ccNumber.isNullOrBlank()) put(ccNumber)
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "DELETE_FILE")
+        put("fileId", fileId)
+        put("ccNumber", ccNumber ?: "")
+        put("deletedFileIds", delArray)
+        put("spreadsheetId", currentStatus.spreadsheetId)
+        put("secretKey", currentStatus.syncSecretKey)
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().close()
+    } catch (_: Exception) {}
+  }
+
   suspend fun softDeleteCustomerFile(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -395,18 +410,10 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().softDeleteFile(fileId, currentUser.rmCode, now)
 
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "FILE_DELETE",
-        fileId = fileId,
-        rmCode = file.assignedRmCode,
-        timestamp = now,
-        details = "Soft-deleted customer file '${file.customerName}' ($fileId)."
-      )
-    )
+    // Immediately synchronize deletion with Google Sheets
+    applicationScope.launch {
+      syncFileDeletionToGoogleSheets(fileId, file.ccNumber)
+    }
 
     // Notify RM via SMS if deleted by Admin or Mentor!
     if ((currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && file.assignedRmCode != currentUser.rmCode) {
@@ -470,19 +477,6 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().restoreFile(fileId, currentUser.rmCode, now)
 
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "FILE_RESTORE",
-        fileId = fileId,
-        rmCode = file?.assignedRmCode,
-        timestamp = now,
-        details = "Restored previously soft-deleted customer file $fileId."
-      )
-    )
-
     if (file != null && (currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && file.assignedRmCode != currentUser.rmCode) {
       val targetRmUser = database.userDao().getUser(file.assignedRmCode)
       val rmMobile = targetRmUser?.mobile ?: ""
@@ -533,18 +527,10 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().permanentDeleteFile(fileId)
 
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "FILE_PERMANENT_DELETE",
-        fileId = fileId,
-        rmCode = file?.assignedRmCode,
-        timestamp = now,
-        details = "Permanently expunged record $fileId by Mentor."
-      )
-    )
+    // Immediately synchronize permanent deletion with Google Sheets
+    applicationScope.launch {
+      syncFileDeletionToGoogleSheets(fileId, file?.ccNumber)
+    }
 
     if (file != null && file.assignedRmCode != currentUser.rmCode) {
       val targetRmUser = database.userDao().getUser(file.assignedRmCode)
@@ -617,19 +603,6 @@ class EblRepository(
     )
 
     database.fileAttachmentDao().insertAttachment(attachment)
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "FILE_ATTACHMENT_UPLOAD",
-        fileId = fileId,
-        rmCode = if (currentUser.role == "RM") currentUser.rmCode else null,
-        timestamp = now,
-        details = "Uploaded attachment '$fileName' ($category) for $fileId."
-      )
-    )
-
     Result.success(attachment)
   }
 
@@ -638,18 +611,6 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("Unauthorized."))
 
     database.fileAttachmentDao().deleteAttachment(attachmentId)
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "FILE_ATTACHMENT_DELETE",
-        fileId = fileId,
-        rmCode = if (currentUser.role == "RM") currentUser.rmCode else null,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Removed attachment $attachmentId from $fileId."
-      )
-    )
     Result.success(Unit)
   }
 
@@ -707,17 +668,6 @@ class EblRepository(
         updatedAt = now
       )
     )
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_ASSIGN_ACTIVE",
-        rmCode = cleanRmCode,
-        timestamp = now,
-        details = "Admin created active RM account for ${name.trim()} (Code: $cleanRmCode)."
-      )
-    )
 
     applicationScope.launch {
       triggerGoogleSheetsSync()
@@ -769,17 +719,6 @@ class EblRepository(
     }
 
     database.userDao().updateUser(updated)
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_UPDATE",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Updated profile for RM $rmCode" + if (!newPassword.isNullOrBlank()) " (password changed)" else ""
-      )
-    )
 
     if (currentUser.role == "ADMIN") {
       context?.let { ctx ->
@@ -842,17 +781,6 @@ class EblRepository(
     val existing = database.userDao().getUser(rmCode)
       ?: return@withContext Result.failure(Exception("RM not found."))
     database.userDao().updateStatus(rmCode, "ACTIVE")
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_APPROVE",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Mentor approved RM account $rmCode (${existing.name})."
-      )
-    )
 
     // Notify approved RM that they can now log in
     context?.let { ctx ->
@@ -876,17 +804,6 @@ class EblRepository(
       return@withContext Result.failure(Exception("Only Mentor can reject RM accounts."))
     }
     database.userDao().updateStatus(rmCode, "INACTIVE")
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_REJECT",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Mentor rejected RM account $rmCode. Reason: ${reason.ifBlank { "Not specified" }}."
-      )
-    )
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -902,17 +819,6 @@ class EblRepository(
     val salt = SecurityUtils.generateSalt()
     val hash = SecurityUtils.hashPassword(newPassword, salt)
     database.userDao().updatePassword(rmCode, hash, salt, mustChange = false)
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_PASSWORD_RESET",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "${currentUser.role} reset password for RM $rmCode (${existing.name})."
-      )
-    )
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -950,18 +856,6 @@ class EblRepository(
     }
 
     database.userDao().updateStatus(rmCode, newStatus)
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "RM_STATUS_CHANGE",
-        rmCode = rmCode,
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Changed RM $rmCode status to $newStatus."
-      )
-    )
-
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -996,17 +890,6 @@ class EblRepository(
       updatedAt = DateUtils.currentDhakaMillis()
     )
     database.appSettingDao().insertOrUpdateSetting(setting)
-
-    database.auditLogDao().insertLog(
-      AuditLogEntity(
-        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
-        userId = currentUser.rmCode,
-        role = currentUser.role,
-        action = "APP_SETTING_CHANGE",
-        timestamp = DateUtils.currentDhakaMillis(),
-        details = "Updated setting '$key'."
-      )
-    )
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -1196,6 +1079,14 @@ class EblRepository(
           })
         }
 
+        // Gather all deleted file IDs so Google Sheets deletes them from spreadsheet
+        val allDeletedFiles = database.customerFileDao().getAllDeletedFiles()
+        val deletedFileIds = org.json.JSONArray()
+        for (df in allDeletedFiles) {
+          deletedFileIds.put(df.fileId)
+          if (df.ccNumber.isNotBlank()) deletedFileIds.put(df.ccNumber)
+        }
+
         val payload = JSONObject().apply {
           put("action", "SYNC_ALL_DATA")
           put("spreadsheetId", currentStatus.spreadsheetId)
@@ -1204,6 +1095,7 @@ class EblRepository(
           put("syncedBy", syncedBy)
           put("filesCount", filesArray.length())
           put("files", filesArray)
+          put("deletedFileIds", deletedFileIds)
           put("rms", rmsArray)
           put("settings", settingsArray)
           put("auditLogs", auditLogsArray)
@@ -1467,6 +1359,10 @@ class EblRepository(
       if (targetId.isBlank()) continue
 
       val existing = database.customerFileDao().getFileById(targetId)
+      if (existing != null && existing.isDeleted) {
+        // Record was deleted in app; do NOT resurrect or re-enable it from spreadsheet!
+        continue
+      }
       val appStatus = obj.optString("applicationStatus", existing?.applicationStatus ?: "Submitted")
       val activeStatus = obj.optString("activeStatus", existing?.activeStatus ?: "Y")
       val remarks = obj.optString("remarks", existing?.remarks ?: "")

@@ -149,33 +149,36 @@ fun RmDashboardScreen(
               onClick = onAddNewFile,
               colors = ButtonDefaults.buttonColors(containerColor = EblGold),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
               modifier = Modifier.weight(1f).testTag("rm_dashboard_add_file_btn")
             ) {
               Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("New File", color = EblNavyDark, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+              Text("New File", color = EblNavyDark, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(
               onClick = onViewAllFiles,
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
               modifier = Modifier.weight(1f).testTag("rm_dashboard_view_all_btn")
             ) {
               Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("My Files", fontSize = 12.sp)
+              Text("My Files", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(
               onClick = onDownloadReport,
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
               shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
               modifier = Modifier.weight(1f).testTag("rm_dashboard_reports_btn")
             ) {
               Icon(Icons.Default.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Report", fontSize = 12.sp)
+              Text("Report", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -261,23 +264,37 @@ fun RmDashboardScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(Icons.Default.TrendingUp, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text(
-                text = "Target vs Achievement",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = EblNavyDark
-              )
+              Column {
+                Text(
+                  text = "Target vs Achievement",
+                  fontSize = 15.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark,
+                  maxLines = 1,
+                  softWrap = false
+                )
+                Text(
+                  text = "Achievement = STC (Production Done)",
+                  fontSize = 10.sp,
+                  color = Color(0xFF0F766E),
+                  fontWeight = FontWeight.Medium,
+                  maxLines = 1,
+                  softWrap = false
+                )
+              }
             }
             Surface(
               shape = RoundedCornerShape(4.dp),
               color = Color(0xFFEFF6FF)
             ) {
               Text(
-                text = "Admin Assigned Goals",
+                text = "Monthly Quotas",
                 fontSize = 10.sp,
                 color = Color(0xFF1D4ED8),
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                maxLines = 1,
+                softWrap = false
               )
             }
           }
@@ -289,8 +306,8 @@ fun RmDashboardScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            // Credit Card Goal
-            val ccAchieved = stats.creditCardCount
+            // Credit Card Goal: Achievement strictly from STC status
+            val ccAchieved = stats.stcCreditCardCount
             val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
             Surface(
               shape = RoundedCornerShape(10.dp),
@@ -302,12 +319,12 @@ fun RmDashboardScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                  Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
                   Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
-                  Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                  Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
@@ -321,13 +338,15 @@ fun RmDashboardScreen(
                   text = "${(ccProgress * 100).toInt()}% Done",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF15803D)
+                  color = Color(0xFF15803D),
+                  maxLines = 1,
+                  softWrap = false
                 )
               }
             }
 
-            // Corporate Card Goal
-            val corpAchieved = stats.corporateCardCount
+            // Corporate Card Goal: Achievement strictly from STC status
+            val corpAchieved = stats.stcCorporateCardCount
             val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
             Surface(
               shape = RoundedCornerShape(10.dp),
@@ -339,12 +358,12 @@ fun RmDashboardScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                  Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
                   Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
-                  Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                  Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
@@ -358,13 +377,15 @@ fun RmDashboardScreen(
                   text = "${(corpProgress * 100).toInt()}% Done",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF1D4ED8)
+                  color = Color(0xFF1D4ED8),
+                  maxLines = 1,
+                  softWrap = false
                 )
               }
             }
 
-            // B2B Goal
-            val b2bAchieved = stats.b2bCount
+            // B2B Goal: Achievement strictly from STC status
+            val b2bAchieved = stats.stcB2bCount
             val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
             Surface(
               shape = RoundedCornerShape(10.dp),
@@ -376,12 +397,12 @@ fun RmDashboardScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.Handshake, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8))
+                  Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.Bottom) {
                   Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7E22CE))
-                  Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp))
+                  Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
@@ -395,7 +416,9 @@ fun RmDashboardScreen(
                   text = "${(b2bProgress * 100).toInt()}% Done",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF7E22CE)
+                  color = Color(0xFF7E22CE),
+                  maxLines = 1,
+                  softWrap = false
                 )
               }
             }
