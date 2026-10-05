@@ -305,11 +305,15 @@ fun CustomerFileFormScreen(
     }
   }
 
-  val productOptions = listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement")
+  val dynamicProductTypes by viewModel.productTypes.collectAsState()
+  val dynamicPendingDocOptions by viewModel.pendingDocsOptions.collectAsState()
+
+  val productOptions = if (dynamicProductTypes.isNotEmpty()) dynamicProductTypes else listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement")
   var selectedProductType by remember { mutableStateOf(productOptions.first()) }
   var productExpanded by remember { mutableStateOf(false) }
 
-  val statusOptions = listOf("Collected", "Submitted", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+  // Includes "Analyst Receive" immediately after "Collected", "Submitted" as requested!
+  val statusOptions = listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
   var selectedApplicationStatus by remember { mutableStateOf("Collected") }
   var statusExpanded by remember { mutableStateOf(false) }
 
@@ -317,7 +321,7 @@ fun CustomerFileFormScreen(
   var selectedActiveStatus by remember { mutableStateOf("N") }
   var activeExpanded by remember { mutableStateOf(false) }
 
-  val allPendingDocOptions = listOf(
+  val allPendingDocOptions = if (dynamicPendingDocOptions.isNotEmpty()) dynamicPendingDocOptions else listOf(
     "NID", "TIN", "Office ID", "Salary Certificate",
     "Account Statement (6 Months)", "BIN", "Trade License 2024-25",
     "Trade License 2025-26", "Trade License 2026-27",

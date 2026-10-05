@@ -19,6 +19,7 @@ fun ApplicationStatusBadge(status: String, modifier: Modifier = Modifier) {
   val (bgColor, textColor) = when (status.lowercase()) {
     "approved" -> Pair(Color(0xFFDCFCE7), Color(0xFF15803D))
     "submitted" -> Pair(Color(0xFFDBEAFE), Color(0xFF1D4ED8))
+    "analyst receive", "analyst received" -> Pair(Color(0xFFE0E7FF), Color(0xFF4338CA))
     "collected" -> Pair(Color(0xFFE0F2FE), Color(0xFF0369A1))
     "query" -> Pair(Color(0xFFFFEDD5), Color(0xFFC2410C))
     "return to source" -> Pair(Color(0xFFFEE2E2), Color(0xFFB91C1C))

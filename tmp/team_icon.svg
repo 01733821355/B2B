@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B192C"/>
+      <stop offset="100%" stop-color="#1E3A8A"/>
+    </linearGradient>
+  </defs>
+  <!-- Background -->
+  <rect width="108" height="108" rx="24" fill="url(#bgGrad)"/>
+  <circle cx="54" cy="54" r="46" fill="none" stroke="#38BDF8" stroke-width="1.5" stroke-opacity="0.25"/>
+
+  <!-- Left Team Member -->
+  <circle cx="35" cy="27" r="6" fill="#93C5FD"/>
+  <path d="M25,43 c0,-3 18,-3 18,0 l-1,10 h-16 z" fill="#93C5FD"/>
+
+  <!-- Right Team Member -->
+  <circle cx="73" cy="27" r="6" fill="#93C5FD"/>
+  <path d="M65,43 c0,-3 18,-3 18,0 l-1,10 h-16 z" fill="#93C5FD"/>
+
+  <!-- Center Team Leader -->
+  <circle cx="54" cy="20" r="7.5" fill="#FFFFFF"/>
+  <path d="M43,39 c0,-3.5 22,-3.5 22,0 l2,14 h-26 z" fill="#FFFFFF"/>
+
+  <!-- Info Document Card Shadow -->
+  <rect x="25" y="54" width="58" height="34" rx="5" fill="#051020" fill-opacity="0.35"/>
+  <!-- Info Document Card Base -->
+  <rect x="25" y="52" width="58" height="34" rx="5" fill="#FFFFFF"/>
+  <!-- Card Header Banner (Gold) -->
+  <path d="M25,57 a5,5 0 0,1 5,-5 h48 a5,5 0 0,1 5,5 v5 h-58 z" fill="#F59E0B"/>
+
+  <!-- Document Lines -->
+  <line x1="32" y1="68" x2="60" y2="68" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="32" y1="74" x2="52" y2="74" stroke="#64748B" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="32" y1="80" x2="56" y2="80" stroke="#94A3B8" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Analytics Done Badge -->
+  <circle cx="72" cy="74" r="8" fill="#10B981"/>
+  <path d="M68.5,74 l2.5,2.5 l5,-5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

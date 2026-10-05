@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -51,6 +52,7 @@ data class KpiStats(
   val totalFiles: Int = 0,
   val stc: Int = 0, // STC / Production Done (Primary Achievement)
   val submitted: Int = 0,
+  val analystReceive: Int = 0, // Analyst Receive (After Collected & Submitted)
   val approved: Int = 0,
   val collected: Int = 0,
   val query: Int = 0,
@@ -202,6 +204,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val appSettings: StateFlow<List<AppSettingEntity>> = eblRepository.getAppSettingsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+  val productTypes: StateFlow<List<String>> = appSettings.map { list ->
+    val raw = list.find { it.settingKey == "PRODUCT_TYPES" }?.settingValue
+    if (!raw.isNullOrBlank()) {
+      raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    } else {
+      listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement")
+    }
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.WhileSubscribed(5000),
+    listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement")
+  )
+
+  val pendingDocsOptions: StateFlow<List<String>> = appSettings.map { list ->
+    val raw = list.find { it.settingKey == "PENDING_DOCS_LIST" }?.settingValue
+    if (!raw.isNullOrBlank()) {
+      raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    } else {
+      listOf("NID", "TIN", "Office ID", "Salary Certificate", "Account Statement (6 Months)", "BIN", "Trade License 2024-25", "Trade License 2025-26", "Trade License 2026-27", "Loan Certificate", "Card Statement (Month)", "Card Copy")
+    }
+  }.stateIn(
+    viewModelScope,
+    SharingStarted.WhileSubscribed(5000),
+    listOf("NID", "TIN", "Office ID", "Salary Certificate", "Account Statement (6 Months)", "BIN", "Trade License 2024-25", "Trade License 2025-26", "Trade License 2026-27", "Loan Certificate", "Card Statement (Month)", "Card Copy")
+  )
+
   val syncStatus: StateFlow<SyncStatusEntity?> = eblRepository.getSyncStatusFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
@@ -332,6 +360,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   private fun computeStats(files: List<CustomerFileEntity>): KpiStats {
     var collected = 0
     var submitted = 0
+    var analystReceive = 0
     var approved = 0
     var declined = 0
     var query = 0
@@ -372,6 +401,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       when (statusLower) {
         "collected" -> collected++
         "submitted" -> submitted++
+        "analyst receive", "analyst received" -> analystReceive++
         "approved" -> approved++
         "declined" -> declined++
         "query" -> query++
@@ -395,6 +425,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       totalFiles = files.size,
       stc = stc,
       submitted = submitted,
+      analystReceive = analystReceive,
       approved = approved,
       collected = collected,
       query = query,

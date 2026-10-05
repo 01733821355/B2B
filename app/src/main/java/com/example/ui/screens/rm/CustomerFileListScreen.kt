@@ -497,8 +497,9 @@ fun CustomerFileListScreen(
 
   // Filter Selector Dialog
   if (showFiltersDialog) {
-    val productOptions = listOf("All", "Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement")
-    val statusOptions = listOf("All", "Collected", "Submitted", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+    val dynamicProductTypes by viewModel.productTypes.collectAsState()
+    val productOptions = listOf("All") + (if (dynamicProductTypes.isNotEmpty()) dynamicProductTypes else listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement"))
+    val statusOptions = listOf("All", "Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
     val activeOptions = listOf("All", "Y", "N", "C")
     val cpvOptions = listOf("All", "Pending", "Completed", "Failed", "Not Required")
 

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
@@ -262,7 +263,7 @@ fun KpiGridSection(
 
     Spacer(modifier = Modifier.height(10.dp))
 
-    // 2. Primary 2-Column Row: Total Files & Submitted
+    // 2. Primary 2-Column Row: Total Files & Collected
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -275,36 +276,6 @@ fun KpiGridSection(
         bgTint = Color(0xFFDBEAFE),
         subtitle = "Active files",
         onClick = { onKpiClick?.invoke("Total") },
-        modifier = Modifier.weight(1f)
-      )
-      MetricKpiCard(
-        title = "Submitted",
-        value = stats.submitted.toString(),
-        icon = Icons.Default.Send,
-        iconTint = Color(0xFF2563EB),
-        bgTint = Color(0xFFEFF6FF),
-        subtitle = "In processing",
-        onClick = { onKpiClick?.invoke("Submitted") },
-        modifier = Modifier.weight(1f)
-      )
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // 3. Row 2: Approved & Collected
-    // "approve hoyleo acivment a dekhabe na" -> Approved is separated and clearly labeled as intermediate approval!
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-      MetricKpiCard(
-        title = "Approved",
-        value = stats.approved.toString(),
-        icon = Icons.Default.CheckCircle,
-        iconTint = Color(0xFF15803D),
-        bgTint = Color(0xFFDCFCE7),
-        subtitle = "Awaiting STC card",
-        onClick = { onKpiClick?.invoke("Approved") },
         modifier = Modifier.weight(1f)
       )
       MetricKpiCard(
@@ -321,12 +292,50 @@ fun KpiGridSection(
 
     Spacer(modifier = Modifier.height(10.dp))
 
-    // 4. Row 3: Query & Return To Source (RTS) - COMPLETELY SEPARATE!
-    // "Declined and rts(return to sourch) akshte thakbe na alda alda bobe thik tamon quary ta alada hobe"
+    // 3. Row 2: Submitted & Analyst Receive ("colect3d submited er pore analyst receive nameo akta option rakho")
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+      MetricKpiCard(
+        title = "Submitted",
+        value = stats.submitted.toString(),
+        icon = Icons.Default.Send,
+        iconTint = Color(0xFF2563EB),
+        bgTint = Color(0xFFEFF6FF),
+        subtitle = "In processing",
+        onClick = { onKpiClick?.invoke("Submitted") },
+        modifier = Modifier.weight(1f)
+      )
+      MetricKpiCard(
+        title = "Analyst Receive",
+        value = stats.analystReceive.toString(),
+        icon = Icons.Default.VerifiedUser,
+        iconTint = Color(0xFF4338CA),
+        bgTint = Color(0xFFEEF2FF),
+        subtitle = "Under review",
+        onClick = { onKpiClick?.invoke("Analyst Receive") },
+        modifier = Modifier.weight(1f)
+      )
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // 4. Row 3: Approved & Query
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+      MetricKpiCard(
+        title = "Approved",
+        value = stats.approved.toString(),
+        icon = Icons.Default.CheckCircle,
+        iconTint = Color(0xFF15803D),
+        bgTint = Color(0xFFDCFCE7),
+        subtitle = "Awaiting STC card",
+        onClick = { onKpiClick?.invoke("Approved") },
+        modifier = Modifier.weight(1f)
+      )
       MetricKpiCard(
         title = "Query",
         value = stats.query.toString(),
@@ -337,6 +346,15 @@ fun KpiGridSection(
         onClick = { onKpiClick?.invoke("Query") },
         modifier = Modifier.weight(1f)
       )
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // 5. Row 4: Return To Source (RTS) & Declined - SEPARATE!
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
       MetricKpiCard(
         title = "Return To Source",
         value = stats.returnToSource.toString(),
@@ -347,25 +365,25 @@ fun KpiGridSection(
         onClick = { onKpiClick?.invoke("Return To Source") },
         modifier = Modifier.weight(1f)
       )
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // 5. Row 4: Declined & Condition - SEPARATE!
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
       MetricKpiCard(
         title = "Declined",
         value = stats.declined.toString(),
         icon = Icons.Default.Cancel,
         iconTint = Color(0xFFDC2626),
         bgTint = Color(0xFFFEE2E2),
-        subtitle = "Rejected applications",
+        subtitle = "Rejected files",
         onClick = { onKpiClick?.invoke("Declined") },
         modifier = Modifier.weight(1f)
       )
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // 6. Row 5: Condition & Pending Docs
+    Row(
+      modifier = Modifier.fillMaxWidth(),
+      horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
       MetricKpiCard(
         title = "Condition",
         value = stats.condition.toString(),
@@ -376,15 +394,6 @@ fun KpiGridSection(
         onClick = { onKpiClick?.invoke("Condition") },
         modifier = Modifier.weight(1f)
       )
-    }
-
-    Spacer(modifier = Modifier.height(10.dp))
-
-    // 6. Row 5: Pending Docs Backlog & Active Cards
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
       MetricKpiCard(
         title = "Pending Docs",
         value = stats.pendingDocumentsCount.toString(),
@@ -395,17 +404,21 @@ fun KpiGridSection(
         onClick = { onKpiClick?.invoke("PendingDocs") },
         modifier = Modifier.weight(1f)
       )
-      MetricKpiCard(
-        title = "Active Cards",
-        value = stats.activeY.toString(),
-        icon = Icons.Default.CreditCard,
-        iconTint = Color(0xFF16A34A),
-        bgTint = Color(0xFFDCFCE7),
-        subtitle = "N:${stats.activeN} | C:${stats.activeC}",
-        onClick = { onKpiClick?.invoke("ActiveCards") },
-        modifier = Modifier.weight(1f)
-      )
     }
+
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // 7. Row 6: Active Cards
+    MetricKpiCard(
+      title = "Active Cards",
+      value = stats.activeY.toString(),
+      icon = Icons.Default.CreditCard,
+      iconTint = Color(0xFF16A34A),
+      bgTint = Color(0xFFDCFCE7),
+      subtitle = "Active: ${stats.activeY} | Inactive: ${stats.activeN} | Closed: ${stats.activeC}",
+      onClick = { onKpiClick?.invoke("ActiveCards") },
+      modifier = Modifier.fillMaxWidth()
+    )
   }
 }
 
@@ -420,6 +433,7 @@ fun StatusDistributionChart(
   val items = listOf(
     Pair("STC", Pair(stats.stc, Color(0xFF0F766E))),
     Pair("Submitted", Pair(stats.submitted, Color(0xFF2563EB))),
+    Pair("Analyst Recv", Pair(stats.analystReceive, Color(0xFF4338CA))),
     Pair("Approved", Pair(stats.approved, Color(0xFF16A34A))),
     Pair("Collected", Pair(stats.collected, Color(0xFF0284C7))),
     Pair("Query", Pair(stats.query, Color(0xFFD97706))),
