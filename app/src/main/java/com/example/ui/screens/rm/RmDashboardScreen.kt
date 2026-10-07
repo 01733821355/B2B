@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Download
@@ -80,6 +81,7 @@ fun RmDashboardScreen(
   target: RmTargetEntity? = null,
   unreadSmsCount: Int = 0,
   onOpenSmsInbox: () -> Unit = {},
+  onOpenDbrChecklist: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   modifier: Modifier = Modifier
 ) {
@@ -167,6 +169,18 @@ fun RmDashboardScreen(
               Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
               Text("My Files", fontSize = 11.sp, maxLines = 1, softWrap = false)
+            }
+
+            OutlinedButton(
+              onClick = onOpenDbrChecklist,
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+              modifier = Modifier.weight(1f).testTag("rm_dashboard_dbr_btn")
+            ) {
+              Icon(Icons.Default.Calculate, contentDescription = null, tint = EblGold, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("DBR Tool", color = EblGold, fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             OutlinedButton(

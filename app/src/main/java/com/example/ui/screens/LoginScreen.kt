@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.ContextWrapper
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Security
@@ -31,6 +34,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,11 +42,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.fragment.app.FragmentActivity
+import com.example.util.BiometricHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -72,14 +79,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
   appCustomName: String = "RM File Management Suite",
+  lastLoggedRmCode: String = "",
   onLogin: (String, String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit,
+  onBiometricLogin: ((String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
-  var usernameInput by remember { mutableStateOf("") }
+  var usernameInput by remember { mutableStateOf(lastLoggedRmCode) }
   var passwordInput by remember { mutableStateOf("") }
   var passwordVisible by remember { mutableStateOf(false) }
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
+
+  LaunchedEffect(lastLoggedRmCode) {
+    if (usernameInput.isBlank() && lastLoggedRmCode.isNotBlank()) {
+      usernameInput = lastLoggedRmCode
+    }
+  }
 
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
@@ -116,6 +131,80 @@ fun LoginScreen(
         }
       }
     }
+  }
+
+  fun doBiometricLogin() {
+    val targetCode = usernameInput.ifBlank { lastLoggedRmCode }.trim()
+    if (targetCode.isBlank()) {
+      errorMessage = "Please enter your RM Code to sign in with fingerprint."
+      return
+    }
+
+    val activity = generateSequence(context) { ctx ->
+      if (ctx is ContextWrapper) ctx.baseContext else null
+    }.filterIsInstance<FragmentActivity>().firstOrNull()
+
+    if (activity == null) {
+      errorMessage = "Biometric prompt requires an active activity."
+      return
+    }
+
+    val availability = BiometricHelper.checkBiometricAvailability(context)
+    when (availability) {
+      BiometricHelper.BiometricAvailability.NO_HARDWARE -> {
+        errorMessage = "Fingerprint sensor is not available on this device."
+        return
+      }
+      BiometricHelper.BiometricAvailability.NONE_ENROLLED -> {
+        errorMessage = "No fingerprint enrolled. Please enroll a fingerprint in Android Settings."
+        return
+      }
+      BiometricHelper.BiometricAvailability.UNAVAILABLE -> {
+        errorMessage = "Fingerprint biometric sensor is currently unavailable."
+        return
+      }
+      BiometricHelper.BiometricAvailability.AVAILABLE -> {}
+    }
+
+    isLoading = true
+    errorMessage = null
+
+    BiometricHelper.promptBiometricLogin(
+      activity = activity,
+      title = "EBL Fingerprint Sign In",
+      subtitle = "Authenticate RM $targetCode",
+      description = "Scan your registered fingerprint to enter the portal",
+      negativeButtonText = "Use Password",
+      onSuccess = {
+        coroutineScope.launch {
+          var lat: Double? = null
+          var lng: Double? = null
+          var addr: String? = null
+          if (LocationHelper.hasLocationPermission(context)) {
+            try {
+              val loc = LocationHelper.getCurrentLocation(context)
+              lat = loc.latitude
+              lng = loc.longitude
+              addr = loc.address
+            } catch (_: Exception) {}
+          }
+          if (onBiometricLogin != null) {
+            onBiometricLogin(targetCode, lat, lng, addr) { success, err ->
+              isLoading = false
+              if (!success) {
+                errorMessage = err ?: "Fingerprint login failed."
+              }
+            }
+          } else {
+            isLoading = false
+          }
+        }
+      },
+      onError = { err ->
+        isLoading = false
+        errorMessage = err
+      }
+    )
   }
 
   Box(
@@ -327,6 +416,67 @@ fun LoginScreen(
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold
               )
+            }
+          }
+
+          // Biometric Fingerprint Login Section
+          if (onBiometricLogin != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE2E8F0))
+              Text(
+                text = "OR BIOMETRIC",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Gray,
+                modifier = Modifier.padding(horizontal = 8.dp)
+              )
+              HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE2E8F0))
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            OutlinedButton(
+              onClick = { doBiometricLogin() },
+              enabled = !isLoading,
+              shape = RoundedCornerShape(10.dp),
+              border = BorderStroke(1.5.dp, EblGold),
+              colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color(0xFFFFFBEB),
+                contentColor = EblNavyDark
+              ),
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .testTag("login_biometric_btn")
+            ) {
+              Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = "Fingerprint Login",
+                tint = Color(0xFFD97706),
+                modifier = Modifier.size(24.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Column(horizontalAlignment = Alignment.Start) {
+                Text(
+                  text = "Fingerprint Sign In",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark
+                )
+                val target = usernameInput.ifBlank { lastLoggedRmCode }.trim()
+                if (target.isNotBlank()) {
+                  Text(
+                    text = "Quick unlock for RM: $target",
+                    fontSize = 10.sp,
+                    color = Color(0xFFB45309)
+                  )
+                }
+              }
             }
           }
         }

@@ -54,4 +54,7 @@ interface UserDao {
 
   @Query("SELECT * FROM users ORDER BY createdAt DESC")
   fun getAllUsersFlow(): Flow<List<UserEntity>>
+
+  @Query("DELETE FROM users WHERE UPPER(TRIM(rmCode)) = UPPER(TRIM(:rmCode))")
+  suspend fun deleteUser(rmCode: String)
 }

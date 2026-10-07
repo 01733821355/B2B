@@ -23,4 +23,7 @@ interface RmTargetDao {
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertOrUpdateTarget(target: RmTargetEntity)
+
+  @Query("DELETE FROM rm_targets WHERE UPPER(TRIM(rmCode)) = UPPER(TRIM(:rmCode))")
+  suspend fun deleteTargetForRm(rmCode: String)
 }

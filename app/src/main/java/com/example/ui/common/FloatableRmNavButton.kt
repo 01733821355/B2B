@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
@@ -59,6 +60,7 @@ fun FloatableRmNavButton(
   onNavigateMyFiles: () -> Unit,
   onNavigatePendingDocs: () -> Unit,
   onNavigateDashboard: () -> Unit,
+  onNavigateDbrChecklist: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   var offsetX by remember { mutableFloatStateOf(0f) }
@@ -225,6 +227,41 @@ fun FloatableRmNavButton(
                 modifier = Modifier.testTag("float_btn_dashboard")
               ) {
                 Icon(Icons.Default.Assessment, contentDescription = "Dashboard")
+              }
+            }
+
+            // Option 5: DBR & Checklist Tool
+            if (onNavigateDbrChecklist != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = EblNavyDark,
+                  shadowElevation = 4.dp
+                ) {
+                  Text(
+                    text = "DBR Tool",
+                    color = EblGold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                SmallFloatingActionButton(
+                  onClick = {
+                    isExpanded = false
+                    onNavigateDbrChecklist()
+                  },
+                  containerColor = EblGold,
+                  contentColor = EblNavyDark,
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("float_btn_dbr_checklist")
+                ) {
+                  Icon(Icons.Default.Calculate, contentDescription = "DBR Tool")
+                }
               }
             }
           }

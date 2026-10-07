@@ -22,6 +22,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
@@ -159,6 +160,35 @@ fun AdminDashboardScreen(
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
               Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            OutlinedButton(
+              onClick = { onNavigate(Screen.DbrChecklist) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+              modifier = Modifier.weight(1f).testTag("admin_nav_dbr_tool")
+            ) {
+              Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp), tint = EblGold)
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("DBR & Checklist Tool", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+            OutlinedButton(
+              onClick = { onNavigate(Screen.Reports) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+              modifier = Modifier.weight(0.7f).testTag("admin_nav_reports")
+            ) {
+              Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Reports", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
         }

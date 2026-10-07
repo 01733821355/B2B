@@ -27,7 +27,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
 
       - name: Setup Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
@@ -37,13 +36,13 @@ jobs:
       - name: Prepare Android SDK & Environment
         run: |
           echo "Setting up Android SDK environment and licenses..."
-          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "sdk.dir=$SDK_ROOT" > local.properties
 
-          # Create local.properties for reliable SDK path resolution
-          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "$SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$SDK_ROOT/platform-tools" >> $GITHUB_PATH
 
-          # Create .env for Secrets Gradle Plugin
+          # Create .env for Secrets Gradle Plugin if missing
           if [ ! -f ".env" ]; then
             if [ -f ".env.example" ]; then
               cp .env.example .env
@@ -52,9 +51,24 @@ jobs:
             fi
           fi
 
-          # Accept all Android licenses
-          mkdir -p "$ANDROID_HOME/licenses" || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses || true
+          # Accept licenses and install platform packages
+          SDKMANAGER=""
+          for candidate in "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "$SDK_ROOT/cmdline-tools/bin/sdkmanager" "$SDK_ROOT/tools/bin/sdkmanager"; do
+            if [ -x "$candidate" ]; then
+              SDKMANAGER="$candidate"
+              break
+            fi
+          done
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER=$(which sdkmanager 2>/dev/null || true)
+          fi
+
+          if [ -n "$SDKMANAGER" ]; then
+            echo "Using sdkmanager at: $SDKMANAGER"
+            mkdir -p "$SDK_ROOT/licenses" || true
+            yes | "$SDKMANAGER" --licenses || true
+            "$SDKMANAGER" --install "platforms;android-36" "build-tools;36.0.0" || true
+          fi
 
           # Generate debug.keystore if missing for signingConfigs.debugConfig
           if [ ! -f "debug.keystore" ]; then
@@ -70,10 +84,17 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
+          # Ensure gradlew executable bit
+          chmod +x gradlew || true
+
       - name: Build Debug APK
         run: |
-          echo "Running Gradle assembleDebug..."
-          gradle :app:assembleDebug --stacktrace --no-daemon -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+          echo "Building Debug APK with Gradle..."
+          if command -v gradle >/dev/null 2>&1; then
+            gradle :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+          else
+            ./gradlew :app:assembleDebug --stacktrace --no-daemon --no-configuration-cache -Dorg.gradle.jvmargs="-Xmx4096m -XX:MaxMetaspaceSize=1024m"
+          fi
 
       - name: Verify APK Output
         run: |
@@ -103,7 +124,7 @@ jobs:
             **How to install on phone:**
             1. Download `app-debug.apk` below directly on your Android phone.
             2. Tap the file to install (allow "Install Unknown Apps" if prompted).
-            3. Open the app and log in with your assigned account (`mentor0`, `admin0`, or `104393`).
+            3. Open the app and log in with your assigned account (`104393`, `Admin0`, or `Mentor0`).
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true

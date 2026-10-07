@@ -13,6 +13,9 @@ interface CustomerFileDao {
   @Query("SELECT * FROM customer_files WHERE fileId = :fileId LIMIT 1")
   suspend fun getFileById(fileId: String): CustomerFileEntity?
 
+  @Query("SELECT * FROM customer_files WHERE UPPER(TRIM(fileId)) = UPPER(TRIM(:id)) OR UPPER(TRIM(ccNumber)) = UPPER(TRIM(:id)) LIMIT 1")
+  suspend fun getFileByAnyId(id: String): CustomerFileEntity?
+
   @Query("SELECT * FROM customer_files WHERE fileId = :fileId LIMIT 1")
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?>
 
@@ -31,10 +34,10 @@ interface CustomerFileDao {
   @Query("SELECT * FROM customer_files ORDER BY updatedAt DESC")
   fun getAllFilesIncludingDeletedFlow(): Flow<List<CustomerFileEntity>>
 
-  @Query("SELECT * FROM customer_files WHERE isSynced = 0")
+  @Query("SELECT * FROM customer_files WHERE isSynced = 0 AND isDeleted = 0")
   suspend fun getUnsyncedFiles(): List<CustomerFileEntity>
 
-  @Query("SELECT COUNT(*) FROM customer_files WHERE isSynced = 0")
+  @Query("SELECT COUNT(*) FROM customer_files WHERE isSynced = 0 AND isDeleted = 0")
   fun getUnsyncedCountFlow(): Flow<Int>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -55,6 +58,15 @@ interface CustomerFileDao {
   @Query("DELETE FROM customer_files WHERE fileId = :fileId")
   suspend fun permanentDeleteFile(fileId: String)
 
+  @Query("DELETE FROM customer_files WHERE fileId = :id OR ccNumber = :id")
+  suspend fun permanentDeleteFileByAnyId(id: String)
+
+  @Query("UPDATE customer_files SET isSynced = 1 WHERE fileId = :fileId")
+  suspend fun markFileSynced(fileId: String)
+
   @Query("UPDATE customer_files SET isSynced = 1 WHERE fileId IN (:fileIds)")
   suspend fun markFilesSynced(fileIds: List<String>)
+
+  @Query("UPDATE customer_files SET isDeleted = 1, updatedBy = :updatedBy, updatedAt = :updatedAt, isSynced = 1 WHERE fileId = :id OR ccNumber = :id")
+  suspend fun markDeletedFromSheet(id: String, updatedBy: String, updatedAt: Long)
 }

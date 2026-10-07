@@ -192,10 +192,10 @@ function doPost(e) {
       var toDelete = data.deletedFileIds || [data.fileId, data.ccNumber].filter(Boolean);
       var curFiles = fileSheet.getDataRange().getValues();
       for (var d = curFiles.length - 1; d >= 1; d--) {
-        var rCc = String(curFiles[d][0] || '').trim();
-        var rFid = String(curFiles[d][1] || '').trim();
+        var rCc = String(curFiles[d][0] || '').trim().toLowerCase();
+        var rFid = String(curFiles[d][1] || '').trim().toLowerCase();
         for (var k = 0; k < toDelete.length; k++) {
-          var targetK = String(toDelete[k] || '').trim();
+          var targetK = String(toDelete[k] || '').trim().toLowerCase();
           if (targetK && (rFid === targetK || rCc === targetK)) {
             fileSheet.deleteRow(d + 1);
             break;
@@ -204,6 +204,26 @@ function doPost(e) {
       }
       if (data.action === 'DELETE_FILE') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted file row from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle RM Profile Deletions (Immediately removes RM rows from Google Sheets when deleted in app)
+    if (data.action === 'DELETE_RM' || (data.deletedRmCodes && data.deletedRmCodes.length > 0)) {
+      var toDeleteRms = data.deletedRmCodes || [data.rmCode].filter(Boolean);
+      var curRms = rmSheet.getDataRange().getValues();
+      for (var dr = curRms.length - 1; dr >= 1; dr--) {
+        var rmCodeVal = String(curRms[dr][0] || '').trim().toUpperCase();
+        for (var m = 0; m < toDeleteRms.length; m++) {
+          var targetRm = String(toDeleteRms[m] || '').trim().toUpperCase();
+          if (targetRm && rmCodeVal === targetRm) {
+            rmSheet.deleteRow(dr + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_RM') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted RM row from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }

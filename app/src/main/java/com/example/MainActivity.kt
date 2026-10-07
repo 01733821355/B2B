@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -72,6 +73,7 @@ import com.example.ui.screens.admin.RmMappingScreen
 import com.example.ui.screens.mentor.MentorDashboardScreen
 import com.example.ui.screens.mentor.MentorUserLocationScreen
 import com.example.ui.screens.reports.ReportsScreen
+import com.example.ui.screens.tools.DbrAndChecklistScreen
 import com.example.ui.screens.rm.CustomerFileFormScreen
 import com.example.ui.screens.rm.CustomerFileListScreen
 import com.example.ui.screens.rm.RmDashboardScreen
@@ -84,7 +86,7 @@ import com.example.util.NotificationHelper
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
   private val viewModel: AppViewModel by viewModels()
 
@@ -108,6 +110,7 @@ fun EblMainApp(viewModel: AppViewModel) {
   val unreadSmsCount by viewModel.unreadSmsCount.collectAsState()
   val rmSmsList by viewModel.rmSmsNotifications.collectAsState()
   val allSmsList by viewModel.allSmsNotifications.collectAsState()
+  val lastLoggedRmCode by viewModel.lastLoggedRmCode.collectAsState()
 
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
@@ -144,8 +147,12 @@ fun EblMainApp(viewModel: AppViewModel) {
   if (currentUser == null) {
     LoginScreen(
       appCustomName = appCustomName,
+      lastLoggedRmCode = lastLoggedRmCode,
       onLogin = { username, password, lat, lng, addr, callback ->
         viewModel.login(username, password, lat, lng, addr, callback)
+      },
+      onBiometricLogin = { rmCode, lat, lng, addr, callback ->
+        viewModel.loginWithBiometrics(rmCode, lat, lng, addr, callback)
       }
     )
     return
@@ -203,7 +210,8 @@ fun EblMainApp(viewModel: AppViewModel) {
         onClearSms = {
           if (user.role == "RM") viewModel.clearSmsForCurrentRm() else viewModel.clearAllSms()
         },
-        onDeleteSms = { viewModel.deleteSms(it) }
+        onDeleteSms = { viewModel.deleteSms(it) },
+        onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) }
       )
     },
     bottomBar = {
@@ -266,6 +274,7 @@ fun EblMainApp(viewModel: AppViewModel) {
               },
               onFileClick = { f -> viewModel.navigateTo(Screen.CustomerForm(f.fileId)) },
               onDownloadReport = { viewModel.navigateTo(Screen.Reports) },
+              onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
               onUpdateLocation = { lat, lng, addr ->
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
               }
@@ -369,6 +378,14 @@ fun EblMainApp(viewModel: AppViewModel) {
 
           is Screen.ProfilePassword -> {
             showPasswordDialog = true
+          }
+
+          is Screen.DbrChecklist -> {
+            DbrAndChecklistScreen(
+              viewModel = viewModel,
+              currentUser = user,
+              onNavigateBack = { viewModel.navigateBack() }
+            )
           }
         }
       }

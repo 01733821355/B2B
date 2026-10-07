@@ -83,6 +83,7 @@ fun RmMappingScreen(
   var editingRm by remember { mutableStateOf<UserEntity?>(null) }
   var resetPasswordRm by remember { mutableStateOf<UserEntity?>(null) }
   var settingTargetsRm by remember { mutableStateOf<UserEntity?>(null) }
+  var rmToDelete by remember { mutableStateOf<UserEntity?>(null) }
   var showExportDialog by remember { mutableStateOf(false) }
   var exportedCsvContent by remember { mutableStateOf("") }
 
@@ -269,6 +270,17 @@ fun RmMappingScreen(
                       }
                     )
                   }
+
+                  if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    DropdownMenuItem(
+                      text = { Text("Delete RM Profile", color = Color(0xFFDC2626), fontSize = 12.sp, fontWeight = FontWeight.Bold) },
+                      onClick = {
+                        menuExpanded = false
+                        rmToDelete = rm
+                      }
+                    )
+                  }
                 }
               }
             }
@@ -405,6 +417,15 @@ fun RmMappingScreen(
                   Icon(Icons.Default.TrendingUp, contentDescription = null, modifier = Modifier.size(13.dp))
                   Spacer(modifier = Modifier.width(3.dp))
                   Text("Targets", fontSize = 11.sp)
+                }
+              }
+
+              if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                IconButton(
+                  onClick = { rmToDelete = rm },
+                  modifier = Modifier.size(32.dp).testTag("btn_delete_rm_${rm.rmCode}")
+                ) {
+                  Icon(Icons.Default.Delete, contentDescription = "Delete RM", tint = Color(0xFFDC2626), modifier = Modifier.size(17.dp))
                 }
               }
             }
@@ -755,6 +776,47 @@ fun RmMappingScreen(
       confirmButton = {
         Button(onClick = { showExportDialog = false }) {
           Text("Done")
+        }
+      }
+    )
+  }
+
+  // Delete RM Profile Confirmation Dialog
+  val rmItemToDelete = rmToDelete
+  if (rmItemToDelete != null) {
+    AlertDialog(
+      onDismissRequest = { rmToDelete = null },
+      title = { Text("Delete RM Profile", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626)) },
+      text = {
+        Column {
+          Text(
+            text = "Are you sure you want to permanently delete RM Profile '${rmItemToDelete.name}' (Code: ${rmItemToDelete.rmCode})?",
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(
+            text = "This action will delete the officer's user credentials and target assignments locally, and synchronize deletion with Google Sheets. This cannot be undone.",
+            fontSize = 12.sp,
+            color = Color.DarkGray
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.deleteRmProfile(rmItemToDelete.rmCode)
+            rmToDelete = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+          modifier = Modifier.testTag("btn_confirm_delete_rm")
+        ) {
+          Text("Delete Profile")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { rmToDelete = null }) {
+          Text("Cancel")
         }
       }
     )

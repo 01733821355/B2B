@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
@@ -241,6 +242,9 @@ fun CustomerFileFormScreen(
   var email by remember { mutableStateOf("") }
   var ccNumber by remember { mutableStateOf("") }
   var assignedRmCode by remember { mutableStateOf(currentUser.rmCode) }
+  val allRms by viewModel.allRms.collectAsState()
+  var rmDropdownExpanded by remember { mutableStateOf(false) }
+  var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
   val locationPermissionLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
@@ -521,6 +525,56 @@ fun CustomerFileFormScreen(
           leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = EblNavyPrimary) },
           testTag = "form_cc_number"
         )
+
+        // Admin & Mentor RM Reassignment Control
+        if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+          Spacer(modifier = Modifier.height(10.dp))
+          ExposedDropdownMenuBox(
+            expanded = rmDropdownExpanded,
+            onExpandedChange = { rmDropdownExpanded = !rmDropdownExpanded }
+          ) {
+            val assignedRmUser = allRms.find { it.rmCode.equals(assignedRmCode, ignoreCase = true) }
+            val rmDisplayName = if (assignedRmUser != null) {
+              "${assignedRmUser.name} (${assignedRmUser.rmCode})"
+            } else {
+              "RM: $assignedRmCode"
+            }
+
+            OutlinedTextField(
+              value = rmDisplayName,
+              onValueChange = {},
+              readOnly = true,
+              label = { Text("Assigned RM Officer * (Admin/Mentor Control)") },
+              leadingIcon = { Icon(Icons.Default.Group, contentDescription = null, tint = EblNavyPrimary) },
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = rmDropdownExpanded) },
+              modifier = Modifier.fillMaxWidth().menuAnchor().testTag("dropdown_assigned_rm"),
+              colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = EblNavyPrimary,
+                focusedContainerColor = Color(0xFFEFF6FF)
+              )
+            )
+
+            ExposedDropdownMenu(
+              expanded = rmDropdownExpanded,
+              onDismissRequest = { rmDropdownExpanded = false }
+            ) {
+              allRms.forEach { rm ->
+                DropdownMenuItem(
+                  text = {
+                    Column {
+                      Text(text = "${rm.name} (${rm.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                      Text(text = "Mobile: ${rm.mobile.ifBlank { "N/A" }} • ${rm.accountStatus}", fontSize = 11.sp, color = Color.Gray)
+                    }
+                  },
+                  onClick = {
+                    assignedRmCode = rm.rmCode
+                    rmDropdownExpanded = false
+                  }
+                )
+              }
+            }
+          }
+        }
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -1345,7 +1399,8 @@ fun CustomerFileFormScreen(
     // Action Buttons: Save & Cancel
     Row(
       modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(12.dp)
+      horizontalArrangement = Arrangement.spacedBy(10.dp),
+      verticalAlignment = Alignment.CenterVertically
     ) {
       OutlinedButton(
         onClick = onCancel,
@@ -1355,11 +1410,24 @@ fun CustomerFileFormScreen(
         Text("Cancel")
       }
 
+      if (editFileId != null) {
+        OutlinedButton(
+          onClick = { showDeleteConfirmDialog = true },
+          modifier = Modifier.height(48.dp).testTag("btn_form_delete_record"),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+          shape = RoundedCornerShape(8.dp)
+        ) {
+          Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp), tint = Color(0xFFDC2626))
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("Delete", color = Color(0xFFDC2626))
+        }
+      }
+
       Button(
         onClick = { handleSave() },
         enabled = !isSaving,
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-        modifier = Modifier.weight(1f).height(48.dp).testTag("btn_save_customer_file"),
+        modifier = Modifier.weight(1.2f).height(48.dp).testTag("btn_save_customer_file"),
         shape = RoundedCornerShape(8.dp)
       ) {
         if (isSaving) {
@@ -1373,6 +1441,35 @@ fun CustomerFileFormScreen(
     }
 
     Spacer(modifier = Modifier.height(32.dp))
+  }
+
+  // Delete Confirmation Dialog for Form
+  if (showDeleteConfirmDialog && editFileId != null) {
+    AlertDialog(
+      onDismissRequest = { showDeleteConfirmDialog = false },
+      title = { Text("Delete Customer Record", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626)) },
+      text = {
+        Text("Are you sure you want to delete customer file '${customerName.ifBlank { "Record" }}' ($editFileId)? This will remove it and sync deletion with Google Sheets.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.deleteFile(editFileId)
+            showDeleteConfirmDialog = false
+            onCancel()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+          modifier = Modifier.testTag("btn_confirm_form_delete")
+        ) {
+          Text("Delete Record")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showDeleteConfirmDialog = false }) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 
   // Dialog to Add Attachment

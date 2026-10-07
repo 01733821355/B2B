@@ -46,6 +46,7 @@ sealed class Screen {
   object MentorDashboard : Screen()
   object MentorUserLocationTracking : Screen()
   object ProfilePassword : Screen()
+  object DbrChecklist : Screen()
 }
 
 data class KpiStats(
@@ -91,6 +92,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   private val _currentScreen = MutableStateFlow<Screen>(Screen.Login)
   val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
+
+  val lastLoggedRmCode = MutableStateFlow("")
+
+  init {
+    viewModelScope.launch {
+      lastLoggedRmCode.value = authRepository.getLastLoggedRmCode()
+    }
+  }
 
   // Navigation backstack support
   private val screenBackstack = mutableListOf<Screen>()
@@ -480,6 +489,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) {}
       }
       res.onSuccess { user ->
+        lastLoggedRmCode.value = user.rmCode
         // Pull latest sheet data immediately upon successful login so all files, stats and SMS are fresh!
         viewModelScope.launch {
           try {
@@ -496,6 +506,42 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message ?: "Authentication failed.")
+      }
+    }
+  }
+
+  fun loginWithBiometrics(
+    rmCodeInput: String,
+    latitude: Double? = null,
+    longitude: Double? = null,
+    address: String? = null,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      var res = authRepository.loginWithBiometrics(rmCodeInput, latitude, longitude, address)
+      if (res.isFailure) {
+        try {
+          eblRepository.pullDataFromGoogleSheets()
+          res = authRepository.loginWithBiometrics(rmCodeInput, latitude, longitude, address)
+        } catch (_: Exception) {}
+      }
+      res.onSuccess { user ->
+        lastLoggedRmCode.value = user.rmCode
+        viewModelScope.launch {
+          try {
+            eblRepository.pullDataFromGoogleSheets()
+          } catch (_: Exception) {}
+        }
+        screenBackstack.clear()
+        when (user.role) {
+          "RM" -> _currentScreen.value = Screen.RmDashboard
+          "ADMIN" -> _currentScreen.value = Screen.AdminDashboard
+          "MENTOR" -> _currentScreen.value = Screen.MentorDashboard
+          else -> _currentScreen.value = Screen.RmDashboard
+        }
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message ?: "Fingerprint login failed.")
       }
     }
   }
@@ -658,6 +704,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiMessage.emit("File $fileId permanently deleted by Mentor.")
       }.onFailure { err ->
         _uiMessage.emit("Failed: ${err.message}")
+      }
+    }
+  }
+
+  fun deleteRmProfile(rmCode: String, onResult: ((Boolean, String?) -> Unit)? = null) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteRmProfile(rmCode)
+      res.onSuccess {
+        _uiMessage.emit("RM Profile $rmCode deleted successfully.")
+        onResult?.invoke(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to delete RM: ${err.message}")
+        onResult?.invoke(false, err.message)
+      }
+    }
+  }
+
+  fun reassignCustomerFileRm(fileId: String, newRmCode: String, onResult: ((Boolean, String?) -> Unit)? = null) {
+    viewModelScope.launch {
+      val res = eblRepository.reassignCustomerFileRm(fileId, newRmCode)
+      res.onSuccess {
+        _uiMessage.emit("File $fileId successfully reassigned to RM $newRmCode.")
+        onResult?.invoke(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Reassign failed: ${err.message}")
+        onResult?.invoke(false, err.message)
       }
     }
   }

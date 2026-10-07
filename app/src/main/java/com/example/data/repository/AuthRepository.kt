@@ -91,8 +91,106 @@ class AuthRepository(private val database: AppDatabase) {
       lastLocationTime = if (latitude != null) now else user.lastLocationTime,
       isOnline = true
     )
+
+    // Save last logged in RM code for Biometric fingerprint login
+    try {
+      database.appSettingDao().insertOrUpdateSetting(
+        com.example.data.model.AppSettingEntity(
+          settingKey = "last_logged_rm_code",
+          settingValue = user.rmCode,
+          updatedBy = user.rmCode,
+          updatedAt = now
+        )
+      )
+    } catch (_: Exception) {}
+
     _currentUser.value = updatedUser
     Result.success(updatedUser)
+  }
+
+  suspend fun loginWithBiometrics(
+    rmCodeInput: String,
+    latitude: Double? = null,
+    longitude: Double? = null,
+    address: String? = null
+  ): Result<UserEntity> = withContext(Dispatchers.IO) {
+    val cleanRmCode = rmCodeInput.trim()
+    val user = database.userDao().getUser(cleanRmCode)
+      ?: return@withContext Result.failure(Exception("Account with RM Code '$cleanRmCode' not found. Please log in with password first."))
+
+    if (user.accountStatus.equals("PENDING_APPROVAL", ignoreCase = true)) {
+      return@withContext Result.failure(Exception("This RM account is pending Mentor approval."))
+    }
+    if (user.accountStatus.equals("INACTIVE", ignoreCase = true)) {
+      return@withContext Result.failure(Exception("This account is inactive. Please contact the administrator."))
+    }
+    if (user.accountStatus.equals("SUSPENDED", ignoreCase = true)) {
+      return@withContext Result.failure(Exception("This account has been suspended for security reasons."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    database.userDao().updateLastLogin(user.rmCode, now)
+
+    if (latitude != null && longitude != null) {
+      database.userDao().updateLocation(
+        rmCode = user.rmCode,
+        lat = latitude,
+        lng = longitude,
+        address = address ?: "Detected on Fingerprint Login",
+        time = now
+      )
+      database.userLocationLogDao().insertLocationLog(
+        com.example.data.model.UserLocationLogEntity(
+          rmCode = user.rmCode,
+          userName = user.name,
+          latitude = latitude,
+          longitude = longitude,
+          address = address ?: "Detected on Fingerprint Login",
+          sourceAction = "FINGERPRINT_LOGIN_TRACKING",
+          timestamp = now
+        )
+      )
+    }
+
+    val locDesc = if (!address.isNullOrBlank()) address else if (latitude != null && longitude != null) "Lat: $latitude, Lng: $longitude" else "Location: GPS Auto"
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-AUTH-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = user.rmCode,
+        role = user.role,
+        action = "BIOMETRIC_LOGIN",
+        rmCode = if (user.role == "RM") user.rmCode else null,
+        timestamp = now,
+        details = "${user.name} logged in via Fingerprint Biometrics. Time: ${DateUtils.formatDateTime(now)} | Location: $locDesc"
+      )
+    )
+
+    val updatedUser = user.copy(
+      lastLogin = now,
+      lastLatitude = latitude ?: user.lastLatitude,
+      lastLongitude = longitude ?: user.lastLongitude,
+      lastLocationAddress = address ?: user.lastLocationAddress,
+      lastLocationTime = if (latitude != null) now else user.lastLocationTime,
+      isOnline = true
+    )
+
+    try {
+      database.appSettingDao().insertOrUpdateSetting(
+        com.example.data.model.AppSettingEntity(
+          settingKey = "last_logged_rm_code",
+          settingValue = user.rmCode,
+          updatedBy = user.rmCode,
+          updatedAt = now
+        )
+      )
+    } catch (_: Exception) {}
+
+    _currentUser.value = updatedUser
+    Result.success(updatedUser)
+  }
+
+  suspend fun getLastLoggedRmCode(): String = withContext(Dispatchers.IO) {
+    database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: ""
   }
 
   suspend fun logout() = withContext(Dispatchers.IO) {

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Shield
@@ -72,6 +73,7 @@ fun EblTopBar(
   onMarkAllSmsRead: () -> Unit = {},
   onClearSms: () -> Unit = {},
   onDeleteSms: (Long) -> Unit = {},
+  onOpenDbrChecklist: () -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   var showMenu by remember { mutableStateOf(false) }
@@ -229,6 +231,18 @@ fun EblTopBar(
           }
         }
 
+        // Quick DBR & Checklist Tool Button
+        IconButton(
+          onClick = onOpenDbrChecklist,
+          modifier = Modifier.testTag("top_bar_dbr_button")
+        ) {
+          Icon(
+            imageVector = Icons.Default.Calculate,
+            contentDescription = "DBR & Checklist Tool",
+            tint = EblGold
+          )
+        }
+
         // Profile Menu
         Box {
           IconButton(
@@ -256,6 +270,17 @@ fun EblTopBar(
               },
               onClick = {},
               enabled = false
+            )
+            DropdownMenuItem(
+              text = { Text("DBR & Checklist Tool", fontSize = 13.sp) },
+              leadingIcon = {
+                Icon(Icons.Default.Calculate, contentDescription = "DBR Tool", tint = EblNavyPrimary)
+              },
+              onClick = {
+                showMenu = false
+                onOpenDbrChecklist()
+              },
+              modifier = Modifier.testTag("menu_dbr_checklist")
             )
             DropdownMenuItem(
               text = { Text("Change Password", fontSize = 13.sp) },

@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Visibility
 import com.example.data.model.FileAttachmentEntity
 import com.example.ui.common.AttachmentViewerDialog
@@ -85,7 +87,12 @@ fun CustomerDetailDialog(
   val scrollState = rememberScrollState()
   val attachmentsFlow = viewModel.eblRepository.getAttachmentsForFileFlow(file.fileId)
   val attachments by attachmentsFlow.collectAsState(initial = emptyList())
+  val allRms by viewModel.allRms.collectAsState()
   var selectedAttachmentForView by remember { mutableStateOf<FileAttachmentEntity?>(null) }
+  var showReassignModal by remember { mutableStateOf(false) }
+  var showConfirmDeleteModal by remember { mutableStateOf(false) }
+  var newSelectedRmCode by remember(file.assignedRmCode) { mutableStateOf(file.assignedRmCode) }
+  var isSubmittingReassign by remember { mutableStateOf(false) }
 
   Dialog(
     onDismissRequest = onDismiss,
@@ -309,10 +316,11 @@ fun CustomerDetailDialog(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Action Buttons: Edit or Close
+        // Action Buttons: Reassign RM (Admin/Mentor), Edit or Close
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp)
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
           OutlinedButton(
             onClick = onDismiss,
@@ -321,21 +329,71 @@ fun CustomerDetailDialog(
             Text("Close")
           }
 
+          if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+            OutlinedButton(
+              onClick = { showReassignModal = true },
+              shape = RoundedCornerShape(8.dp),
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF2563EB)),
+              modifier = Modifier.weight(1.3f).testTag("btn_detail_reassign_rm")
+            ) {
+              Icon(Icons.Default.SwapHoriz, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Reassign RM", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+          }
+
+          // Delete button for RM, Admin, Mentor
+          IconButton(
+            onClick = { showConfirmDeleteModal = true },
+            modifier = Modifier.size(38.dp).testTag("btn_detail_delete")
+          ) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete File", tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+          }
+
           Button(
             onClick = {
               onDismiss()
               onEdit(file.fileId)
             },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            modifier = Modifier.weight(1f).testTag("btn_detail_edit")
+            modifier = Modifier.weight(1.2f).testTag("btn_detail_edit")
           ) {
             Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text("Edit File")
           }
         }
       }
     }
+  }
+
+  // Delete Confirmation Dialog
+  if (showConfirmDeleteModal) {
+    AlertDialog(
+      onDismissRequest = { showConfirmDeleteModal = false },
+      title = { Text("Delete Customer Record", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626)) },
+      text = {
+        Text("Are you sure you want to delete customer file '${file.customerName}' (${file.fileId})? It will be removed from the active list and synchronized with Google Sheets.")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.deleteFile(file.fileId)
+            showConfirmDeleteModal = false
+            onDismiss()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+          modifier = Modifier.testTag("btn_confirm_detail_delete")
+        ) {
+          Text("Delete Record")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showConfirmDeleteModal = false }) {
+          Text("Cancel")
+        }
+      }
+    )
   }
 
   // Attachment Viewer & Downloader Dialog
@@ -344,6 +402,103 @@ fun CustomerDetailDialog(
     AttachmentViewerDialog(
       attachment = currentAttachment,
       onDismiss = { selectedAttachmentForView = null }
+    )
+  }
+
+  // Reassign RM Confirmation Dialog (Admin & Mentor)
+  if (showReassignModal) {
+    AlertDialog(
+      onDismissRequest = { if (!isSubmittingReassign) showReassignModal = false },
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Group, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(22.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Reassign Customer File RM", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+      },
+      text = {
+        Column {
+          Text(
+            text = "Select the new Relationship Manager (RM) for '${file.customerName}' (${file.fileId}). Once reassigned, the file will be removed from RM ${file.assignedRmCode}'s mobile app, and automatically delivered to the new RM.",
+            fontSize = 12.sp,
+            color = Color.DarkGray
+          )
+          Spacer(modifier = Modifier.height(14.dp))
+          Text("Currently Assigned: RM ${file.assignedRmCode}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(8.dp))
+
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .border(1.dp, Color(0xFFCBD5E1), RoundedCornerShape(8.dp))
+              .padding(8.dp)
+          ) {
+            allRms.forEach { rm ->
+              val isSelected = rm.rmCode.equals(newSelectedRmCode, ignoreCase = true)
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clip(RoundedCornerShape(6.dp))
+                  .background(if (isSelected) Color(0xFFEFF6FF) else Color.Transparent)
+                  .clickable { newSelectedRmCode = rm.rmCode }
+                  .padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                androidx.compose.material3.RadioButton(
+                  selected = isSelected,
+                  onClick = { newSelectedRmCode = rm.rmCode },
+                  colors = androidx.compose.material3.RadioButtonDefaults.colors(selectedColor = EblNavyPrimary)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                  Text(
+                    text = "${rm.name} (${rm.rmCode})",
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isSelected) EblNavyPrimary else Color.Black
+                  )
+                  Text(
+                    text = "Mobile: ${rm.mobile.ifBlank { "N/A" }} • Status: ${rm.accountStatus}",
+                    fontSize = 10.sp,
+                    color = Color.Gray
+                  )
+                }
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            if (newSelectedRmCode.isNotBlank() && !newSelectedRmCode.equals(file.assignedRmCode, ignoreCase = true)) {
+              isSubmittingReassign = true
+              viewModel.reassignCustomerFileRm(file.fileId, newSelectedRmCode) { success, _ ->
+                isSubmittingReassign = false
+                showReassignModal = false
+                if (success) {
+                  onDismiss()
+                }
+              }
+            } else {
+              showReassignModal = false
+            }
+          },
+          enabled = !isSubmittingReassign && newSelectedRmCode.isNotBlank() && !newSelectedRmCode.equals(file.assignedRmCode, ignoreCase = true),
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+          modifier = Modifier.testTag("btn_confirm_reassign_rm")
+        ) {
+          Text(if (isSubmittingReassign) "Reassigning..." else "Confirm Transfer")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(
+          onClick = { showReassignModal = false },
+          enabled = !isSubmittingReassign
+        ) {
+          Text("Cancel")
+        }
+      }
     )
   }
 }

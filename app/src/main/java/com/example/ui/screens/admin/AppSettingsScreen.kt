@@ -16,8 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.platform.LocalContext
+import com.example.util.BiometricHelper
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -346,6 +349,36 @@ fun AppSettingsScreen(
           Spacer(modifier = Modifier.width(4.dp))
           Text("Save Week Rule")
         }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Biometric & Fingerprint Security Status Card
+    val biometricAvailability = BiometricHelper.checkBiometricAvailability(LocalContext.current)
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Fingerprint, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(24.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Biometric Security (ফিঙ্গারপ্রিন্ট লগইন)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+          text = when (biometricAvailability) {
+            BiometricHelper.BiometricAvailability.AVAILABLE -> "Device biometric sensor is active and ready for Fingerprint Sign In."
+            BiometricHelper.BiometricAvailability.NONE_ENROLLED -> "No fingerprint registered on this phone. Please add a fingerprint in Android Settings to enable quick sign-in."
+            BiometricHelper.BiometricAvailability.NO_HARDWARE -> "Fingerprint hardware is not available on this device."
+            else -> "Biometric status: Unavailable."
+          },
+          fontSize = 12.sp,
+          color = if (biometricAvailability == BiometricHelper.BiometricAvailability.AVAILABLE) Color(0xFF059669) else Color(0xFFD97706)
+        )
       }
     }
 

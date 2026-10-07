@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
@@ -179,6 +180,19 @@ fun MentorDashboardScreen(
               Spacer(modifier = Modifier.width(3.dp))
               Text("Sheets", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedButton(
+            onClick = { onNavigate(Screen.DbrChecklist) },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+            modifier = Modifier.fillMaxWidth().testTag("mentor_btn_dbr_checklist")
+          ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp), tint = EblGold)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("DBR Calculator & Document Checklist Tool", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
         }
       }

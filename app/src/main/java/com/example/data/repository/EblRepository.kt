@@ -282,9 +282,11 @@ class EblRepository(
     } else {
       database.customerFileDao().updateFile(entity)
 
-      // Notify RM via SMS & App Alert if updated by Admin or Mentor
-      if ((currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && existing.assignedRmCode != currentUser.rmCode) {
+      // Notify RM via SMS & App Alert if updated or reassigned by Admin or Mentor
+      if ((currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && (existing.assignedRmCode != currentUser.rmCode || existing.assignedRmCode != resolvedRmCode)) {
+        val hasRmChanged = !existing.assignedRmCode.equals(resolvedRmCode, ignoreCase = true)
         val changedItems = mutableListOf<String>()
+        if (hasRmChanged) changedItems.add("Assigned RM Reassigned -> $resolvedRmCode")
         if (existing.applicationStatus != applicationStatus) changedItems.add("Status -> $applicationStatus")
         if (existing.activeStatus != activeStatus) changedItems.add("Active -> $activeStatus")
         if (existing.remarks != remarks.trim()) changedItems.add("Remarks updated")
@@ -298,7 +300,11 @@ class EblRepository(
         val rmName = targetRmUser?.name ?: resolvedRmCode
         val formattedTime = DateUtils.formatDateTime(now)
 
-        val smsMessage = "[EBL Alert] Dear $rmName ($resolvedRmCode), customer file $targetFileId for '$customerName' was UPDATED by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Changes: $changeDetailsStr. Timestamp: $formattedTime. EBL Sales Suite."
+        val smsMessage = if (hasRmChanged) {
+          "[EBL Alert] Dear $rmName ($resolvedRmCode), customer file $targetFileId for '$customerName' has been REASSIGNED to you by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. EBL Sales Suite."
+        } else {
+          "[EBL Alert] Dear $rmName ($resolvedRmCode), customer file $targetFileId for '$customerName' was UPDATED by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Changes: $changeDetailsStr. Timestamp: $formattedTime. EBL Sales Suite."
+        }
 
         var smsStatus = "DELIVERED"
         if (context != null && rmMobile.isNotBlank()) {
@@ -313,7 +319,7 @@ class EblRepository(
             recipientName = rmName,
             triggeredByRole = currentUser.role,
             triggeredByCode = currentUser.rmCode,
-            actionType = "UPDATE",
+            actionType = if (hasRmChanged) "TRANSFER" else "UPDATE",
             targetType = "CUSTOMER_FILE",
             fileId = targetFileId,
             customerName = customerName,
@@ -323,6 +329,38 @@ class EblRepository(
             isRead = false
           )
         )
+
+        // If RM code changed, notify old RM that the file has moved to new RM
+        if (hasRmChanged) {
+          val oldRmUser = database.userDao().getUser(existing.assignedRmCode)
+          val oldRmMobile = oldRmUser?.mobile ?: ""
+          val oldRmName = oldRmUser?.name ?: existing.assignedRmCode
+          val oldMsg = "[EBL Alert] Notice: Dear $oldRmName (${existing.assignedRmCode}), customer file $targetFileId ('$customerName') previously under your code has been transferred to RM $resolvedRmCode by ${currentUser.role}. Timestamp: $formattedTime."
+
+          var oldSmsStatus = "DELIVERED"
+          if (context != null && oldRmMobile.isNotBlank()) {
+            val sent = SmsService.sendSms(context, oldRmMobile, oldMsg)
+            oldSmsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+          }
+
+          database.smsNotificationDao().insertSms(
+            SmsNotificationEntity(
+              recipientRmCode = existing.assignedRmCode,
+              recipientMobile = oldRmMobile,
+              recipientName = oldRmName,
+              triggeredByRole = currentUser.role,
+              triggeredByCode = currentUser.rmCode,
+              actionType = "TRANSFER",
+              targetType = "CUSTOMER_FILE",
+              fileId = targetFileId,
+              customerName = customerName,
+              messageText = oldMsg,
+              sentTimestamp = now,
+              status = oldSmsStatus,
+              isRead = false
+            )
+          )
+        }
 
         context?.let { ctx ->
           NotificationHelper.sendRmFileUpdateNotification(
@@ -860,6 +898,181 @@ class EblRepository(
     Result.success(Unit)
   }
 
+  suspend fun deleteRmProfile(rmCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin or Mentor can delete RM profiles."))
+    }
+
+    val user = database.userDao().getUser(rmCode)
+      ?: return@withContext Result.failure(Exception("RM $rmCode not found."))
+
+    val now = DateUtils.currentDhakaMillis()
+    // Remove user and target records from local database
+    database.userDao().deleteUser(rmCode)
+    database.rmTargetDao().deleteTargetForRm(rmCode)
+
+    // Store in persistent deleted_rm_codes setting
+    val currentDel = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
+    val updatedDel = if (currentDel.isBlank()) rmCode else "$currentDel,$rmCode"
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_rm_codes", updatedDel, currentUser.rmCode, now)
+    )
+
+    // Security Audit Log
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "DELETE_RM_PROFILE",
+        details = "Deleted RM Profile ${user.name} ($rmCode) by ${currentUser.role} (${currentUser.rmCode})",
+        timestamp = now,
+        rmCode = rmCode
+      )
+    )
+
+    // Synchronize RM deletion with Google Sheets
+    applicationScope.launch {
+      syncRmDeletionToGoogleSheets(rmCode)
+    }
+
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  suspend fun syncRmDeletionToGoogleSheets(rmCode: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = JSONObject().apply {
+        put("action", "DELETE_RM")
+        put("rmCode", rmCode)
+        put("deletedRmCodes", org.json.JSONArray().apply { put(rmCode) })
+        put("spreadsheetId", currentStatus.spreadsheetId)
+        put("secretKey", currentStatus.syncSecretKey)
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().close()
+    } catch (_: Exception) {}
+  }
+
+  suspend fun reassignCustomerFileRm(fileId: String, newRmCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin or Mentor can change RM assignment."))
+    }
+
+    val file = database.customerFileDao().getFileByAnyId(fileId)
+      ?: return@withContext Result.failure(Exception("Customer file not found."))
+
+    val oldRmCode = file.assignedRmCode
+    if (oldRmCode.equals(newRmCode, ignoreCase = true)) {
+      return@withContext Result.success(Unit)
+    }
+
+    val targetRmUser = database.userDao().getUser(newRmCode)
+    val oldRmUser = database.userDao().getUser(oldRmCode)
+
+    val now = DateUtils.currentDhakaMillis()
+    val updated = file.copy(
+      assignedRmCode = newRmCode.trim().uppercase(),
+      updatedAt = now,
+      updatedBy = "${currentUser.role}_${currentUser.rmCode}",
+      isSynced = false
+    )
+    database.customerFileDao().updateFile(updated)
+
+    // Security Audit Log
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "REASSIGN_RM",
+        fileId = file.fileId,
+        details = "Reassigned file ${file.fileId} ('${file.customerName}') from RM $oldRmCode to RM $newRmCode by ${currentUser.role}",
+        timestamp = now,
+        rmCode = newRmCode
+      )
+    )
+
+    // Send SMS alerts to BOTH new RM and old RM
+    val formattedTime = DateUtils.formatDateTime(now)
+
+    // 1. Alert New RM
+    val newRmName = targetRmUser?.name ?: newRmCode
+    val newRmMobile = targetRmUser?.mobile ?: ""
+    val msgForNewRm = "[EBL Alert] Dear $newRmName ($newRmCode), customer file ${file.fileId} ('${file.customerName}') has been REASSIGNED to you by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Please follow up. Timestamp: $formattedTime."
+
+    var newSmsStatus = "DELIVERED"
+    if (context != null && newRmMobile.isNotBlank()) {
+      val sent = SmsService.sendSms(context, newRmMobile, msgForNewRm)
+      newSmsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+    }
+
+    database.smsNotificationDao().insertSms(
+      SmsNotificationEntity(
+        recipientRmCode = newRmCode,
+        recipientMobile = newRmMobile,
+        recipientName = newRmName,
+        triggeredByRole = currentUser.role,
+        triggeredByCode = currentUser.rmCode,
+        actionType = "TRANSFER",
+        targetType = "CUSTOMER_FILE",
+        fileId = file.fileId,
+        customerName = file.customerName,
+        messageText = msgForNewRm,
+        sentTimestamp = now,
+        status = newSmsStatus,
+        isRead = false
+      )
+    )
+
+    // 2. Alert Old RM
+    val oldRmName = oldRmUser?.name ?: oldRmCode
+    val oldRmMobile = oldRmUser?.mobile ?: ""
+    val msgForOldRm = "[EBL Alert] Notice: Dear $oldRmName ($oldRmCode), customer file ${file.fileId} ('${file.customerName}') previously assigned to you was reassigned to RM $newRmCode by ${currentUser.role}. Timestamp: $formattedTime."
+
+    var oldSmsStatus = "DELIVERED"
+    if (context != null && oldRmMobile.isNotBlank()) {
+      val sent = SmsService.sendSms(context, oldRmMobile, msgForOldRm)
+      oldSmsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+    }
+
+    database.smsNotificationDao().insertSms(
+      SmsNotificationEntity(
+        recipientRmCode = oldRmCode,
+        recipientMobile = oldRmMobile,
+        recipientName = oldRmName,
+        triggeredByRole = currentUser.role,
+        triggeredByCode = currentUser.rmCode,
+        actionType = "TRANSFER",
+        targetType = "CUSTOMER_FILE",
+        fileId = file.fileId,
+        customerName = file.customerName,
+        messageText = msgForOldRm,
+        sentTimestamp = now,
+        status = oldSmsStatus,
+        isRead = false
+      )
+    )
+
+    updatePendingSyncCount()
+    applicationScope.launch { triggerGoogleSheetsSync() }
+
+    Result.success(Unit)
+  }
+
   // 4. Audit Logs
   fun getAuditLogsFlow(): Flow<List<AuditLogEntity>> {
     val currentUser = authRepository.currentUser.value ?: return emptyFlow()
@@ -950,7 +1163,7 @@ class EblRepository(
     try {
       val allFiles = database.customerFileDao().getAllActiveFiles()
       val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
-      val filesToPush = if (currentStatus.lastSyncTimestamp == null || currentStatus.lastSyncStatus == "IDLE") allFiles else unsyncedFiles
+      val filesToPush = (if (currentStatus.lastSyncTimestamp == null || currentStatus.lastSyncStatus == "IDLE") allFiles else unsyncedFiles).filter { !it.isDeleted }
 
       val allUsers = database.userDao().getAllUsers()
       val allRms = allUsers.filter { it.role == "RM" }
@@ -1087,6 +1300,13 @@ class EblRepository(
           if (df.ccNumber.isNotBlank()) deletedFileIds.put(df.ccNumber)
         }
 
+        // Gather all deleted RM codes so Google Sheets deletes them from RM sheet
+        val delRmsSetting = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
+        val deletedRmCodes = org.json.JSONArray()
+        delRmsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.forEach {
+          deletedRmCodes.put(it)
+        }
+
         val payload = JSONObject().apply {
           put("action", "SYNC_ALL_DATA")
           put("spreadsheetId", currentStatus.spreadsheetId)
@@ -1096,6 +1316,7 @@ class EblRepository(
           put("filesCount", filesArray.length())
           put("files", filesArray)
           put("deletedFileIds", deletedFileIds)
+          put("deletedRmCodes", deletedRmCodes)
           put("rms", rmsArray)
           put("settings", settingsArray)
           put("auditLogs", auditLogsArray)
@@ -1236,10 +1457,37 @@ class EblRepository(
   private suspend fun processSheetRms(sheetRmsJson: JSONArray): Int {
     var updatedCount = 0
     val now = DateUtils.currentDhakaMillis()
+
+    // 1. Gather all RM codes from sheet
+    val sheetRmCodes = HashSet<String>()
+    for (idx in 0 until sheetRmsJson.length()) {
+      val o = sheetRmsJson.optJSONObject(idx) ?: continue
+      val c = o.optString("rmCode").trim().uppercase()
+      if (c.isNotBlank()) sheetRmCodes.add(c)
+    }
+
+    // 2. If sheet returned RM rows, remove any local custom RM that was deleted in Google Sheet
+    if (sheetRmsJson.length() > 0) {
+      val allLocalUsers = database.userDao().getAllUsers()
+      val protectedCodes = setOf("104393", "ADMIN", "MENTOR")
+      for (u in allLocalUsers) {
+        val uCode = u.rmCode.trim().uppercase()
+        if (u.role == "RM" && uCode !in protectedCodes && uCode !in sheetRmCodes) {
+          database.userDao().deleteUser(u.rmCode)
+          database.rmTargetDao().deleteTargetForRm(u.rmCode)
+          updatedCount++
+        }
+      }
+    }
+
+    // 3. Check persistent deleted RM codes so app never resurrects deleted RMs
+    val delRmsSetting = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
+    val deletedCodes = delRmsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+
     for (i in 0 until sheetRmsJson.length()) {
       val obj = sheetRmsJson.optJSONObject(i) ?: continue
       val code = obj.optString("rmCode").trim().uppercase()
-      if (code.isBlank() || code == "ADMIN0" || code == "MENTOR0") continue
+      if (code.isBlank() || code == "ADMIN0" || code == "MENTOR0" || code in deletedCodes) continue
 
       val name = obj.optString("name", "Relationship Manager").trim()
       val mobile = obj.optString("mobile", "").trim()
@@ -1351,6 +1599,34 @@ class EblRepository(
   private suspend fun processSheetFiles(sheetFilesJson: JSONArray): Int {
     var updatedCount = 0
     val now = DateUtils.currentDhakaMillis()
+
+    // 1. Gather all file identifiers present in the Google Sheet
+    val sheetIds = HashSet<String>()
+    for (idx in 0 until sheetFilesJson.length()) {
+      val o = sheetFilesJson.optJSONObject(idx) ?: continue
+      val fId = o.optString("fileId").trim().lowercase()
+      val cc = o.optString("ccNumber").trim().lowercase()
+      if (fId.isNotBlank()) sheetIds.add(fId)
+      if (cc.isNotBlank()) sheetIds.add(cc)
+    }
+
+    // 2. Detect records DELETED in Google Sheets:
+    // If the sheet returned data, any local active file that was previously synced (or created > 20s ago)
+    // and is completely missing from the sheet has been deleted by an administrator or mentor in Google Sheets!
+    if (sheetFilesJson.length() > 0) {
+      val allLocalActive = database.customerFileDao().getAllActiveFiles()
+      for (localFile in allLocalActive) {
+        val fMatch = localFile.fileId.trim().lowercase() in sheetIds
+        val ccMatch = localFile.ccNumber.isNotBlank() && localFile.ccNumber.trim().lowercase() in sheetIds
+        if (!fMatch && !ccMatch && (localFile.isSynced || now - localFile.createdAt > 10000)) {
+          database.customerFileDao().softDeleteFile(localFile.fileId, "GoogleSheets_Delete", now)
+          database.customerFileDao().markFileSynced(localFile.fileId)
+          updatedCount++
+        }
+      }
+    }
+
+    // 3. Upsert / update files present in Google Sheets
     for (i in 0 until sheetFilesJson.length()) {
       val obj = sheetFilesJson.optJSONObject(i) ?: continue
       val fileId = obj.optString("fileId").trim()
@@ -1358,9 +1634,11 @@ class EblRepository(
       val targetId = if (fileId.isNotBlank()) fileId else ccNumber
       if (targetId.isBlank()) continue
 
-      val existing = database.customerFileDao().getFileById(targetId)
+      val existing = database.customerFileDao().getFileByAnyId(targetId)
+        ?: (if (ccNumber.isNotBlank()) database.customerFileDao().getFileByAnyId(ccNumber) else null)
+
       if (existing != null && existing.isDeleted) {
-        // Record was deleted in app; do NOT resurrect or re-enable it from spreadsheet!
+        // Record was deleted in app or sheet; do NOT resurrect or re-enable it!
         continue
       }
       val appStatus = obj.optString("applicationStatus", existing?.applicationStatus ?: "Submitted")
@@ -1376,33 +1654,36 @@ class EblRepository(
         val hasRemarksChanged = existing.remarks != remarks
         val hasDocsChanged = existing.pendingDocuments != pendingDocs
         val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber != ccNumber
+        val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.equals(rmCode, ignoreCase = true)
 
-        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged) {
+        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged) {
           val updated = existing.copy(
             applicationStatus = appStatus,
             activeStatus = activeStatus,
             remarks = remarks,
             pendingDocuments = pendingDocs,
             ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
+            assignedRmCode = if (rmCode.isNotBlank()) rmCode else existing.assignedRmCode,
             updatedAt = now,
             updatedBy = "GoogleSheets_Sync"
           )
           database.customerFileDao().updateFile(updated)
           updatedCount++
 
-          // Send SMS to RM if status, active, remarks or documents were changed from Google Sheets!
-          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged) {
-            val targetRmUser = database.userDao().getUser(existing.assignedRmCode)
+          // Send SMS to RM if status, active, remarks, documents, or RM assignment were changed from Google Sheets!
+          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged) {
+            val targetRmUser = database.userDao().getUser(updated.assignedRmCode)
             val rmMobile = targetRmUser?.mobile ?: ""
-            val rmName = targetRmUser?.name ?: existing.assignedRmCode
+            val rmName = targetRmUser?.name ?: updated.assignedRmCode
             val formattedTime = DateUtils.formatDateTime(now)
             val changeNote = when {
+              hasRmChanged -> "Assigned RM: $rmCode"
               hasStatusChanged -> "Status: $appStatus"
               hasActiveChanged -> "Active Status: $activeStatus"
               hasRemarksChanged -> "CPV Remarks Updated"
               else -> "Pending Docs Updated"
             }
-            val smsMessage = "[EBL Alert] Dear $rmName (${existing.assignedRmCode}), your customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
+            val smsMessage = "[EBL Alert] Dear $rmName (${updated.assignedRmCode}), customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
 
             var smsStatus = "DELIVERED"
             if (context != null && rmMobile.isNotBlank()) {
@@ -1412,12 +1693,12 @@ class EblRepository(
 
             database.smsNotificationDao().insertSms(
               SmsNotificationEntity(
-                recipientRmCode = existing.assignedRmCode,
+                recipientRmCode = updated.assignedRmCode,
                 recipientMobile = rmMobile,
                 recipientName = rmName,
                 triggeredByRole = "SHEETS_SYNC",
                 triggeredByCode = "Admin_Sheets",
-                actionType = "UPDATE",
+                actionType = if (hasRmChanged) "TRANSFER" else "UPDATE",
                 targetType = "CUSTOMER_FILE",
                 fileId = existing.fileId,
                 customerName = existing.customerName,
@@ -1431,7 +1712,7 @@ class EblRepository(
             context?.let { ctx ->
               NotificationHelper.sendRmFileUpdateNotification(
                 context = ctx,
-                targetRmCode = existing.assignedRmCode,
+                targetRmCode = updated.assignedRmCode,
                 ccNumber = existing.ccNumber.ifBlank { existing.fileId },
                 customerName = existing.customerName,
                 changeDetails = "Google Sheet Update: $changeNote",
