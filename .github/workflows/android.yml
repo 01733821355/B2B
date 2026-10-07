@@ -59,31 +59,11 @@ jobs:
 
           # Pre-seed ALL accepted license hashes so automated SDK download never fails
           mkdir -p "$SDK_ROOT/licenses"
-          cat << 'EOF' > "$SDK_ROOT/licenses/android-sdk-license"
-8933bad161af4178b1185d1a37fbf41ea5269c55
-d56f5187479451eabf01fb78af6dfcb131a6481e
-24333f8a63b6825ea9c5514f83c2829b004d1fee
-c084f74853edd93da6433e3d173829a86a38a3a1
-EOF
-
-          cat << 'EOF' > "$SDK_ROOT/licenses/android-sdk-preview-license"
-84831b9409646a247e3073db48957827972fce6e
-7c4912242136e0d9b4b00518728d77d7301c27e8
-EOF
-
-          cat << 'EOF' > "$SDK_ROOT/licenses/android-googletv-license"
-601085b94cd77f0b54ff86406957099fed807210
-01a472d4a34edd2395561a196147d34be2403fb4
-7983a8f172eb0005f9b8b2338b73f422e9752355
-EOF
-
-          cat << 'EOF' > "$SDK_ROOT/licenses/android-sdk-arm-dbt-license"
-859f317696f67ef3d7f30a50a5560e7834b433fb
-EOF
-
-          cat << 'EOF' > "$SDK_ROOT/licenses/mips-android-sdk-license"
-e9acab5b5fbb560a72cfa4f27c30f4d10488f53b
-EOF
+          printf "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nc084f74853edd93da6433e3d173829a86a38a3a1\n" > "$SDK_ROOT/licenses/android-sdk-license"
+          printf "84831b9409646a247e3073db48957827972fce6e\n7c4912242136e0d9b4b00518728d77d7301c27e8\n" > "$SDK_ROOT/licenses/android-sdk-preview-license"
+          printf "601085b94cd77f0b54ff86406957099fed807210\n01a472d4a34edd2395561a196147d34be2403fb4\n7983a8f172eb0005f9b8b2338b73f422e9752355\n" > "$SDK_ROOT/licenses/android-googletv-license"
+          printf "859f317696f67ef3d7f30a50a5560e7834b433fb\n" > "$SDK_ROOT/licenses/android-sdk-arm-dbt-license"
+          printf "e9acab5b5fbb560a72cfa4f27c30f4d10488f53b\n" > "$SDK_ROOT/licenses/mips-android-sdk-license"
 
           # Find sdkmanager
           SDKMANAGER=""
