@@ -342,21 +342,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Continuous Real-Time Bi-Directional Auto-Sync Loop
-    // Automatically synchronizes both ways with Google Sheets in the background every 3 seconds
+    // Automatically synchronizes both ways with Google Sheets in the background every 0.50 seconds (All-Time Live)
     viewModelScope.launch {
       while (true) {
-        delay(3000) // 3 seconds continuous live sync interval
-        if (isRealtimeAutoSyncEnabled.value) {
+        delay(500) // 0.50 second (500ms) continuous live sync interval
+        if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
-            // 1. ALWAYS PULL FIRST! This brings in any manual changes from Google Sheets,
-            // new RMs, updated file statuses, and universal settings changed by other phones.
-            eblRepository.pullDataFromGoogleSheets()
+            // 1. First push local updates, deletions, and RM credentials
+            eblRepository.triggerGoogleSheetsSync()
 
-            // 2. Then, push any locally modified files or settings if logged in
-            if (currentUser.value != null) {
-              eblRepository.triggerGoogleSheetsSync()
-            }
+            // 2. Then pull external changes from Google Sheets
+            eblRepository.pullDataFromGoogleSheets()
           } catch (_: Exception) {
           } finally {
             isSyncingInProgress.value = false
@@ -470,6 +467,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     return false
   }
 
+  fun isBiometricEnabled(rmCode: String): Boolean {
+    val clean = rmCode.trim().uppercase()
+    if (clean.isBlank()) return false
+    return allSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue == "true"
+  }
+
+  fun isPasswordLoginVerified(rmCode: String): Boolean {
+    val clean = rmCode.trim().uppercase()
+    if (clean.isBlank()) return false
+    return allSettings.value.find { it.settingKey == "password_login_verified_$clean" }?.settingValue == "true"
+  }
+
+  fun setBiometricEnabled(rmCode: String, enabled: Boolean, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    val clean = rmCode.trim().uppercase()
+    viewModelScope.launch {
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity(
+          settingKey = "fingerprint_enabled_$clean",
+          settingValue = if (enabled) "true" else "false",
+          updatedBy = clean,
+          updatedAt = DateUtils.currentDhakaMillis()
+        )
+      )
+      if (enabled) {
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity(
+            settingKey = "last_logged_rm_code",
+            settingValue = clean,
+            updatedBy = clean,
+            updatedAt = DateUtils.currentDhakaMillis()
+          )
+        )
+      }
+      onResult(true, null)
+    }
+  }
+
   fun login(
     usernameInput: String,
     passwordInput: String,
@@ -490,6 +524,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }
       res.onSuccess { user ->
         lastLoggedRmCode.value = user.rmCode
+        // Record that user has successfully authenticated via password
+        try {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity(
+              settingKey = "password_login_verified_${user.rmCode.trim().uppercase()}",
+              settingValue = "true",
+              updatedBy = user.rmCode,
+              updatedAt = DateUtils.currentDhakaMillis()
+            )
+          )
+        } catch (_: Exception) {}
+
         // Pull latest sheet data immediately upon successful login so all files, stats and SMS are fresh!
         viewModelScope.launch {
           try {
@@ -517,6 +563,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     address: String? = null,
     onResult: (Boolean, String?) -> Unit
   ) {
+    val clean = rmCodeInput.trim().uppercase()
+    if (!isBiometricEnabled(clean) || !isPasswordLoginVerified(clean)) {
+      onResult(false, "Fingerprint unlock is not enabled. Please sign in with your RM password first, then turn on Fingerprint Login in Settings.")
+      return
+    }
+
     viewModelScope.launch {
       var res = authRepository.loginWithBiometrics(rmCodeInput, latitude, longitude, address)
       if (res.isFailure) {
@@ -824,6 +876,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiMessage.emit("Password reset successfully for RM $rmCode.")
         onResult(true, null)
       }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun saveUniversalChecklistSettings(
+    headerTemplate: String,
+    regardsTemplate: String,
+    corporateDocsJson: String = "",
+    enhancementDocsJson: String = "",
+    onResult: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.saveUniversalChecklistSettings(headerTemplate, regardsTemplate, corporateDocsJson, enhancementDocsJson)
+      res.onSuccess {
+        _uiMessage.emit("Universal checklist templates saved and synced!")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to save checklist settings: ${err.message}")
         onResult(false, err.message)
       }
     }

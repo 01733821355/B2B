@@ -153,7 +153,9 @@ fun EblMainApp(viewModel: AppViewModel) {
       },
       onBiometricLogin = { rmCode, lat, lng, addr, callback ->
         viewModel.loginWithBiometrics(rmCode, lat, lng, addr, callback)
-      }
+      },
+      isBiometricEnabled = { viewModel.isBiometricEnabled(it) },
+      isPasswordVerified = { viewModel.isPasswordLoginVerified(it) }
     )
     return
   }

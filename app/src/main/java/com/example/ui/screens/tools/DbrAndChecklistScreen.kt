@@ -101,17 +101,17 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 data class ExistingCreditCardEntry(
-  var id: Long = System.currentTimeMillis(),
-  var bankName: String = "",
-  var limit: String = "",
-  var outstanding: String = ""
+  val id: Long = System.currentTimeMillis(),
+  val bankName: String = "",
+  val limit: String = "",
+  val outstanding: String = ""
 )
 
 data class ExistingLoanEntry(
-  var id: Long = System.currentTimeMillis(),
-  var bankName: String = "",
-  var loanType: String = "Personal Loan",
-  var monthlyEmi: String = ""
+  val id: Long = System.currentTimeMillis(),
+  val bankName: String = "",
+  val loanType: String = "Personal Loan",
+  val monthlyEmi: String = ""
 )
 
 data class ChecklistItem(
@@ -228,6 +228,7 @@ fun DbrAndChecklistScreen(
     } else {
       DocumentChecklistSenderTab(
         currentUser = currentUser,
+        viewModel = viewModel,
         availableFiles = allFiles
       )
     }
@@ -237,6 +238,22 @@ fun DbrAndChecklistScreen(
 // -------------------------------------------------------------------------------------------------
 // TAB 1: DBR CALCULATOR
 // -------------------------------------------------------------------------------------------------
+
+private fun sanitizeNumberInput(raw: String): String {
+  val sb = StringBuilder()
+  var hasDot = false
+  for (ch in raw) {
+    when {
+      ch in '0'..'9' -> sb.append(ch)
+      ch in '০'..'৯' -> sb.append((ch - '০' + '0'.code).toChar())
+      (ch == '.' || ch == '·') && !hasDot -> {
+        sb.append('.')
+        hasDot = true
+      }
+    }
+  }
+  return sb.toString()
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -258,32 +275,48 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
   var salaryText by remember { mutableStateOf("") }
   var proposedLimitText by remember { mutableStateOf("") }
 
-  // Credit Cards List
+  // Direct Master Input Fields for Credit Limit, Outstanding, and Loan EMI
+  var creditCardLimitInput by remember { mutableStateOf("") }
+  var creditCardOutstandingInput by remember { mutableStateOf("") }
+  var loanEmiInput by remember { mutableStateOf("") }
+  var showItemizedBreakdown by remember { mutableStateOf(false) }
+  var showItemizedLoans by remember { mutableStateOf(false) }
+
+  // Credit Cards List (for optional detailed card-by-card breakdown)
   val creditCards = remember {
     mutableStateListOf(
       ExistingCreditCardEntry(id = 1, bankName = "EBL", limit = "", outstanding = "")
     )
   }
 
-  // Loans List
+  // Loans List (for optional detailed loan-by-loan breakdown)
   val loans = remember {
     mutableStateListOf<ExistingLoanEntry>()
   }
 
   // Calculations
-  val salary = salaryText.toDoubleOrNull() ?: 0.0
-  val proposedLimit = proposedLimitText.toDoubleOrNull() ?: 0.0
+  val salary = sanitizeNumberInput(salaryText).toDoubleOrNull() ?: 0.0
+  val proposedLimit = sanitizeNumberInput(proposedLimitText).toDoubleOrNull() ?: 0.0
 
-  // Existing Cards Total & 3% / 5%
-  val totalCardLimit = creditCards.sumOf { it.limit.toDoubleOrNull() ?: 0.0 }
-  val totalCardOutstanding = creditCards.sumOf { it.outstanding.toDoubleOrNull() ?: 0.0 }
+  val itemizedCardLimit = creditCards.sumOf { sanitizeNumberInput(it.limit).toDoubleOrNull() ?: 0.0 }
+  val itemizedCardOutstanding = creditCards.sumOf { sanitizeNumberInput(it.outstanding).toDoubleOrNull() ?: 0.0 }
+  val itemizedLoanEmi = loans.sumOf { sanitizeNumberInput(it.monthlyEmi).toDoubleOrNull() ?: 0.0 }
+
+  val totalCardLimit = if (creditCardLimitInput.isNotBlank()) {
+    sanitizeNumberInput(creditCardLimitInput).toDoubleOrNull() ?: 0.0
+  } else itemizedCardLimit
+
+  val totalCardOutstanding = if (creditCardOutstandingInput.isNotBlank()) {
+    sanitizeNumberInput(creditCardOutstandingInput).toDoubleOrNull() ?: 0.0
+  } else itemizedCardOutstanding
 
   val cardLimit3Percent = totalCardLimit * 0.03
   val cardOutstanding5Percent = totalCardOutstanding * 0.05
   val consideredCardObligation = max(cardLimit3Percent, cardOutstanding5Percent)
 
-  // Total Loan EMI
-  val totalLoanEmi = loans.sumOf { it.monthlyEmi.toDoubleOrNull() ?: 0.0 }
+  val totalLoanEmi = if (loanEmiInput.isNotBlank()) {
+    sanitizeNumberInput(loanEmiInput).toDoubleOrNull() ?: 0.0
+  } else itemizedLoanEmi
 
   // Proposed Commitment: Proposed Limit * 3%
   val proposedCommitment = proposedLimit * 0.03
@@ -428,11 +461,11 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
           // Salary Input
           OutlinedTextField(
             value = salaryText,
-            onValueChange = { salaryText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+            onValueChange = { salaryText = sanitizeNumberInput(it) },
             label = { Text("Monthly Net Salary (Banks Pay Part) *") },
             placeholder = { Text("e.g. 35000") },
             leadingIcon = { Icon(Icons.Default.MonetizationOn, contentDescription = null, tint = Color(0xFF059669)) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
             singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("input_dbr_salary"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
@@ -459,7 +492,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
       }
     }
 
-    // 2. Existing Credit Cards Card (Multiple cards with limit & outstanding per card)
+    // 2. Existing Credit Cards Card (Direct Input + Optional Multiple Cards Breakdown)
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
@@ -472,7 +505,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "2. Existing Credit Cards",
                 fontSize = 14.sp,
@@ -480,89 +513,179 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 color = EblNavyDark
               )
               Text(
-                text = "Add all credit cards with limits & outstandings",
+                text = "Enter total limits & outstandings directly or add card-by-card",
                 fontSize = 11.sp,
                 color = Color.Gray
               )
             }
             OutlinedButton(
               onClick = {
-                creditCards.add(ExistingCreditCardEntry(id = System.currentTimeMillis()))
+                showItemizedBreakdown = !showItemizedBreakdown
+                if (showItemizedBreakdown && creditCards.isEmpty()) {
+                  creditCards.add(ExistingCreditCardEntry(id = System.currentTimeMillis()))
+                }
               },
               contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-              modifier = Modifier.testTag("btn_add_credit_card")
+              modifier = Modifier.testTag("btn_toggle_itemized_cards")
             ) {
-              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+              Icon(
+                if (showItemizedBreakdown) Icons.Default.Check else Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp)
+              )
               Spacer(modifier = Modifier.width(4.dp))
-              Text("+ Add Card", fontSize = 11.sp)
+              Text(if (showItemizedBreakdown) "Hide Details" else "+ Itemize Cards", fontSize = 11.sp)
             }
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
+          Spacer(modifier = Modifier.height(10.dp))
 
-          creditCards.forEachIndexed { index, card ->
-            Card(
-              shape = RoundedCornerShape(8.dp),
-              colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp)
+          // DIRECT MASTER QUICK INPUTS (Type total limit & outstanding immediately!)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            OutlinedTextField(
+              value = creditCardLimitInput,
+              onValueChange = { input ->
+                creditCardLimitInput = sanitizeNumberInput(input)
+              },
+              label = { Text("Total Card Limit (BDT) *", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+              placeholder = { Text(if (itemizedCardLimit > 0) nf.format(itemizedCardLimit.roundToInt()) else "e.g. 150000", fontSize = 11.sp) },
+              supportingText = {
+                if (totalCardLimit > 0) {
+                  Text("3% = BDT ${nf.format(cardLimit3Percent.roundToInt())}", fontSize = 10.sp, color = Color(0xFF1E3A8A), fontWeight = FontWeight.Bold)
+                }
+              },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+              singleLine = true,
+              modifier = Modifier.weight(1f).testTag("input_dbr_total_card_limit"),
+              colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+            )
+            OutlinedTextField(
+              value = creditCardOutstandingInput,
+              onValueChange = { input ->
+                creditCardOutstandingInput = sanitizeNumberInput(input)
+              },
+              label = { Text("Total O/S (BDT)", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+              placeholder = { Text(if (itemizedCardOutstanding > 0) nf.format(itemizedCardOutstanding.roundToInt()) else "e.g. 35000", fontSize = 11.sp) },
+              supportingText = {
+                if (totalCardOutstanding > 0) {
+                  Text("5% = BDT ${nf.format(cardOutstanding5Percent.roundToInt())}", fontSize = 10.sp, color = Color(0xFFB45309), fontWeight = FontWeight.Bold)
+                }
+              },
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+              singleLine = true,
+              modifier = Modifier.weight(1f).testTag("input_dbr_total_card_outstanding"),
+              colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+            )
+          }
+
+          // Optional Card-by-Card Itemized Breakdown
+          if (showItemizedBreakdown) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              Column(modifier = Modifier.padding(8.dp)) {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
+              Text(
+                text = "Itemized Card Breakdown (${creditCards.size})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = EblNavyPrimary
+              )
+              TextButton(
+                onClick = {
+                  creditCards.add(ExistingCreditCardEntry(id = System.currentTimeMillis()))
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+              ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                Text("+ Add Another Card", fontSize = 11.sp)
+              }
+            }
+
+            creditCards.forEachIndexed { index, card ->
+              androidx.compose.runtime.key(card.id) {
+                Card(
+                  shape = RoundedCornerShape(8.dp),
+                  colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
                 ) {
-                  Text(
-                    text = "Card #${index + 1}",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    color = EblNavyPrimary
-                  )
-                  if (creditCards.size > 1) {
-                    IconButton(
-                      onClick = { creditCards.removeAt(index) },
-                      modifier = Modifier.size(24.dp)
+                  Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      verticalAlignment = Alignment.CenterVertically
                     ) {
-                      Icon(Icons.Default.Delete, contentDescription = "Delete Card", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                      Text(
+                        text = "Card #${index + 1}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = EblNavyPrimary
+                      )
+                      IconButton(
+                        onClick = {
+                          creditCards.removeAt(index)
+                        },
+                        modifier = Modifier.size(24.dp)
+                      ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Card", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                      }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    OutlinedTextField(
+                      value = card.bankName,
+                      onValueChange = { newBank ->
+                        creditCards[index] = card.copy(bankName = newBank)
+                      },
+                      label = { Text("Bank Name", fontSize = 10.sp) },
+                      placeholder = { Text("e.g. SCB / City / BRAC", fontSize = 10.sp) },
+                      singleLine = true,
+                      modifier = Modifier.fillMaxWidth(),
+                      colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                      OutlinedTextField(
+                        value = card.limit,
+                        onValueChange = { newLimit ->
+                          val sanitized = sanitizeNumberInput(newLimit)
+                          creditCards[index] = card.copy(limit = sanitized)
+                        },
+                        label = { Text("Limit (BDT) *", fontSize = 10.sp) },
+                        placeholder = { Text("100000", fontSize = 10.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+                      )
+                      OutlinedTextField(
+                        value = card.outstanding,
+                        onValueChange = { newOs ->
+                          val sanitized = sanitizeNumberInput(newOs)
+                          creditCards[index] = card.copy(outstanding = sanitized)
+                        },
+                        label = { Text("O/S (BDT)", fontSize = 10.sp) },
+                        placeholder = { Text("25000", fontSize = 10.sp) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+                      )
                     }
                   }
-                }
-
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                  OutlinedTextField(
-                    value = card.bankName,
-                    onValueChange = { card.bankName = it },
-                    label = { Text("Bank Name", fontSize = 10.sp) },
-                    placeholder = { Text("e.g. SCB / City", fontSize = 10.sp) },
-                    singleLine = true,
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-                  )
-                  OutlinedTextField(
-                    value = card.limit,
-                    onValueChange = { card.limit = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("Limit (BDT) *", fontSize = 10.sp) },
-                    placeholder = { Text("100000", fontSize = 10.sp) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.weight(1.2f),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-                  )
-                  OutlinedTextField(
-                    value = card.outstanding,
-                    onValueChange = { card.outstanding = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                    label = { Text("O/S (BDT)", fontSize = 10.sp) },
-                    placeholder = { Text("25000", fontSize = 10.sp) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.weight(1.2f),
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-                  )
                 }
               }
             }
@@ -606,7 +729,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
       }
     }
 
-    // 3. Existing Loans Card (Multiple loans)
+    // 3. Existing Loans Card (Direct Input + Optional Multiple Loans Breakdown)
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
@@ -619,7 +742,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "3. Existing Loans",
                 fontSize = 14.sp,
@@ -634,84 +757,143 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             }
             OutlinedButton(
               onClick = {
-                loans.add(ExistingLoanEntry(id = System.currentTimeMillis()))
+                showItemizedLoans = !showItemizedLoans
+                if (showItemizedLoans && loans.isEmpty()) {
+                  loans.add(ExistingLoanEntry(id = System.currentTimeMillis()))
+                }
               },
               contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-              modifier = Modifier.testTag("btn_add_existing_loan")
+              modifier = Modifier.testTag("btn_toggle_itemized_loans")
             ) {
-              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+              Icon(
+                if (showItemizedLoans) Icons.Default.Check else Icons.Default.Add,
+                contentDescription = null,
+                modifier = Modifier.size(15.dp)
+              )
               Spacer(modifier = Modifier.width(4.dp))
-              Text("+ Add Loan", fontSize = 11.sp)
+              Text(if (showItemizedLoans) "Hide Details" else "+ Itemize Loans", fontSize = 11.sp)
             }
           }
 
-          if (loans.isEmpty()) {
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-              text = "No existing loans added. Tap '+ Add Loan' if customer has existing bank loan EMIs.",
-              fontSize = 11.sp,
-              color = Color.Gray,
-              modifier = Modifier.padding(vertical = 6.dp)
-            )
-          } else {
-            Spacer(modifier = Modifier.height(8.dp))
-            loans.forEachIndexed { index, loan ->
-              Card(
-                shape = RoundedCornerShape(8.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .padding(vertical = 4.dp)
-              ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                  ) {
-                    Text(
-                      text = "Loan #${index + 1}",
-                      fontWeight = FontWeight.Bold,
-                      fontSize = 12.sp,
-                      color = EblNavyPrimary
-                    )
-                    IconButton(
-                      onClick = { loans.removeAt(index) },
-                      modifier = Modifier.size(24.dp)
-                    ) {
-                      Icon(Icons.Default.Delete, contentDescription = "Delete Loan", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
-                    }
-                  }
+          Spacer(modifier = Modifier.height(10.dp))
 
-                  Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                  ) {
-                    OutlinedTextField(
-                      value = loan.bankName,
-                      onValueChange = { loan.bankName = it },
-                      label = { Text("Bank / FI", fontSize = 10.sp) },
-                      placeholder = { Text("e.g. BRAC / DBBL", fontSize = 10.sp) },
-                      singleLine = true,
-                      modifier = Modifier.weight(1f),
-                      colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-                    )
-                    OutlinedTextField(
-                      value = loan.loanType,
-                      onValueChange = { loan.loanType = it },
-                      label = { Text("Type", fontSize = 10.sp) },
-                      singleLine = true,
-                      modifier = Modifier.weight(1f),
-                      colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-                    )
+          // DIRECT MASTER QUICK INPUT FOR LOAN EMI (Zero friction)
+          OutlinedTextField(
+            value = loanEmiInput,
+            onValueChange = { input ->
+              loanEmiInput = sanitizeNumberInput(input)
+            },
+            label = { Text("Total Existing Loan Monthly EMI (BDT) *", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+            placeholder = { Text(if (itemizedLoanEmi > 0) nf.format(itemizedLoanEmi.roundToInt()) else "e.g. 15000", fontSize = 11.sp) },
+            supportingText = {
+              if (totalLoanEmi > 0) {
+                Text("Monthly Loan Obligation: BDT ${nf.format(totalLoanEmi.roundToInt())}", fontSize = 10.sp, color = Color(0xFFDC2626), fontWeight = FontWeight.Bold)
+              }
+            },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().testTag("input_dbr_total_loan_emi"),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+          )
+
+          // Optional Loan-by-Loan Itemized Breakdown
+          if (showItemizedLoans) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "Itemized Loans Breakdown (${loans.size})",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = EblNavyPrimary
+              )
+              TextButton(
+                onClick = {
+                  loans.add(ExistingLoanEntry(id = System.currentTimeMillis()))
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+              ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                Text("+ Add Another Loan", fontSize = 11.sp)
+              }
+            }
+
+            loans.forEachIndexed { index, loan ->
+              androidx.compose.runtime.key(loan.id) {
+                Card(
+                  shape = RoundedCornerShape(8.dp),
+                  colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9)),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+                ) {
+                  Column(modifier = Modifier.padding(10.dp)) {
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.SpaceBetween,
+                      verticalAlignment = Alignment.CenterVertically
+                    ) {
+                      Text(
+                        text = "Loan #${index + 1}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        color = EblNavyPrimary
+                      )
+                      IconButton(
+                        onClick = { loans.removeAt(index) },
+                        modifier = Modifier.size(24.dp)
+                      ) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete Loan", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                      }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                      OutlinedTextField(
+                        value = loan.bankName,
+                        onValueChange = { newBank ->
+                          loans[index] = loan.copy(bankName = newBank)
+                        },
+                        label = { Text("Bank / FI", fontSize = 10.sp) },
+                        placeholder = { Text("e.g. BRAC / DBBL", fontSize = 10.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+                      )
+                      OutlinedTextField(
+                        value = loan.loanType,
+                        onValueChange = { newType ->
+                          loans[index] = loan.copy(loanType = newType)
+                        },
+                        label = { Text("Type", fontSize = 10.sp) },
+                        placeholder = { Text("Personal / Auto", fontSize = 10.sp) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+                      )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     OutlinedTextField(
                       value = loan.monthlyEmi,
-                      onValueChange = { loan.monthlyEmi = it.filter { ch -> ch.isDigit() || ch == '.' } },
-                      label = { Text("EMI (BDT) *", fontSize = 10.sp) },
+                      onValueChange = { newEmi ->
+                        val sanitized = sanitizeNumberInput(newEmi)
+                        loans[index] = loan.copy(monthlyEmi = sanitized)
+                      },
+                      label = { Text("Monthly EMI (BDT) *", fontSize = 10.sp) },
                       placeholder = { Text("12500", fontSize = 10.sp) },
-                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                       singleLine = true,
-                      modifier = Modifier.weight(1.2f),
+                      modifier = Modifier.fillMaxWidth(),
                       colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
                     )
                   }
@@ -720,15 +902,13 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             }
           }
 
-          if (loans.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(4.dp))
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-              Text("Total Existing Loan EMIs:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-              Text("BDT ${nf.format(totalLoanEmi.roundToInt())}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
-            }
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text("Total Existing Loan EMIs:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            Text("BDT ${nf.format(totalLoanEmi.roundToInt())}", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
           }
         }
       }
@@ -752,11 +932,11 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
 
           OutlinedTextField(
             value = proposedLimitText,
-            onValueChange = { proposedLimitText = it.filter { ch -> ch.isDigit() || ch == '.' } },
+            onValueChange = { proposedLimitText = sanitizeNumberInput(it) },
             label = { Text("Proposed Limit (BDT) *") },
             placeholder = { Text("e.g. 100000") },
             leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = EblNavyPrimary) },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
             singleLine = true,
             modifier = Modifier.fillMaxWidth().testTag("input_dbr_proposed_limit"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
@@ -980,102 +1160,375 @@ private fun BreakdownLine(
 }
 
 // -------------------------------------------------------------------------------------------------
-// TAB 2: DOCUMENT CHECKLIST SENDER
+// TAB 2: DOCUMENT CHECKLIST SENDER (Presets, Corporate Card 2-Part Docs, Universal Templates & Admin Customization)
 // -------------------------------------------------------------------------------------------------
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentChecklistSenderTab(
   currentUser: UserEntity,
-  availableFiles: List<CustomerFileEntity>
+  availableFiles: List<CustomerFileEntity>,
+  viewModel: AppViewModel? = null
 ) {
   val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
 
   var customerName by remember { mutableStateOf("") }
   var customerMobile by remember { mutableStateOf("") }
 
-  val segmentOptions = listOf(
-    "Salaried Executive / Govt. Employee",
-    "Business Person / Proprietorship / Ltd. Co.",
-    "Landlord / Landlady (Rental Income)",
-    "Doctor / CA / Lawyer / Professional"
+  // Presets requested by user: Credit Card Limit Enhance, Corporate Card, etc.
+  val presetOptions = listOf(
+    "Credit Card Limit Enhance",
+    "Corporate Card",
+    "New Credit Card (Salaried)",
+    "New Credit Card (Business Person)",
+    "Personal / Auto / Home Loan"
   )
-  var selectedSegment by remember { mutableStateOf(segmentOptions[0]) }
-  var segmentExpanded by remember { mutableStateOf(false) }
+  var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
+  var presetExpanded by remember { mutableStateOf(false) }
 
-  val productOptions = listOf(
-    "Credit Card",
-    "Personal Loan",
-    "Auto Loan",
-    "Home Loan"
-  )
-  var selectedProduct by remember { mutableStateOf(productOptions[0]) }
-  var productExpanded by remember { mutableStateOf(false) }
+  // Universal Templates (synced from AppSettings if available)
+  val appSettingsList = viewModel?.appSettings?.collectAsState()?.value ?: emptyList()
+  val savedHeaderTpl = appSettingsList.find { it.settingKey == "CHECKLIST_HEADER_TEMPLATE" }?.settingValue
+    ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
 
-  // Dynamic Checklists based on segment & product
-  val checklistItems = remember(selectedSegment, selectedProduct) {
-    mutableStateListOf<ChecklistItem>().apply {
-      // Common docs
-      add(ChecklistItem(1, "NID / Smart Card / Valid Passport photocopy"))
-      add(ChecklistItem(2, "2 copies recent Passport size lab-print photographs"))
-      add(ChecklistItem(3, "Latest E-TIN Certificate & Tax Return Assessment Ack Slip"))
-      add(ChecklistItem(4, "Utility Bill photocopy (Electricity / WASA / Gas for residence)"))
+  val savedRegardsTpl = appSettingsList.find { it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" }?.settingValue
+    ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
 
-      when {
-        selectedSegment.contains("Salaried") -> {
-          add(ChecklistItem(5, "Latest Salary Certificate / Original Pay Slips (last 3 months)"))
-          add(ChecklistItem(6, "6-month Salary Account Statement (with bank seal & signature)"))
-          add(ChecklistItem(7, "Office ID Card photocopy & Business Visiting Card"))
-          if (selectedProduct == "Credit Card") {
-            add(ChecklistItem(8, "Letter of Introduction (LOI) on corporate letterhead"))
-          }
-        }
-        selectedSegment.contains("Business") -> {
-          add(ChecklistItem(5, "Valid Trade License (last 3-5 years renewal copies)"))
-          add(ChecklistItem(6, "12-month Business & Personal Bank Account Statement (sealed)"))
-          add(ChecklistItem(7, "Visiting card & Memorandum of Association / Partnership Deed"))
-          add(ChecklistItem(8, "Office rental agreement or ownership papers"))
-        }
-        selectedSegment.contains("Landlord") -> {
-          add(ChecklistItem(5, "Valid Rental Agreement copies with tenants"))
-          add(ChecklistItem(6, "Title Deed (Dalil), Mutation (Namjari), DCR & latest Khajana receipt"))
-          add(ChecklistItem(7, "6-12 month Rental Credit Bank Account Statement"))
-          add(ChecklistItem(8, "Holding Tax receipt photocopy"))
-        }
-        selectedSegment.contains("Doctor") || selectedSegment.contains("Professional") -> {
-          add(ChecklistItem(5, "BMDC / Bar Council / Professional Membership Certificate"))
-          add(ChecklistItem(6, "6-month Practice / Professional Bank Account Statement"))
-          add(ChecklistItem(7, "Visiting Card & Hospital / Chamber prescription pad or appointment letter"))
-        }
+  val savedCorpDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_DOCS" }?.settingValue
+  val savedEnhanceDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_ENHANCE_DOCS" }?.settingValue
+
+  var headerTemplate by remember(savedHeaderTpl) { mutableStateOf(savedHeaderTpl) }
+  var regardsTemplate by remember(savedRegardsTpl) { mutableStateOf(savedRegardsTpl) }
+  var showAdminTemplateDialog by remember { mutableStateOf(false) }
+
+  // 1. Credit Card Limit Enhance Docs
+  val defaultEnhanceDocs = remember(savedEnhanceDocsJson) {
+    if (!savedEnhanceDocsJson.isNullOrBlank()) {
+      try {
+        val arr = org.json.JSONArray(savedEnhanceDocsJson)
+        val list = mutableListOf<String>()
+        for (i in 0 until arr.length()) list.add(arr.getString(i))
+        if (list.isNotEmpty()) list else listOf(
+          "Front & back photocopy of existing Credit Card",
+          "Latest 6-month Salary / Business Bank Account Statement (sealed)",
+          "Latest Salary Certificate / Original Pay Slips / Trade License renewal copy",
+          "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
+          "Photocopy of National ID Card (NID) / Smart Card"
+        )
+      } catch (_: Exception) {
+        listOf(
+          "Front & back photocopy of existing Credit Card",
+          "Latest 6-month Salary / Business Bank Account Statement (sealed)",
+          "Latest Salary Certificate / Original Pay Slips / Trade License renewal copy",
+          "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
+          "Photocopy of National ID Card (NID) / Smart Card"
+        )
       }
+    } else {
+      listOf(
+        "Front & back photocopy of existing Credit Card",
+        "Latest 6-month Salary / Business Bank Account Statement (sealed)",
+        "Latest Salary Certificate / Original Pay Slips / Trade License renewal copy",
+        "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
+        "Photocopy of National ID Card (NID) / Smart Card"
+      )
+    }
+  }
 
-      if (selectedProduct == "Auto Loan") {
-        add(ChecklistItem(9, "Vehicle Quotation from recognized dealership"))
-      } else if (selectedProduct == "Home Loan") {
-        add(ChecklistItem(9, "Approved Building Plan from RAJUK / CDA / Authority"))
-        add(ChecklistItem(10, "All original property title documents"))
+  // 2. Corporate Card Docs: TWO DISTINCT PARTS (Company Document & Employee Document)
+  val defaultCorporateCompanyDocs = remember(savedCorpDocsJson) {
+    if (!savedCorpDocsJson.isNullOrBlank()) {
+      try {
+        val obj = org.json.JSONObject(savedCorpDocsJson)
+        val arr = obj.optJSONArray("company")
+        if (arr != null && arr.length() > 0) {
+          val list = mutableListOf<String>()
+          for (i in 0 until arr.length()) list.add(arr.getString(i))
+          list
+        } else listOf(
+          "Valid Trade License (last 3-5 years renewal copies)",
+          "Memorandum & Articles of Association (MOA & AOA) / Partnership Deed",
+          "Board Resolution authorizing Corporate Card facility & authorized signatories",
+          "Latest 2 consecutive years Audited Financial Statements & Balance Sheet",
+          "Form XII / Schedule X / List of Directors certified copy",
+          "Company E-TIN Certificate & BIN / VAT Registration Certificate",
+          "12-Month Company Bank Account Statement (with bank seal & signature)"
+        )
+      } catch (_: Exception) {
+        listOf(
+          "Valid Trade License (last 3-5 years renewal copies)",
+          "Memorandum & Articles of Association (MOA & AOA) / Partnership Deed",
+          "Board Resolution authorizing Corporate Card facility & authorized signatories",
+          "Latest 2 consecutive years Audited Financial Statements & Balance Sheet",
+          "Form XII / Schedule X / List of Directors certified copy",
+          "Company E-TIN Certificate & BIN / VAT Registration Certificate",
+          "12-Month Company Bank Account Statement (with bank seal & signature)"
+        )
+      }
+    } else {
+      listOf(
+        "Valid Trade License (last 3-5 years renewal copies)",
+        "Memorandum & Articles of Association (MOA & AOA) / Partnership Deed",
+        "Board Resolution authorizing Corporate Card facility & authorized signatories",
+        "Latest 2 consecutive years Audited Financial Statements & Balance Sheet",
+        "Form XII / Schedule X / List of Directors certified copy",
+        "Company E-TIN Certificate & BIN / VAT Registration Certificate",
+        "12-Month Company Bank Account Statement (with bank seal & signature)"
+      )
+    }
+  }
+
+  val defaultCorporateEmployeeDocs = remember(savedCorpDocsJson) {
+    if (!savedCorpDocsJson.isNullOrBlank()) {
+      try {
+        val obj = org.json.JSONObject(savedCorpDocsJson)
+        val arr = obj.optJSONArray("employee")
+        if (arr != null && arr.length() > 0) {
+          val list = mutableListOf<String>()
+          for (i in 0 until arr.length()) list.add(arr.getString(i))
+          list
+        } else listOf(
+          "Applicant Employee NID / Smart Card / Valid Passport photocopy",
+          "Employee Office ID Card photocopy & Business Visiting Card",
+          "Letter of Introduction (LOI) / Corporate Card authorization on official company letterhead",
+          "2 copies recent Passport size lab-print photographs of applicant",
+          "Applicant Employee E-TIN Certificate photocopy",
+          "Latest 6-Month Salary Account Bank Statement"
+        )
+      } catch (_: Exception) {
+        listOf(
+          "Applicant Employee NID / Smart Card / Valid Passport photocopy",
+          "Employee Office ID Card photocopy & Business Visiting Card",
+          "Letter of Introduction (LOI) / Corporate Card authorization on official company letterhead",
+          "2 copies recent Passport size lab-print photographs of applicant",
+          "Applicant Employee E-TIN Certificate photocopy",
+          "Latest 6-Month Salary Account Bank Statement"
+        )
+      }
+    } else {
+      listOf(
+        "Applicant Employee NID / Smart Card / Valid Passport photocopy",
+        "Employee Office ID Card photocopy & Business Visiting Card",
+        "Letter of Introduction (LOI) / Corporate Card authorization on official company letterhead",
+        "2 copies recent Passport size lab-print photographs of applicant",
+        "Applicant Employee E-TIN Certificate photocopy",
+        "Latest 6-Month Salary Account Bank Statement"
+      )
+    }
+  }
+
+  // 3. New Credit Card Salaried Docs
+  val defaultSalariedDocs = remember {
+    listOf(
+      "NID / Smart Card / Valid Passport photocopy",
+      "2 copies recent Passport size photographs",
+      "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
+      "Latest Salary Certificate / Original Pay Slips (last 3 months)",
+      "6-month Salary Account Statement (with bank seal & signature)",
+      "Office ID Card photocopy & Visiting Card",
+      "Utility Bill photocopy (Electricity / WASA / Gas residence)"
+    )
+  }
+
+  // 4. New Credit Card Business Docs
+  val defaultBusinessDocs = remember {
+    listOf(
+      "National ID Card (NID) photocopy",
+      "2 copies recent Passport size photographs",
+      "Valid Trade License (last 3-5 years renewal copies)",
+      "12-month Business & Personal Bank Account Statement (sealed)",
+      "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
+      "Visiting card & Memorandum of Association / Partnership Deed",
+      "Utility bill of residence & business premises"
+    )
+  }
+
+  // 5. Loan Docs
+  val defaultLoanDocs = remember {
+    listOf(
+      "National ID Card (NID) photocopy",
+      "2 copies recent Passport size photographs",
+      "Latest E-TIN Certificate & Tax Return Assessment Slip",
+      "Income proof (Salary Certificate / 6-12 month Bank Statement)",
+      "Office ID / Trade License photocopy",
+      "Utility Bill photocopy (residence)"
+    )
+  }
+
+  // Active state lists
+  val singleChecklistItems = remember(selectedPreset) {
+    mutableStateListOf<ChecklistItem>().apply {
+      when (selectedPreset) {
+        "Credit Card Limit Enhance" -> defaultEnhanceDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+        "New Credit Card (Salaried)" -> defaultSalariedDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+        "New Credit Card (Business Person)" -> defaultBusinessDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+        "Personal / Auto / Home Loan" -> defaultLoanDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+        else -> defaultEnhanceDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
       }
     }
   }
 
+  // Corporate Card Two-Part state lists
+  val corporateCompanyItems = remember {
+    mutableStateListOf<ChecklistItem>().apply {
+      defaultCorporateCompanyDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+    }
+  }
+  val corporateEmployeeItems = remember {
+    mutableStateListOf<ChecklistItem>().apply {
+      defaultCorporateEmployeeDocs.forEachIndexed { i, t -> add(ChecklistItem(100 + i + 1, t)) }
+    }
+  }
+
   var newCustomDocText by remember { mutableStateOf("") }
+  var newCorpCustomDocText by remember { mutableStateOf("") }
   var selectedFilePickerExpanded by remember { mutableStateOf(false) }
 
-  // Generated SMS / WhatsApp Message Text
-  val checkedTitles = checklistItems.filter { it.isChecked }.mapIndexed { idx, it -> "${idx + 1}. ${it.title}" }
-  val formattedMessage = """
-Dear ${customerName.ifBlank { "Customer" }},
-Greetings from Eastern Bank PLC (EBL).
-To process your $selectedProduct application ($selectedSegment), please provide the following required documents:
+  // Header and Regards auto-fill
+  val custDisplayName = customerName.trim().ifBlank { "Customer" }
+  val presetDisplayName = when (selectedPreset) {
+    "Credit Card Limit Enhance" -> "Credit Card Limit Enhancement"
+    "Corporate Card" -> "Corporate Credit Card"
+    else -> selectedPreset
+  }
 
-${checkedTitles.joinToString("\n")}
+  val resolvedHeader = headerTemplate
+    .replace("{CUSTOMER_NAME}", custDisplayName)
+    .replace("{PRESET_NAME}", presetDisplayName)
 
-For any query or assistance, please contact:
-${currentUser.name}
-RM Code: ${currentUser.rmCode}
-Mobile: ${currentUser.mobile.ifBlank { "EBL Sales Hotline" }}
-Eastern Bank PLC
-  """.trimIndent()
+  val resolvedRegards = regardsTemplate
+    .replace("{RM_NAME}", currentUser.name.ifBlank { "Relationship Manager" })
+    .replace("{RM_CODE}", currentUser.rmCode)
+    .replace("{RM_PHONE}", currentUser.mobile.ifBlank { "017XXXXXXXX" })
+
+  // Construct formatted message
+  val formattedMessage = remember(
+    selectedPreset,
+    resolvedHeader,
+    resolvedRegards,
+    singleChecklistItems.map { it.isChecked },
+    corporateCompanyItems.map { it.isChecked },
+    corporateEmployeeItems.map { it.isChecked }
+  ) {
+    val sb = StringBuilder()
+    sb.appendLine(resolvedHeader)
+    sb.appendLine()
+
+    if (selectedPreset == "Corporate Card") {
+      val checkedCompany = corporateCompanyItems.filter { it.isChecked }
+      val checkedEmp = corporateEmployeeItems.filter { it.isChecked }
+
+      sb.appendLine("🏢 [PART 1: COMPANY DOCUMENTS / কোম্পানি ডকুমেন্টস]")
+      if (checkedCompany.isEmpty()) {
+        sb.appendLine("• (No company documents selected)")
+      } else {
+        checkedCompany.forEachIndexed { idx, item ->
+          sb.appendLine("${idx + 1}. ${item.title}")
+        }
+      }
+      sb.appendLine()
+      sb.appendLine("👤 [PART 2: EMPLOYEE DOCUMENTS / এমপ্লয়ি ডকুমেন্টস]")
+      if (checkedEmp.isEmpty()) {
+        sb.appendLine("• (No employee documents selected)")
+      } else {
+        checkedEmp.forEachIndexed { idx, item ->
+          sb.appendLine("${idx + 1}. ${item.title}")
+        }
+      }
+    } else {
+      val checkedList = singleChecklistItems.filter { it.isChecked }
+      if (checkedList.isEmpty()) {
+        sb.appendLine("• (No documents selected)")
+      } else {
+        checkedList.forEachIndexed { idx, item ->
+          sb.appendLine("${idx + 1}. ${item.title}")
+        }
+      }
+    }
+
+    sb.appendLine()
+    sb.append(resolvedRegards)
+    sb.toString()
+  }
+
+  // Admin / Mentor Template Editor Dialog
+  if (showAdminTemplateDialog) {
+    var editHeaderInput by remember { mutableStateOf(headerTemplate) }
+    var editRegardsInput by remember { mutableStateOf(regardsTemplate) }
+    var isSavingTpl by remember { mutableStateOf(false) }
+
+    androidx.compose.material3.AlertDialog(
+      onDismissRequest = { showAdminTemplateDialog = false },
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Description, contentDescription = null, tint = EblNavyPrimary)
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Universal Checklist Settings (এডমিন সেটিংস)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+      },
+      text = {
+        Column(
+          modifier = Modifier.fillMaxWidth(),
+          verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          Text(
+            text = "Set universal templates for all mobile devices. RM name and mobile will be automatically replaced with active RM credentials.",
+            fontSize = 11.sp,
+            color = Color.Gray
+          )
+
+          OutlinedTextField(
+            value = editHeaderInput,
+            onValueChange = { editHeaderInput = it },
+            label = { Text("Universal Header Template", fontSize = 11.sp) },
+            supportingText = { Text("Placeholders: {CUSTOMER_NAME}, {PRESET_NAME}", fontSize = 10.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 4,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+          )
+
+          OutlinedTextField(
+            value = editRegardsInput,
+            onValueChange = { editRegardsInput = it },
+            label = { Text("Universal Regards Template", fontSize = 11.sp) },
+            supportingText = { Text("Placeholders: {RM_NAME}, {RM_CODE}, {RM_PHONE}", fontSize = 10.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 4,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            isSavingTpl = true
+            headerTemplate = editHeaderInput
+            regardsTemplate = editRegardsInput
+            viewModel?.saveUniversalChecklistSettings(
+              headerTemplate = editHeaderInput,
+              regardsTemplate = editRegardsInput
+            ) { success, _ ->
+              isSavingTpl = false
+              showAdminTemplateDialog = false
+              if (success) {
+                Toast.makeText(context, "Universal templates updated and synced!", Toast.LENGTH_SHORT).show()
+              }
+            }
+          },
+          enabled = !isSavingTpl,
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Save & Sync Universal")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showAdminTemplateDialog = false }) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
 
   LazyColumn(
     modifier = Modifier
@@ -1085,36 +1538,45 @@ Eastern Bank PLC
   ) {
     item {
       Spacer(modifier = Modifier.height(6.dp))
-      // Guidance header
+      // Guidance header banner
       Card(
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
       ) {
         Row(
-          modifier = Modifier.padding(10.dp),
+          modifier = Modifier.padding(12.dp),
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(20.dp))
-          Spacer(modifier = Modifier.width(8.dp))
-          Column {
+          Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(22.dp))
+          Spacer(modifier = Modifier.width(10.dp))
+          Column(modifier = Modifier.weight(1f)) {
             Text(
               text = "Document Checklist Dispatcher",
-              fontSize = 12.sp,
+              fontSize = 13.sp,
               fontWeight = FontWeight.Bold,
               color = Color(0xFF1E3A8A)
             )
             Text(
-              text = "Send customized checklist directly to customer via SMS, WhatsApp, or Clipboard",
-              fontSize = 10.sp,
+              text = "Preset auto-loads headers & 2-part Corporate Card docs. Sends via SMS / WhatsApp.",
+              fontSize = 11.sp,
               color = Color(0xFF3B82F6)
             )
+          }
+
+          if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+            IconButton(
+              onClick = { showAdminTemplateDialog = true },
+              modifier = Modifier.size(32.dp)
+            ) {
+              Icon(Icons.Default.Description, contentDescription = "Universal Template Settings", tint = EblNavyPrimary)
+            }
           }
         }
       }
     }
 
-    // 1. Recipient Information & Customer Quick Pick
+    // 1. Preset Selector & Recipient Information
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
@@ -1128,7 +1590,7 @@ Eastern Bank PLC
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Customer Details",
+              text = "1. Select Checklist Preset & Customer",
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
@@ -1145,7 +1607,7 @@ Eastern Bank PLC
                   contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                   modifier = Modifier.menuAnchor()
                 ) {
-                  Text("Pick from Files", fontSize = 11.sp)
+                  Text("Pick File", fontSize = 11.sp)
                 }
                 ExposedDropdownMenu(
                   expanded = selectedFilePickerExpanded,
@@ -1157,6 +1619,11 @@ Eastern Bank PLC
                       onClick = {
                         customerName = f.customerName
                         customerMobile = f.mobile
+                        if (f.productType.contains("Corporate", ignoreCase = true)) {
+                          selectedPreset = "Corporate Card"
+                        } else if (f.productType.contains("Enhance", ignoreCase = true)) {
+                          selectedPreset = "Credit Card Limit Enhance"
+                        }
                         selectedFilePickerExpanded = false
                       }
                     )
@@ -1166,12 +1633,54 @@ Eastern Bank PLC
             }
           }
 
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Preset Dropdown
+          ExposedDropdownMenuBox(
+            expanded = presetExpanded,
+            onExpandedChange = { presetExpanded = !presetExpanded }
+          ) {
+            OutlinedTextField(
+              value = selectedPreset,
+              onValueChange = {},
+              readOnly = true,
+              label = { Text("Checklist Preset *", fontWeight = FontWeight.SemiBold) },
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = presetExpanded) },
+              modifier = Modifier.fillMaxWidth().menuAnchor().testTag("dropdown_checklist_preset"),
+              colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = EblNavyPrimary,
+                unfocusedBorderColor = EblGold
+              )
+            )
+            ExposedDropdownMenu(
+              expanded = presetExpanded,
+              onDismissRequest = { presetExpanded = false }
+            ) {
+              presetOptions.forEach { opt ->
+                DropdownMenuItem(
+                  text = {
+                    Column {
+                      Text(opt, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                      if (opt == "Corporate Card") {
+                        Text("2-Part: Company Docs & Employee Docs", fontSize = 10.sp, color = Color.Gray)
+                      }
+                    }
+                  },
+                  onClick = {
+                    selectedPreset = opt
+                    presetExpanded = false
+                  }
+                )
+              }
+            }
+          }
+
           Spacer(modifier = Modifier.height(8.dp))
 
           OutlinedTextField(
             value = customerName,
             onValueChange = { customerName = it },
-            label = { Text("Customer Name *") },
+            label = { Text("Customer / Applicant Name *") },
             placeholder = { Text("e.g. Md. Kabir Hossain") },
             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray) },
             singleLine = true,
@@ -1192,70 +1701,6 @@ Eastern Bank PLC
             modifier = Modifier.fillMaxWidth().testTag("input_checklist_customer_mobile"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
           )
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          // Segment Dropdown
-          ExposedDropdownMenuBox(
-            expanded = segmentExpanded,
-            onExpandedChange = { segmentExpanded = !segmentExpanded }
-          ) {
-            OutlinedTextField(
-              value = selectedSegment,
-              onValueChange = {},
-              readOnly = true,
-              label = { Text("Customer Segment") },
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = segmentExpanded) },
-              modifier = Modifier.fillMaxWidth().menuAnchor(),
-              colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-            )
-            ExposedDropdownMenu(
-              expanded = segmentExpanded,
-              onDismissRequest = { segmentExpanded = false }
-            ) {
-              segmentOptions.forEach { seg ->
-                DropdownMenuItem(
-                  text = { Text(seg, fontSize = 13.sp) },
-                  onClick = {
-                    selectedSegment = seg
-                    segmentExpanded = false
-                  }
-                )
-              }
-            }
-          }
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          // Product Dropdown
-          ExposedDropdownMenuBox(
-            expanded = productExpanded,
-            onExpandedChange = { productExpanded = !productExpanded }
-          ) {
-            OutlinedTextField(
-              value = selectedProduct,
-              onValueChange = {},
-              readOnly = true,
-              label = { Text("Applying Product") },
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = productExpanded) },
-              modifier = Modifier.fillMaxWidth().menuAnchor(),
-              colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-            )
-            ExposedDropdownMenu(
-              expanded = productExpanded,
-              onDismissRequest = { productExpanded = false }
-            ) {
-              productOptions.forEach { prod ->
-                DropdownMenuItem(
-                  text = { Text(prod, fontSize = 13.sp) },
-                  onClick = {
-                    selectedProduct = prod
-                    productExpanded = false
-                  }
-                )
-              }
-            }
-          }
         }
       }
     }
@@ -1268,94 +1713,279 @@ Eastern Bank PLC
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Text(
-              text = "Required Documents (${checklistItems.count { it.isChecked }}/${checklistItems.size})",
-              fontSize = 14.sp,
-              fontWeight = FontWeight.Bold,
-              color = EblNavyDark
-            )
-            Text(
-              text = "Check/uncheck items",
-              fontSize = 11.sp,
-              color = Color.Gray
-            )
-          }
-
-          Spacer(modifier = Modifier.height(8.dp))
-
-          checklistItems.forEachIndexed { index, item ->
+          if (selectedPreset == "Corporate Card") {
+            // CORPORATE CARD: TWO SEPARATE PARTS
+            // Part 1: Company Documents
             Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                  checklistItems[index] = item.copy(isChecked = !item.isChecked)
-                }
-                .padding(vertical = 4.dp),
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Checkbox(
-                checked = item.isChecked,
-                onCheckedChange = { checked ->
-                  checklistItems[index] = item.copy(isChecked = checked)
-                },
-                colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
-                modifier = Modifier.size(24.dp)
-              )
-              Spacer(modifier = Modifier.width(10.dp))
               Text(
-                text = item.title,
-                fontSize = 12.sp,
-                color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
-                fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
-                modifier = Modifier.weight(1f)
+                text = "🏢 Part 1: Company Documents (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
               )
-              IconButton(
-                onClick = { checklistItems.removeAt(index) },
-                modifier = Modifier.size(20.dp)
+              Text("কোম্পানি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            corporateCompanyItems.forEachIndexed { index, item ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { corporateCompanyItems[index] = item.copy(isChecked = !item.isChecked) }
+                  .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
               ) {
-                Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray, modifier = Modifier.size(15.dp))
+                Checkbox(
+                  checked = item.isChecked,
+                  onCheckedChange = { checked -> corporateCompanyItems[index] = item.copy(isChecked = checked) },
+                  colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
+                  modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = item.title,
+                  fontSize = 12.sp,
+                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
+                  modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                  onClick = { corporateCompanyItems.removeAt(index) },
+                  modifier = Modifier.size(20.dp)
+                ) {
+                  Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Add custom Company doc
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              OutlinedTextField(
+                value = newCorpCustomDocText,
+                onValueChange = { newCorpCustomDocText = it },
+                placeholder = { Text("+ Add custom company document...", fontSize = 11.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+              )
+              Button(
+                onClick = {
+                  if (newCorpCustomDocText.isNotBlank()) {
+                    corporateCompanyItems.add(
+                      ChecklistItem(id = corporateCompanyItems.size + 1, title = newCorpCustomDocText.trim(), isChecked = true)
+                    )
+                    newCorpCustomDocText = ""
+                  }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+                shape = RoundedCornerShape(8.dp)
+              ) {
+                Text("Add", fontSize = 11.sp)
+              }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+            // Part 2: Employee Documents
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "👤 Part 2: Employee Documents (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+              Text("এমপ্লয়ি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray)
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+
+            corporateEmployeeItems.forEachIndexed { index, item ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { corporateEmployeeItems[index] = item.copy(isChecked = !item.isChecked) }
+                  .padding(vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Checkbox(
+                  checked = item.isChecked,
+                  onCheckedChange = { checked -> corporateEmployeeItems[index] = item.copy(isChecked = checked) },
+                  colors = CheckboxDefaults.colors(checkedColor = Color(0xFF059669)),
+                  modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = item.title,
+                  fontSize = 12.sp,
+                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
+                  modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                  onClick = { corporateEmployeeItems.removeAt(index) },
+                  modifier = Modifier.size(20.dp)
+                ) {
+                  Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            // Add custom Employee doc
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              OutlinedTextField(
+                value = newCustomDocText,
+                onValueChange = { newCustomDocText = it },
+                placeholder = { Text("+ Add custom employee document...", fontSize = 11.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+              )
+              Button(
+                onClick = {
+                  if (newCustomDocText.isNotBlank()) {
+                    corporateEmployeeItems.add(
+                      ChecklistItem(id = 100 + corporateEmployeeItems.size + 1, title = newCustomDocText.trim(), isChecked = true)
+                    )
+                    newCustomDocText = ""
+                  }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                shape = RoundedCornerShape(8.dp)
+              ) {
+                Text("Add", fontSize = 11.sp)
+              }
+            }
+
+          } else {
+            // STANDARD / LIMIT ENHANCE CHECKLIST
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "$selectedPreset (${singleChecklistItems.count { it.isChecked }}/${singleChecklistItems.size})",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+              Text("Check/uncheck items", fontSize = 11.sp, color = Color.Gray)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            singleChecklistItems.forEachIndexed { index, item ->
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable { singleChecklistItems[index] = item.copy(isChecked = !item.isChecked) }
+                  .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Checkbox(
+                  checked = item.isChecked,
+                  onCheckedChange = { checked -> singleChecklistItems[index] = item.copy(isChecked = checked) },
+                  colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
+                  modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                  text = item.title,
+                  fontSize = 12.sp,
+                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
+                  modifier = Modifier.weight(1f)
+                )
+                IconButton(
+                  onClick = { singleChecklistItems.removeAt(index) },
+                  modifier = Modifier.size(20.dp)
+                ) {
+                  Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.LightGray, modifier = Modifier.size(15.dp))
+                }
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Add custom document item
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              OutlinedTextField(
+                value = newCustomDocText,
+                onValueChange = { newCustomDocText = it },
+                placeholder = { Text("Add custom required document...", fontSize = 11.sp) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+              )
+              Button(
+                onClick = {
+                  if (newCustomDocText.isNotBlank()) {
+                    singleChecklistItems.add(
+                      ChecklistItem(id = singleChecklistItems.size + 1, title = newCustomDocText.trim(), isChecked = true)
+                    )
+                    newCustomDocText = ""
+                  }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+                shape = RoundedCornerShape(8.dp)
+              ) {
+                Text("Add", fontSize = 12.sp)
               }
             }
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
-
-          // Add custom document item
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-          ) {
-            OutlinedTextField(
-              value = newCustomDocText,
-              onValueChange = { newCustomDocText = it },
-              placeholder = { Text("Add custom required document...", fontSize = 11.sp) },
-              singleLine = true,
-              modifier = Modifier.weight(1f),
-              colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
-            )
-            Button(
+          // Admin / Mentor button to save preset items universally
+          if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+            Spacer(modifier = Modifier.height(14.dp))
+            OutlinedButton(
               onClick = {
-                if (newCustomDocText.isNotBlank()) {
-                  checklistItems.add(
-                    ChecklistItem(
-                      id = checklistItems.size + 1,
-                      title = newCustomDocText.trim(),
-                      isChecked = true
-                    )
-                  )
-                  newCustomDocText = ""
+                val corpJson = org.json.JSONObject().apply {
+                  put("company", org.json.JSONArray(corporateCompanyItems.map { it.title }))
+                  put("employee", org.json.JSONArray(corporateEmployeeItems.map { it.title }))
+                }.toString()
+                val enhanceJson = if (selectedPreset == "Credit Card Limit Enhance") {
+                  org.json.JSONArray(singleChecklistItems.map { it.title }).toString()
+                } else ""
+                viewModel?.saveUniversalChecklistSettings(
+                  headerTemplate = headerTemplate,
+                  regardsTemplate = regardsTemplate,
+                  corporateDocsJson = corpJson,
+                  enhancementDocsJson = enhanceJson
+                ) { success, _ ->
+                  if (success) {
+                    Toast.makeText(context, "✓ প্রিসেট ডকুমেন্টস ইউনিভার্সাল হিসেবে সেভ হয়েছে এবং শিটে সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
+                  }
                 }
               },
-              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-              shape = RoundedCornerShape(8.dp)
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.fillMaxWidth()
             ) {
-              Text("Add", fontSize = 12.sp)
+              Icon(Icons.Default.CloudUpload, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("Save Preset Items as Universal (সকল RM এর জন্য সেভ করুন)", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
             }
           }
         }
@@ -1370,12 +2000,24 @@ Eastern Bank PLC
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
-          Text(
-            text = "Dispatched Message Preview",
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Bold,
-            color = EblNavyDark
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "Dispatched Message Preview",
+              fontSize = 14.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+            Text(
+              text = "Universal Header & RM Info Auto-Applied",
+              fontSize = 10.sp,
+              color = Color(0xFF059669),
+              fontWeight = FontWeight.SemiBold
+            )
+          }
 
           Spacer(modifier = Modifier.height(8.dp))
 

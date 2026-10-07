@@ -142,6 +142,9 @@ function doPost(e) {
     var contents = e.postData ? e.postData.contents : '{}';
     var data = JSON.parse(contents);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss && data.spreadsheetId) {
+      try { ss = SpreadsheetApp.openById(data.spreadsheetId); } catch (e) {}
+    }
 
     // 1. Auto-create & format 'Customer_Files' Tab
     var fileSheet = getOrCreateSheet(ss, 'Customer_Files', [
@@ -187,18 +190,52 @@ function doPost(e) {
       'RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Source Action'
     ], '#0F766E');
 
-    // Handle File Deletions (Immediately removes rows from Google Sheets when deleted in app)
+    // Handle File Deletions (Immediately removes rows from Google Sheets across Customer_Files and other tabs)
     if (data.action === 'DELETE_FILE' || (data.deletedFileIds && data.deletedFileIds.length > 0)) {
       var toDelete = data.deletedFileIds || [data.fileId, data.ccNumber].filter(Boolean);
-      var curFiles = fileSheet.getDataRange().getValues();
-      for (var d = curFiles.length - 1; d >= 1; d--) {
-        var rCc = String(curFiles[d][0] || '').trim().toLowerCase();
-        var rFid = String(curFiles[d][1] || '').trim().toLowerCase();
-        for (var k = 0; k < toDelete.length; k++) {
-          var targetK = String(toDelete[k] || '').trim().toLowerCase();
-          if (targetK && (rFid === targetK || rCc === targetK)) {
-            fileSheet.deleteRow(d + 1);
-            break;
+      var sheetsToCheck = [fileSheet];
+      try {
+        var allSheets = ss.getSheets();
+        for (var si = 0; si < allSheets.length; si++) {
+          var sName = allSheets[si].getName();
+          if (sName !== 'RM_Details' && sName !== 'Universal_Settings' && sName !== 'Audit_Trail' &&
+              sName !== 'Attachments' && sName !== 'SMS_Notifications' && sName !== 'RM_Location_Logs') {
+            if (sheetsToCheck.indexOf(allSheets[si]) === -1) {
+              sheetsToCheck.push(allSheets[si]);
+            }
+          }
+        }
+      } catch (e) {}
+
+      for (var sIdx = 0; sIdx < sheetsToCheck.length; sIdx++) {
+        var curTargetSheet = sheetsToCheck[sIdx];
+        var curFiles = curTargetSheet.getDataRange().getValues();
+        for (var d = curFiles.length - 1; d >= 1; d--) {
+          var rowMatch = false;
+          var rCc = String(curFiles[d][0] || '').trim().toLowerCase();
+          var rFid = String(curFiles[d][1] || '').trim().toLowerCase();
+          for (var k = 0; k < toDelete.length; k++) {
+            var targetK = String(toDelete[k] || '').trim().toLowerCase();
+            if (targetK && (rFid === targetK || rCc === targetK)) {
+              rowMatch = true;
+              break;
+            }
+          }
+          if (!rowMatch) {
+            for (var col = 2; col < Math.min(curFiles[d].length, 6); col++) {
+              var cellVal = String(curFiles[d][col] || '').trim().toLowerCase();
+              for (var k2 = 0; k2 < toDelete.length; k2++) {
+                var targetK2 = String(toDelete[k2] || '').trim().toLowerCase();
+                if (targetK2 && cellVal === targetK2) {
+                  rowMatch = true;
+                  break;
+                }
+              }
+              if (rowMatch) break;
+            }
+          }
+          if (rowMatch) {
+            curTargetSheet.deleteRow(d + 1);
           }
         }
       }
@@ -226,6 +263,22 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted RM row from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
+    }
+
+    // Handle Direct RM Password Update
+    if (data.action === 'UPDATE_RM_PASSWORD') {
+      var targetRmCode = String(data.rmCode || '').trim().toUpperCase();
+      var curRmsP = rmSheet.getDataRange().getValues();
+      for (var pr = 1; pr < curRmsP.length; pr++) {
+        if (String(curRmsP[pr][0] || '').trim().toUpperCase() === targetRmCode) {
+          rmSheet.getRange(pr + 1, 11).setValue(data.passwordHash || '');
+          rmSheet.getRange(pr + 1, 12).setValue(data.salt || '');
+          rmSheet.getRange(pr + 1, 14).setValue(data.updatedAt || '');
+          break;
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM Password updated in sheet." }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (data.action === 'FETCH_SHEET_DATA') {

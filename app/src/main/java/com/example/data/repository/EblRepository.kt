@@ -430,7 +430,9 @@ class EblRepository(
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
-      httpClient.newCall(request).execute().close()
+      httpClient.newCall(request).execute().use { resp ->
+        resp.body?.string()
+      }
     } catch (_: Exception) {}
   }
 
@@ -451,6 +453,7 @@ class EblRepository(
     // Immediately synchronize deletion with Google Sheets
     applicationScope.launch {
       syncFileDeletionToGoogleSheets(fileId, file.ccNumber)
+      triggerGoogleSheetsSync()
     }
 
     // Notify RM via SMS if deleted by Admin or Mentor!
@@ -708,6 +711,7 @@ class EblRepository(
     )
 
     applicationScope.launch {
+      syncRmPasswordToGoogleSheets(cleanRmCode, hash, salt)
       triggerGoogleSheetsSync()
     }
 
@@ -806,6 +810,17 @@ class EblRepository(
       )
     )
 
+    if (!newPassword.isNullOrBlank()) {
+      val uSalt = updated.salt
+      val uHash = updated.passwordHash
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("RM_PASS_UPDATED_AT_${rmCode.trim().uppercase()}", now.toString(), currentUser.rmCode, now)
+      )
+      applicationScope.launch {
+        syncRmPasswordToGoogleSheets(rmCode, uHash, uSalt)
+      }
+    }
+
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -846,6 +861,31 @@ class EblRepository(
     Result.success(Unit)
   }
 
+  suspend fun syncRmPasswordToGoogleSheets(rmCode: String, passwordHash: String, salt: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPDATE_RM_PASSWORD")
+        put("rmCode", rmCode.trim().uppercase())
+        put("passwordHash", passwordHash)
+        put("salt", salt)
+        put("updatedAt", DateUtils.formatDateTime(DateUtils.currentDhakaMillis()))
+        put("spreadsheetId", currentStatus.spreadsheetId)
+        put("secretKey", currentStatus.syncSecretKey)
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp ->
+        resp.body?.string()
+      }
+    } catch (_: Exception) {}
+  }
+
   suspend fun resetRmPassword(rmCode: String, newPassword: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -854,9 +894,48 @@ class EblRepository(
     }
     val existing = database.userDao().getUser(rmCode)
       ?: return@withContext Result.failure(Exception("RM not found."))
+    val now = DateUtils.currentDhakaMillis()
     val salt = SecurityUtils.generateSalt()
     val hash = SecurityUtils.hashPassword(newPassword, salt)
     database.userDao().updatePassword(rmCode, hash, salt, mustChange = false)
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("RM_PASS_UPDATED_AT_${rmCode.trim().uppercase()}", now.toString(), currentUser.rmCode, now)
+    )
+    applicationScope.launch {
+      syncRmPasswordToGoogleSheets(rmCode, hash, salt)
+      triggerGoogleSheetsSync()
+    }
+    Result.success(Unit)
+  }
+
+  suspend fun saveUniversalChecklistSettings(
+    headerTemplate: String,
+    regardsTemplate: String,
+    corporateDocsJson: String = "",
+    enhancementDocsJson: String = ""
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin / Mentor can configure universal checklist templates."))
+    }
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("CHECKLIST_HEADER_TEMPLATE", headerTemplate, currentUser.rmCode, now)
+    )
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("CHECKLIST_REGARDS_TEMPLATE", regardsTemplate, currentUser.rmCode, now)
+    )
+    if (corporateDocsJson.isNotBlank()) {
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("CHECKLIST_CORP_DOCS", corporateDocsJson, currentUser.rmCode, now)
+      )
+    }
+    if (enhancementDocsJson.isNotBlank()) {
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("CHECKLIST_ENHANCE_DOCS", enhancementDocsJson, currentUser.rmCode, now)
+      )
+    }
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -1162,8 +1241,7 @@ class EblRepository(
 
     try {
       val allFiles = database.customerFileDao().getAllActiveFiles()
-      val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
-      val filesToPush = (if (currentStatus.lastSyncTimestamp == null || currentStatus.lastSyncStatus == "IDLE") allFiles else unsyncedFiles).filter { !it.isDeleted }
+      val filesToPush = allFiles.filter { !it.isDeleted }
 
       val allUsers = database.userDao().getAllUsers()
       val allRms = allUsers.filter { it.role == "RM" }
@@ -1504,12 +1582,15 @@ class EblRepository(
 
       val existing = database.userDao().getUser(code)
       if (existing != null) {
-        val hashToUse = if (sheetHash.isNotBlank()) sheetHash else existing.passwordHash
-        val saltToUse = if (sheetSalt.isNotBlank()) sheetSalt else existing.salt
+        val lastLocalPassChangeTime = database.appSettingDao().getSetting("RM_PASS_UPDATED_AT_$code")?.updatedAt ?: 0L
+        val isRecentLocalPassChange = (now - lastLocalPassChangeTime) < 180_000L // 3 minutes immunity window
+
+        val hashToUse = if (isRecentLocalPassChange) existing.passwordHash else if (sheetHash.isNotBlank()) sheetHash else existing.passwordHash
+        val saltToUse = if (isRecentLocalPassChange) existing.salt else if (sheetSalt.isNotBlank()) sheetSalt else existing.salt
         val hasChanges = existing.name != name || existing.mobile != mobile ||
                          existing.email != email || existing.officeAddress != office ||
                          existing.accountStatus != status ||
-                         (sheetHash.isNotBlank() && existing.passwordHash != sheetHash)
+                         (!isRecentLocalPassChange && sheetHash.isNotBlank() && existing.passwordHash != sheetHash)
         if (hasChanges) {
           database.userDao().updateUser(
             existing.copy(

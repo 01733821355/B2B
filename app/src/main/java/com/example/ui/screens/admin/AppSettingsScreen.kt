@@ -20,7 +20,14 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.ui.platform.LocalContext
+import android.content.ContextWrapper
+import android.widget.Toast
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.fragment.app.FragmentActivity
 import com.example.util.BiometricHelper
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -354,8 +361,13 @@ fun AppSettingsScreen(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // Biometric & Fingerprint Security Status Card
-    val biometricAvailability = BiometricHelper.checkBiometricAvailability(LocalContext.current)
+    // Biometric & Fingerprint Security Card (Interactive Activation Toggle)
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val biometricAvailability = BiometricHelper.checkBiometricAvailability(context)
+    val isBiometricActive = viewModel.isBiometricEnabled(currentUser.rmCode)
+    val isPasswordVerified = viewModel.isPasswordLoginVerified(currentUser.rmCode)
+
     Card(
       modifier = Modifier.fillMaxWidth(),
       shape = RoundedCornerShape(12.dp),
@@ -363,21 +375,125 @@ fun AppSettingsScreen(
       elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
       Column(modifier = Modifier.padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Icon(Icons.Default.Fingerprint, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(24.dp))
-          Spacer(modifier = Modifier.width(8.dp))
-          Text("Biometric Security (ফিঙ্গারপ্রিন্ট লগইন)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Icon(Icons.Default.Fingerprint, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(26.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+              Text("Fingerprint Sign In (ফিঙ্গারপ্রিন্ট লগইন)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+              Text("RM: ${currentUser.rmCode} (${currentUser.name})", fontSize = 11.sp, color = Color.Gray)
+            }
+          }
+
+          Switch(
+            checked = isBiometricActive,
+            onCheckedChange = { enable ->
+              if (enable) {
+                if (!isPasswordVerified) {
+                  Toast.makeText(
+                    context,
+                    "অনুগ্রহ করে প্রথমে আপনার পাসওয়ার্ড দিয়ে লগইন করুন, তারপর ফিঙ্গারপ্রিন্ট চালু করুন।",
+                    Toast.LENGTH_LONG
+                  ).show()
+                  return@Switch
+                }
+
+                if (biometricAvailability != BiometricHelper.BiometricAvailability.AVAILABLE) {
+                  Toast.makeText(
+                    context,
+                    "ডিভাইসে ফিঙ্গারপ্রিন্ট সেন্সর সক্রিয় নেই বা ফিঙ্গারপ্রিন্ট সেটআপ করা হয়নি।",
+                    Toast.LENGTH_LONG
+                  ).show()
+                  return@Switch
+                }
+
+                val activity = generateSequence(context) { ctx ->
+                  if (ctx is ContextWrapper) ctx.baseContext else null
+                }.filterIsInstance<FragmentActivity>().firstOrNull()
+
+                if (activity == null) {
+                  Toast.makeText(context, "Cannot open biometric prompt.", Toast.LENGTH_SHORT).show()
+                  return@Switch
+                }
+
+                BiometricHelper.promptBiometricLogin(
+                  activity = activity,
+                  title = "Activate Fingerprint Login",
+                  subtitle = "RM ${currentUser.rmCode}",
+                  description = "Touch the fingerprint sensor to confirm enrollment",
+                  negativeButtonText = "Cancel",
+                  onSuccess = {
+                    viewModel.setBiometricEnabled(currentUser.rmCode, true) { success, _ ->
+                      if (success) {
+                        Toast.makeText(context, "✓ ফিঙ্গারপ্রিন্ট লগইন সফলভাবে সক্রিয় করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                  },
+                  onError = { err ->
+                    Toast.makeText(context, "Biometric verification failed: $err", Toast.LENGTH_SHORT).show()
+                  }
+                )
+              } else {
+                viewModel.setBiometricEnabled(currentUser.rmCode, false) { success, _ ->
+                  if (success) {
+                    Toast.makeText(context, "ফিঙ্গারপ্রিন্ট লগইন নিষ্ক্রিয় করা হয়েছে।", Toast.LENGTH_SHORT).show()
+                  }
+                }
+              }
+            },
+            colors = SwitchDefaults.colors(
+              checkedThumbColor = Color.White,
+              checkedTrackColor = Color(0xFF059669)
+            )
+          )
         }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (isBiometricActive) Color(0xFFECFDF5) else Color(0xFFFFFBEB),
+          border = androidx.compose.foundation.BorderStroke(1.dp, if (isBiometricActive) Color(0xFFA7F3D0) else Color(0xFFFDE68A)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              imageVector = if (isBiometricActive) Icons.Default.Fingerprint else Icons.Default.Settings,
+              contentDescription = null,
+              tint = if (isBiometricActive) Color(0xFF059669) else Color(0xFFD97706),
+              modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+              text = if (isBiometricActive) {
+                "✓ Fingerprint Sign In is ACTIVE for RM ${currentUser.rmCode}. You can now unlock the app using your fingerprint directly from login screen!"
+              } else {
+                "নিয়ম: প্রথমে পাসওয়ার্ড দিয়ে একবার লগইন করতে হবে। এরপর সেটিংস থেকে এই টগলটি অন করলে ফিঙ্গারপ্রিন্ট দিয়ে ওয়ান-টাচ লগইন করা যাবে।"
+              },
+              fontSize = 11.sp,
+              color = if (isBiometricActive) Color(0xFF065F46) else Color(0xFF92400E)
+            )
+          }
+        }
+
         Spacer(modifier = Modifier.height(6.dp))
+
         Text(
           text = when (biometricAvailability) {
-            BiometricHelper.BiometricAvailability.AVAILABLE -> "Device biometric sensor is active and ready for Fingerprint Sign In."
-            BiometricHelper.BiometricAvailability.NONE_ENROLLED -> "No fingerprint registered on this phone. Please add a fingerprint in Android Settings to enable quick sign-in."
-            BiometricHelper.BiometricAvailability.NO_HARDWARE -> "Fingerprint hardware is not available on this device."
-            else -> "Biometric status: Unavailable."
+            BiometricHelper.BiometricAvailability.AVAILABLE -> "• Hardware Status: Fingerprint sensor is ready on this phone."
+            BiometricHelper.BiometricAvailability.NONE_ENROLLED -> "• Hardware Alert: No fingerprint enrolled in Android phone settings."
+            BiometricHelper.BiometricAvailability.NO_HARDWARE -> "• Hardware Alert: Fingerprint scanner hardware is not available on this device."
+            else -> "• Hardware Status: Sensor unavailable."
           },
-          fontSize = 12.sp,
-          color = if (biometricAvailability == BiometricHelper.BiometricAvailability.AVAILABLE) Color(0xFF059669) else Color(0xFFD97706)
+          fontSize = 11.sp,
+          color = if (biometricAvailability == BiometricHelper.BiometricAvailability.AVAILABLE) Color.Gray else Color(0xFFDC2626)
         )
       }
     }

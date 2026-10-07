@@ -82,6 +82,8 @@ fun LoginScreen(
   lastLoggedRmCode: String = "",
   onLogin: (String, String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit,
   onBiometricLogin: ((String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit)? = null,
+  isBiometricEnabled: ((String) -> Boolean)? = null,
+  isPasswordVerified: ((String) -> Boolean)? = null,
   modifier: Modifier = Modifier
 ) {
   var usernameInput by remember { mutableStateOf(lastLoggedRmCode) }
@@ -134,9 +136,17 @@ fun LoginScreen(
   }
 
   fun doBiometricLogin() {
-    val targetCode = usernameInput.ifBlank { lastLoggedRmCode }.trim()
+    val targetCode = usernameInput.ifBlank { lastLoggedRmCode }.trim().uppercase()
     if (targetCode.isBlank()) {
-      errorMessage = "Please enter your RM Code to sign in with fingerprint."
+      errorMessage = "Please enter your RM Code first."
+      return
+    }
+
+    val isBioOn = isBiometricEnabled?.invoke(targetCode) == true
+    val isPassOk = isPasswordVerified?.invoke(targetCode) == true
+
+    if (!isBioOn || !isPassOk) {
+      errorMessage = "ফিঙ্গারপ্রিন্ট আনলক করতে প্রথমে RM পাসওয়ার্ড দিয়ে লগইন করুন, তারপর সেটিংস-এ গিয়ে ফিঙ্গারপ্রিন্ট লগইন চালু করুন। (To use fingerprint unlock, please log in with your RM password first, then turn on Fingerprint Login in Settings.)"
       return
     }
 
@@ -468,12 +478,14 @@ fun LoginScreen(
                   fontWeight = FontWeight.Bold,
                   color = EblNavyDark
                 )
-                val target = usernameInput.ifBlank { lastLoggedRmCode }.trim()
+                val target = usernameInput.ifBlank { lastLoggedRmCode }.trim().uppercase()
+                val isBioActive = target.isNotBlank() && (isBiometricEnabled?.invoke(target) == true)
                 if (target.isNotBlank()) {
                   Text(
-                    text = "Quick unlock for RM: $target",
+                    text = if (isBioActive) "✓ Ready for RM: $target" else "Requires initial password sign-in & Settings activation",
                     fontSize = 10.sp,
-                    color = Color(0xFFB45309)
+                    color = if (isBioActive) Color(0xFF059669) else Color(0xFFB45309),
+                    fontWeight = if (isBioActive) FontWeight.Bold else FontWeight.Normal
                   )
                 }
               }
