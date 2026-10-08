@@ -145,6 +145,9 @@ function doPost(e) {
     if (!ss && data.spreadsheetId) {
       try { ss = SpreadsheetApp.openById(data.spreadsheetId); } catch (e) {}
     }
+    if (!ss) {
+      try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+    }
 
     // 1. Auto-create & format 'Customer_Files' Tab
     var fileSheet = getOrCreateSheet(ss, 'Customer_Files', [
@@ -322,17 +325,7 @@ function doPost(e) {
 
         if (fileIdRowMap[matchKey]) {
           var rowIndex = fileIdRowMap[matchKey];
-          var existingRow = fileExistingData[rowIndex - 1];
-          var existingUpdatedBy = String(existingRow[18] || '');
-          var existingUpdatedAt = String(existingRow[17] || '');
-          var appUpdatedAt = String(f.updatedAt || '');
-
-          // If row was edited manually in Google Sheet, NEVER overwrite with older/equal app data!
-          if (existingUpdatedBy === 'Manual_Sheet_Edit' && (!appUpdatedAt || existingUpdatedAt >= appUpdatedAt)) {
-            // Keep manual sheet edits safe!
-          } else {
-            fileSheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
-          }
+          fileSheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
         } else {
           fileSheet.appendRow(row);
           fileIdRowMap[matchKey] = fileSheet.getLastRow();
@@ -562,6 +555,7 @@ function extractAllSheetFiles(sheet) {
       assignedRmCode: String(row[10] || ''),
       pendingDocuments: String(row[11] || ''),
       cpvRemarks: String(row[12] || ''),
+      remarks: String(row[12] || ''),
       cpvStatus: String(row[13] || 'Pending'),
       submissionAddress: String(row[14] || ''),
       updatedAt: String(row[17] || ''),
@@ -730,7 +724,7 @@ function extractAllSheetSettings(sheet) {
             }
             Text(
               text = if (isRealtimeAutoSyncEnabled)
-                "প্রতি ৪ সেকেন্ডে অ্যাপ এবং গুগল শিট স্বয়ংক্রিয়ভাবে সিঙ্ক হচ্ছে (ম্যানুয়ালি পুশ বা পুল চাপার প্রয়োজন নেই)।"
+                "প্রতি ০.০৫ সেকেন্ডে (0.05s) অ্যাপ এবং গুগল শিট স্বয়ংক্রিয়ভাবে লাইভ সিঙ্ক হচ্ছে (ম্যানুয়ালি পুশ বা পুল চাপার প্রয়োজন নেই)।"
               else
                 "অটো-সিঙ্ক বন্ধ রয়েছে। স্বয়ংক্রিয় সিঙ্ক চালু করতে টগল করুন।",
               fontSize = 11.sp,

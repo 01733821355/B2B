@@ -145,8 +145,8 @@ fun LoginScreen(
     val isBioOn = isBiometricEnabled?.invoke(targetCode) == true
     val isPassOk = isPasswordVerified?.invoke(targetCode) == true
 
-    if (!isBioOn || !isPassOk) {
-      errorMessage = "ফিঙ্গারপ্রিন্ট আনলক করতে প্রথমে RM পাসওয়ার্ড দিয়ে লগইন করুন, তারপর সেটিংস-এ গিয়ে ফিঙ্গারপ্রিন্ট লগইন চালু করুন। (To use fingerprint unlock, please log in with your RM password first, then turn on Fingerprint Login in Settings.)"
+    if (!isPassOk && !isBioOn) {
+      errorMessage = "প্রথমবার ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে লগইন করলে পরবর্তী সকল সময়ে সরাসরি ফিঙ্গারপ্রিন্ট দিয়ে ঢুকতে পারবেন। (Please sign in with username & password for the first time. Fingerprint will be enabled for subsequent logins.)"
       return
     }
 
@@ -482,7 +482,7 @@ fun LoginScreen(
                 val isBioActive = target.isNotBlank() && (isBiometricEnabled?.invoke(target) == true)
                 if (target.isNotBlank()) {
                   Text(
-                    text = if (isBioActive) "✓ Ready for RM: $target" else "Requires initial password sign-in & Settings activation",
+                    text = if (isBioActive) "✓ ফিঙ্গারপ্রিন্ট প্রস্তুত ($target) - ট্যাপ করুন" else "প্রথমবার পাসওয়ার্ড দিয়ে লগইন করুন (এরপর সক্রিয় হবে)",
                     fontSize = 10.sp,
                     color = if (isBioActive) Color(0xFF059669) else Color(0xFFB45309),
                     fontWeight = if (isBioActive) FontWeight.Bold else FontWeight.Normal

@@ -425,8 +425,8 @@ class EblRepository(
         put("fileId", fileId)
         put("ccNumber", ccNumber ?: "")
         put("deletedFileIds", delArray)
-        put("spreadsheetId", currentStatus.spreadsheetId)
-        put("secretKey", currentStatus.syncSecretKey)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
@@ -449,6 +449,14 @@ class EblRepository(
 
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().softDeleteFile(fileId, currentUser.rmCode, now)
+
+    // Store in persistent deleted_file_ids setting
+    val currentDel = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue ?: ""
+    val toAdd = listOfNotNull(file.fileId.ifBlank { null }, file.ccNumber.ifBlank { null }).joinToString(",")
+    val updatedDel = if (currentDel.isBlank()) toAdd else "$currentDel,$toAdd"
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_file_ids", updatedDel, currentUser.rmCode, now)
+    )
 
     // Immediately synchronize deletion with Google Sheets
     applicationScope.launch {
@@ -1377,6 +1385,10 @@ class EblRepository(
           deletedFileIds.put(df.fileId)
           if (df.ccNumber.isNotBlank()) deletedFileIds.put(df.ccNumber)
         }
+        val delFilesSetting = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue ?: ""
+        delFilesSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+          deletedFileIds.put(it)
+        }
 
         // Gather all deleted RM codes so Google Sheets deletes them from RM sheet
         val delRmsSetting = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
@@ -1387,8 +1399,8 @@ class EblRepository(
 
         val payload = JSONObject().apply {
           put("action", "SYNC_ALL_DATA")
-          put("spreadsheetId", currentStatus.spreadsheetId)
-          put("secretKey", currentStatus.syncSecretKey)
+          put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+          put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
           put("timestamp", DateUtils.currentDhakaMillis())
           put("syncedBy", syncedBy)
           put("filesCount", filesArray.length())
@@ -1730,23 +1742,51 @@ class EblRepository(
       val custName = obj.optString("customerName", existing?.customerName ?: "Customer")
 
       if (existing != null) {
+        // CRITICAL FIX: If local file has pending un-synced edits, NEVER overwrite with sheet data!
+        // This ensures editing in app never gets reverted back to old values!
+        if (!existing.isSynced) {
+          continue
+        }
+
+        val custName = obj.optString("customerName", existing.customerName)
+        val compName = obj.optString("companyName", existing.companyName)
+        val offAddr = obj.optString("officeAddress", existing.officeAddress)
+        val mob = obj.optString("mobile", existing.mobile)
+        val em = obj.optString("email", existing.email)
+        val prodType = obj.optString("productType", existing.productType)
+        val cpvStatus = obj.optString("cpvStatus", existing.cpvStatus)
+        val cpvRemarks = obj.optString("cpvRemarks", obj.optString("remarks", existing.cpvRemarks))
+        val remarksVal = obj.optString("remarks", obj.optString("cpvRemarks", existing.remarks))
+
         val hasStatusChanged = existing.applicationStatus != appStatus
         val hasActiveChanged = existing.activeStatus != activeStatus
-        val hasRemarksChanged = existing.remarks != remarks
+        val hasRemarksChanged = existing.remarks != remarksVal || existing.cpvRemarks != cpvRemarks
         val hasDocsChanged = existing.pendingDocuments != pendingDocs
         val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber != ccNumber
         val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.equals(rmCode, ignoreCase = true)
+        val hasDetailsChanged = existing.customerName != custName || existing.companyName != compName ||
+                                existing.mobile != mob || existing.email != em || existing.officeAddress != offAddr ||
+                                existing.productType != prodType || existing.cpvStatus != cpvStatus
 
-        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged) {
+        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged) {
           val updated = existing.copy(
+            customerName = custName,
+            companyName = compName,
+            officeAddress = offAddr,
+            mobile = mob,
+            email = em,
+            productType = prodType,
             applicationStatus = appStatus,
             activeStatus = activeStatus,
-            remarks = remarks,
+            remarks = remarksVal,
+            cpvRemarks = cpvRemarks,
+            cpvStatus = cpvStatus,
             pendingDocuments = pendingDocs,
             ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
             assignedRmCode = if (rmCode.isNotBlank()) rmCode else existing.assignedRmCode,
             updatedAt = now,
-            updatedBy = "GoogleSheets_Sync"
+            updatedBy = "GoogleSheets_Sync",
+            isSynced = true
           )
           database.customerFileDao().updateFile(updated)
           updatedCount++

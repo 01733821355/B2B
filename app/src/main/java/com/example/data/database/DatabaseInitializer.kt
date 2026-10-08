@@ -13,12 +13,16 @@ object DatabaseInitializer {
   suspend fun initializeIfNeeded(database: AppDatabase) = withContext(Dispatchers.IO) {
     val targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
 
-    // Ensure SyncStatus is always configured with user's Web App URL on any phone
+    // Ensure SyncStatus is always configured with user's Web App URL & Spreadsheet ID on any phone
     val existingStatus = database.appSettingDao().getSyncStatus()
-    if (existingStatus == null || existingStatus.appsScriptUrl != targetWebAppUrl) {
+    val defaultSpreadsheetId = "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"
+    val defaultSecret = "ebl_secure_sync_token_2026"
+    if (existingStatus == null || existingStatus.appsScriptUrl != targetWebAppUrl || existingStatus.spreadsheetId.isBlank()) {
       database.appSettingDao().insertOrUpdateSyncStatus(
         (existingStatus ?: SyncStatusEntity()).copy(
           appsScriptUrl = targetWebAppUrl,
+          spreadsheetId = if (existingStatus?.spreadsheetId.isNullOrBlank()) defaultSpreadsheetId else existingStatus!!.spreadsheetId,
+          syncSecretKey = if (existingStatus?.syncSecretKey.isNullOrBlank()) defaultSecret else existingStatus!!.syncSecretKey,
           lastSyncStatus = "READY",
           lastSyncMessage = "Ready for live bi-directional sync."
         )
@@ -112,13 +116,13 @@ object DatabaseInitializer {
     // 3. Seed Initial Sync Status
     val syncStatus = SyncStatusEntity(
       id = 1,
-      spreadsheetId = "",
+      spreadsheetId = defaultSpreadsheetId,
       lastSyncTimestamp = null,
       lastSyncStatus = "READY",
       lastSyncMessage = "Ready for live bi-directional sync with Google Sheets.",
       pendingRecordsCount = 0,
       appsScriptUrl = targetWebAppUrl,
-      syncSecretKey = ""
+      syncSecretKey = defaultSecret
     )
     database.appSettingDao().insertOrUpdateSyncStatus(syncStatus)
   }

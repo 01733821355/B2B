@@ -1200,36 +1200,38 @@ fun DocumentChecklistSenderTab(
     ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
 
   val savedCorpDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_DOCS" }?.settingValue
+  val savedCorpCompanyDocs = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_COMPANY_DOCS" }?.settingValue
+  val savedCorpEmployeeDocs = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_EMPLOYEE_DOCS" }?.settingValue
   val savedEnhanceDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_ENHANCE_DOCS" }?.settingValue
+  val savedSalariedDocs = appSettingsList.find { it.settingKey == "CHECKLIST_SALARIED_DOCS" }?.settingValue
+  val savedBusinessDocs = appSettingsList.find { it.settingKey == "CHECKLIST_BUSINESS_DOCS" }?.settingValue
+  val savedLoanDocs = appSettingsList.find { it.settingKey == "CHECKLIST_LOAN_DOCS" }?.settingValue
 
   var headerTemplate by remember(savedHeaderTpl) { mutableStateOf(savedHeaderTpl) }
   var regardsTemplate by remember(savedRegardsTpl) { mutableStateOf(savedRegardsTpl) }
   var showAdminTemplateDialog by remember { mutableStateOf(false) }
 
-  // 1. Credit Card Limit Enhance Docs
-  val defaultEnhanceDocs = remember(savedEnhanceDocsJson) {
-    if (!savedEnhanceDocsJson.isNullOrBlank()) {
+  fun parseCustomDocs(raw: String?, fallback: List<String>): List<String> {
+    if (raw.isNullOrBlank()) return fallback
+    val parsed = if (raw.trim().startsWith("[")) {
       try {
-        val arr = org.json.JSONArray(savedEnhanceDocsJson)
-        val list = mutableListOf<String>()
-        for (i in 0 until arr.length()) list.add(arr.getString(i))
-        if (list.isNotEmpty()) list else listOf(
-          "Front & back photocopy of existing Credit Card",
-          "Latest 6-month Salary / Business Bank Account Statement (sealed)",
-          "Latest Salary Certificate / Original Pay Slips / Trade License renewal copy",
-          "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
-          "Photocopy of National ID Card (NID) / Smart Card"
-        )
+        val arr = org.json.JSONArray(raw)
+        val l = mutableListOf<String>()
+        for (i in 0 until arr.length()) l.add(arr.getString(i))
+        l
       } catch (_: Exception) {
-        listOf(
-          "Front & back photocopy of existing Credit Card",
-          "Latest 6-month Salary / Business Bank Account Statement (sealed)",
-          "Latest Salary Certificate / Original Pay Slips / Trade License renewal copy",
-          "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
-          "Photocopy of National ID Card (NID) / Smart Card"
-        )
+        raw.lines().map { it.trim() }.filter { it.isNotBlank() }
       }
     } else {
+      raw.lines().map { it.trim() }.filter { it.isNotBlank() }
+    }
+    return if (parsed.isNotEmpty()) parsed else fallback
+  }
+
+  // 1. Credit Card Limit Enhance Docs
+  val defaultEnhanceDocs = remember(savedEnhanceDocsJson) {
+    parseCustomDocs(
+      savedEnhanceDocsJson,
       listOf(
         "Front & back photocopy of existing Credit Card",
         "Latest 6-month Salary / Business Bank Account Statement (sealed)",
@@ -1237,12 +1239,14 @@ fun DocumentChecklistSenderTab(
         "Latest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip",
         "Photocopy of National ID Card (NID) / Smart Card"
       )
-    }
+    )
   }
 
   // 2. Corporate Card Docs: TWO DISTINCT PARTS (Company Document & Employee Document)
-  val defaultCorporateCompanyDocs = remember(savedCorpDocsJson) {
-    if (!savedCorpDocsJson.isNullOrBlank()) {
+  val defaultCorporateCompanyDocs = remember(savedCorpCompanyDocs, savedCorpDocsJson) {
+    if (!savedCorpCompanyDocs.isNullOrBlank()) {
+      parseCustomDocs(savedCorpCompanyDocs, emptyList())
+    } else if (!savedCorpDocsJson.isNullOrBlank()) {
       try {
         val obj = org.json.JSONObject(savedCorpDocsJson)
         val arr = obj.optJSONArray("company")
@@ -1283,8 +1287,10 @@ fun DocumentChecklistSenderTab(
     }
   }
 
-  val defaultCorporateEmployeeDocs = remember(savedCorpDocsJson) {
-    if (!savedCorpDocsJson.isNullOrBlank()) {
+  val defaultCorporateEmployeeDocs = remember(savedCorpEmployeeDocs, savedCorpDocsJson) {
+    if (!savedCorpEmployeeDocs.isNullOrBlank()) {
+      parseCustomDocs(savedCorpEmployeeDocs, emptyList())
+    } else if (!savedCorpDocsJson.isNullOrBlank()) {
       try {
         val obj = org.json.JSONObject(savedCorpDocsJson)
         val arr = obj.optJSONArray("employee")
@@ -1323,40 +1329,49 @@ fun DocumentChecklistSenderTab(
   }
 
   // 3. New Credit Card Salaried Docs
-  val defaultSalariedDocs = remember {
-    listOf(
-      "NID / Smart Card / Valid Passport photocopy",
-      "2 copies recent Passport size photographs",
-      "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
-      "Latest Salary Certificate / Original Pay Slips (last 3 months)",
-      "6-month Salary Account Statement (with bank seal & signature)",
-      "Office ID Card photocopy & Visiting Card",
-      "Utility Bill photocopy (Electricity / WASA / Gas residence)"
+  val defaultSalariedDocs = remember(savedSalariedDocs) {
+    parseCustomDocs(
+      savedSalariedDocs,
+      listOf(
+        "NID / Smart Card / Valid Passport photocopy",
+        "2 copies recent Passport size photographs",
+        "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
+        "Latest Salary Certificate / Original Pay Slips (last 3 months)",
+        "6-month Salary Account Statement (with bank seal & signature)",
+        "Office ID Card photocopy & Visiting Card",
+        "Utility Bill photocopy (Electricity / WASA / Gas residence)"
+      )
     )
   }
 
   // 4. New Credit Card Business Docs
-  val defaultBusinessDocs = remember {
-    listOf(
-      "National ID Card (NID) photocopy",
-      "2 copies recent Passport size photographs",
-      "Valid Trade License (last 3-5 years renewal copies)",
-      "12-month Business & Personal Bank Account Statement (sealed)",
-      "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
-      "Visiting card & Memorandum of Association / Partnership Deed",
-      "Utility bill of residence & business premises"
+  val defaultBusinessDocs = remember(savedBusinessDocs) {
+    parseCustomDocs(
+      savedBusinessDocs,
+      listOf(
+        "National ID Card (NID) photocopy",
+        "2 copies recent Passport size photographs",
+        "Valid Trade License (last 3-5 years renewal copies)",
+        "12-month Business & Personal Bank Account Statement (sealed)",
+        "Latest E-TIN Certificate & Tax Return Acknowledgment Slip",
+        "Visiting card & Memorandum of Association / Partnership Deed",
+        "Utility bill of residence & business premises"
+      )
     )
   }
 
   // 5. Loan Docs
-  val defaultLoanDocs = remember {
-    listOf(
-      "National ID Card (NID) photocopy",
-      "2 copies recent Passport size photographs",
-      "Latest E-TIN Certificate & Tax Return Assessment Slip",
-      "Income proof (Salary Certificate / 6-12 month Bank Statement)",
-      "Office ID / Trade License photocopy",
-      "Utility Bill photocopy (residence)"
+  val defaultLoanDocs = remember(savedLoanDocs) {
+    parseCustomDocs(
+      savedLoanDocs,
+      listOf(
+        "National ID Card (NID) photocopy",
+        "2 copies recent Passport size photographs",
+        "Latest E-TIN Certificate & Tax Return Assessment Slip",
+        "Income proof (Salary Certificate / 6-12 month Bank Statement)",
+        "Office ID / Trade License photocopy",
+        "Utility Bill photocopy (residence)"
+      )
     )
   }
 

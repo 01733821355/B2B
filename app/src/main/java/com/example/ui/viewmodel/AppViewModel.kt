@@ -342,10 +342,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Continuous Real-Time Bi-Directional Auto-Sync Loop
-    // Automatically synchronizes both ways with Google Sheets in the background every 0.50 seconds (All-Time Live)
+    // Automatically synchronizes both ways with Google Sheets in the background every 0.05 seconds (50ms) (All-Time Live)
     viewModelScope.launch {
       while (true) {
-        delay(500) // 0.50 second (500ms) continuous live sync interval
+        delay(50) // 0.05 second (50ms) continuous live sync interval
         if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
@@ -470,7 +470,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun isBiometricEnabled(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
-    return appSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue == "true"
+    val savedSetting = appSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue
+    // Automatically enable for any user once they have logged in with their password on this device
+    return if (savedSetting != null) savedSetting == "true" else isPasswordLoginVerified(clean)
   }
 
   fun isPasswordLoginVerified(rmCode: String): Boolean {
@@ -523,15 +525,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) {}
       }
       res.onSuccess { user ->
-        lastLoggedRmCode.value = user.rmCode
-        // Record that user has successfully authenticated via password
+        val cleanCode = user.rmCode.trim().uppercase()
+        lastLoggedRmCode.value = cleanCode
+        // Record password verification AND automatically enable fingerprint for this user!
         try {
+          val now = DateUtils.currentDhakaMillis()
           database.appSettingDao().insertOrUpdateSetting(
             AppSettingEntity(
-              settingKey = "password_login_verified_${user.rmCode.trim().uppercase()}",
+              settingKey = "password_login_verified_$cleanCode",
               settingValue = "true",
-              updatedBy = user.rmCode,
-              updatedAt = DateUtils.currentDhakaMillis()
+              updatedBy = cleanCode,
+              updatedAt = now
+            )
+          )
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity(
+              settingKey = "fingerprint_enabled_$cleanCode",
+              settingValue = "true",
+              updatedBy = cleanCode,
+              updatedAt = now
+            )
+          )
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity(
+              settingKey = "last_logged_rm_code",
+              settingValue = cleanCode,
+              updatedBy = cleanCode,
+              updatedAt = now
             )
           )
         } catch (_: Exception) {}
@@ -564,8 +584,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     onResult: (Boolean, String?) -> Unit
   ) {
     val clean = rmCodeInput.trim().uppercase()
-    if (!isBiometricEnabled(clean) || !isPasswordLoginVerified(clean)) {
-      onResult(false, "Fingerprint unlock is not enabled. Please sign in with your RM password first, then turn on Fingerprint Login in Settings.")
+    if (!isPasswordLoginVerified(clean)) {
+      onResult(false, "প্রথমবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। এরপর থেকে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে চালু থাকবে। (First-time password login is mandatory. Fingerprint will be enabled afterwards.)")
       return
     }
 

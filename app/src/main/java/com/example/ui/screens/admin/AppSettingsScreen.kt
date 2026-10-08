@@ -1,9 +1,11 @@
 package com.example.ui.screens.admin
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -62,6 +64,7 @@ fun AppSettingsScreen(
   modifier: Modifier = Modifier
 ) {
   val settings by viewModel.appSettings.collectAsState()
+  val context = LocalContext.current
   val scrollState = rememberScrollState()
 
   val productSetting = settings.find { it.settingKey == "PRODUCT_TYPES" }?.settingValue
@@ -173,13 +176,124 @@ fun AppSettingsScreen(
         )
         Spacer(modifier = Modifier.height(8.dp))
         Button(
-          onClick = { viewModel.updateSetting("PENDING_DOCS_LIST", pendingDocsInput.trim()) },
+          onClick = {
+            viewModel.updateSetting("PENDING_DOCS_LIST", pendingDocsInput.trim())
+            Toast.makeText(context, "Pending documents checklist saved & synced!", Toast.LENGTH_SHORT).show()
+          },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           modifier = Modifier.align(Alignment.End)
         ) {
           Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
           Text("Save Documents")
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // Checklist Sender Items Management
+    val checklistPresets = listOf(
+      Triple("CHECKLIST_ENHANCE_DOCS", "Limit Enhancement Docs", "Front & back photocopy of existing Credit Card\nLatest 6-month Salary / Business Bank Account Statement (sealed)\nLatest Salary Certificate / Original Pay Slips / Trade License renewal copy\nLatest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip\nPhotocopy of National ID Card (NID) / Smart Card"),
+      Triple("CHECKLIST_CORP_COMPANY_DOCS", "Corporate Card (Company)", "Valid Trade License (last 3-5 years renewal copies)\nMemorandum & Articles of Association (MOA & AOA) / Partnership Deed\nBoard Resolution authorizing Corporate Card facility & authorized signatories\nLatest 2 consecutive years Audited Financial Statements & Balance Sheet\nForm XII / Schedule X / List of Directors certified copy\nCompany E-TIN Certificate & BIN / VAT Registration Certificate\n12-Month Company Bank Account Statement (with bank seal & signature)"),
+      Triple("CHECKLIST_CORP_EMPLOYEE_DOCS", "Corporate Card (Employee)", "Applicant Employee NID / Smart Card / Valid Passport photocopy\nEmployee Office ID Card photocopy & Business Visiting Card\nLetter of Introduction (LOI) / Corporate Card authorization on official company letterhead\n2 copies recent Passport size lab-print photographs of applicant\nApplicant Employee E-TIN Certificate photocopy\nLatest 6-Month Salary Account Bank Statement"),
+      Triple("CHECKLIST_SALARIED_DOCS", "Salaried Credit Card", "NID / Smart Card / Valid Passport photocopy\n2 copies recent Passport size photographs\nLatest E-TIN Certificate & Tax Return Acknowledgment Slip\nLatest Salary Certificate / Original Pay Slips (last 3 months)\n6-month Salary Account Statement (with bank seal & signature)\nOffice ID Card photocopy & Visiting Card\nUtility Bill photocopy (Electricity / WASA / Gas residence)"),
+      Triple("CHECKLIST_BUSINESS_DOCS", "Business Person Credit Card", "National ID Card (NID) photocopy\n2 copies recent Passport size photographs\nValid Trade License (last 3-5 years renewal copies)\n12-month Business & Personal Bank Account Statement (sealed)\nLatest E-TIN Certificate & Tax Return Acknowledgment Slip\nVisiting card & Memorandum of Association / Partnership Deed\nUtility bill of residence & business premises"),
+      Triple("CHECKLIST_LOAN_DOCS", "Loan Application Docs", "National ID Card (NID) photocopy\n2 copies recent Passport size photographs\nLatest E-TIN Certificate & Tax Return Assessment Slip\nIncome proof (Salary Certificate / 6-12 month Bank Statement)\nOffice ID / Trade License photocopy\nUtility Bill photocopy (residence)"),
+      Triple("CHECKLIST_HEADER_TEMPLATE", "Checklist Header Greeting", "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"),
+      Triple("CHECKLIST_REGARDS_TEMPLATE", "Checklist Footer / Regards", "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC")
+    )
+
+    var selectedPresetKey by remember { mutableStateOf(checklistPresets[0].first) }
+    val currentPresetObj = checklistPresets.find { it.first == selectedPresetKey } ?: checklistPresets[0]
+    val savedPresetVal = settings.find { it.settingKey == selectedPresetKey }?.settingValue ?: currentPresetObj.third
+    var checklistPresetInput by remember(selectedPresetKey, savedPresetVal) { mutableStateOf(savedPresetVal) }
+
+    Card(
+      modifier = Modifier.fillMaxWidth().testTag("card_checklist_sender_settings"),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Checklist Sender Items Management (চেকলিস্ট সেন্ডার)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+        }
+        Text("চেকলিস্ট সেন্ডারের প্রতিটি অপশনের আইটেম অ্যাড বা এডিট করুন। সেভ করলে গুগল শিটের Universal_Settings ট্যাবে নতুন রো হিসেবে লোড হবে।", fontSize = 11.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Preset selector chips
+        Text("Select Preset Category to Edit:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
+        Spacer(modifier = Modifier.height(6.dp))
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          checklistPresets.forEach { preset ->
+            val isSelected = preset.first == selectedPresetKey
+            Surface(
+              shape = RoundedCornerShape(16.dp),
+              color = if (isSelected) EblNavyPrimary else Color(0xFFF1F5F9),
+              border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+              modifier = Modifier
+                .clickable { selectedPresetKey = preset.first }
+                .padding(vertical = 2.dp)
+            ) {
+              Text(
+                text = preset.second,
+                color = if (isSelected) Color.White else Color.DarkGray,
+                fontSize = 11.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(
+          text = "Items for '${currentPresetObj.second}' (Key: ${currentPresetObj.first}):",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblNavyDark
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        com.example.ui.common.VoiceInputField(
+          value = checklistPresetInput,
+          onValueChange = { checklistPresetInput = it },
+          label = "${currentPresetObj.second} Items",
+          singleLine = false,
+          maxLines = 8,
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "input_setting_checklist_preset"
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(
+            text = "Total ${checklistPresetInput.lines().count { it.isNotBlank() }} items configured",
+            fontSize = 11.sp,
+            color = Color.Gray
+          )
+          Button(
+            onClick = {
+              val cleanVal = checklistPresetInput.trim()
+              viewModel.updateSetting(selectedPresetKey, cleanVal)
+              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced to Universal Settings tab!", Toast.LENGTH_SHORT).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            modifier = Modifier.testTag("btn_save_checklist_preset")
+          ) {
+            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Save & Sync to Sheet")
+          }
         }
       }
     }
