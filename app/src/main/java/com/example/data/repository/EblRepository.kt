@@ -1440,7 +1440,7 @@ class EblRepository(
               lastSyncTimestamp = DateUtils.currentDhakaMillis(),
               lastSyncStatus = "FAILED",
               lastSyncMessage = errorMsg,
-              pendingRecordsCount = unsyncedFiles.size
+              pendingRecordsCount = filesToPush.size
             )
           )
           return@withContext Result.failure(Exception(errorMsg))

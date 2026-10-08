@@ -470,13 +470,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun isBiometricEnabled(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
-    return allSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue == "true"
+    return appSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue == "true"
   }
 
   fun isPasswordLoginVerified(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
-    return allSettings.value.find { it.settingKey == "password_login_verified_$clean" }?.settingValue == "true"
+    return appSettings.value.find { it.settingKey == "password_login_verified_$clean" }?.settingValue == "true"
   }
 
   fun setBiometricEnabled(rmCode: String, enabled: Boolean, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
