@@ -93,11 +93,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   private val _currentScreen = MutableStateFlow<Screen>(Screen.Login)
   val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
+  private val authPrefs by lazy {
+    getApplication<Application>().getSharedPreferences("ebl_auth_preferences", android.content.Context.MODE_PRIVATE)
+  }
+
   val lastLoggedRmCode = MutableStateFlow("")
 
   init {
+    val cachedRm = authPrefs.getString("last_logged_rm_code", "") ?: ""
+    if (cachedRm.isNotBlank()) {
+      lastLoggedRmCode.value = cachedRm
+    }
     viewModelScope.launch {
-      lastLoggedRmCode.value = authRepository.getLastLoggedRmCode()
+      val dbLastRm = authRepository.getLastLoggedRmCode()
+      if (dbLastRm.isNotBlank()) {
+        lastLoggedRmCode.value = dbLastRm
+        authPrefs.edit().putString("last_logged_rm_code", dbLastRm).apply()
+      }
     }
   }
 
@@ -470,6 +482,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun isBiometricEnabled(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
+    if (authPrefs.contains("fingerprint_enabled_$clean")) {
+      return authPrefs.getBoolean("fingerprint_enabled_$clean", false)
+    }
     val savedSetting = appSettings.value.find { it.settingKey == "fingerprint_enabled_$clean" }?.settingValue
     // Automatically enable for any user once they have logged in with their password on this device
     return if (savedSetting != null) savedSetting == "true" else isPasswordLoginVerified(clean)
@@ -478,11 +493,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun isPasswordLoginVerified(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
+    if (authPrefs.getBoolean("password_login_verified_$clean", false)) return true
     return appSettings.value.find { it.settingKey == "password_login_verified_$clean" }?.settingValue == "true"
   }
 
   fun setBiometricEnabled(rmCode: String, enabled: Boolean, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     val clean = rmCode.trim().uppercase()
+    authPrefs.edit().putBoolean("fingerprint_enabled_$clean", enabled).apply()
     viewModelScope.launch {
       database.appSettingDao().insertOrUpdateSetting(
         AppSettingEntity(
@@ -493,6 +510,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
       )
       if (enabled) {
+        authPrefs.edit().putString("last_logged_rm_code", clean).apply()
         database.appSettingDao().insertOrUpdateSetting(
           AppSettingEntity(
             settingKey = "last_logged_rm_code",
@@ -527,7 +545,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       res.onSuccess { user ->
         val cleanCode = user.rmCode.trim().uppercase()
         lastLoggedRmCode.value = cleanCode
-        // Record password verification AND automatically enable fingerprint for this user!
+        // Record password verification AND automatically enable fingerprint for this user in SharedPreferences and DB!
+        authPrefs.edit()
+          .putBoolean("password_login_verified_$cleanCode", true)
+          .putBoolean("fingerprint_enabled_$cleanCode", true)
+          .putString("last_logged_rm_code", cleanCode)
+          .apply()
         try {
           val now = DateUtils.currentDhakaMillis()
           database.appSettingDao().insertOrUpdateSetting(

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
@@ -49,6 +50,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -193,6 +195,46 @@ fun MentorDashboardScreen(
             Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp), tint = EblGold)
             Spacer(modifier = Modifier.width(6.dp))
             Text("DBR Calculator & Document Checklist Tool", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+          val isBioMentor = viewModel.isBiometricEnabled(currentUser.rmCode)
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(8.dp))
+              .background(Color(0xFF0F2642))
+              .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = "Fingerprint Login",
+                tint = if (isBioMentor) Color(0xFF34D399) else Color(0xFF94A3B8),
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Column {
+                Text(
+                  text = "Fingerprint Login (ফিঙ্গারপ্রিন্ট লগইন)",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color.White
+                )
+                Text(
+                  text = if (isBioMentor) "Enabled (লগইনে ফিঙ্গারপ্রিন্ট সক্রিয়)" else "Disabled (পাসওয়ার্ড লগইন প্রয়োজন)",
+                  fontSize = 9.sp,
+                  color = if (isBioMentor) Color(0xFF34D399) else Color.LightGray
+                )
+              }
+            }
+            Switch(
+              checked = isBioMentor,
+              onCheckedChange = { viewModel.setBiometricEnabled(currentUser.rmCode, it) },
+              modifier = Modifier.testTag("switch_mentor_biometric")
+            )
           }
         }
       }

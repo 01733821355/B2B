@@ -99,6 +99,7 @@ fun LoginScreen(
   }
 
   val context = LocalContext.current
+  val sharedPrefs = remember { context.getSharedPreferences("ebl_auth_preferences", android.content.Context.MODE_PRIVATE) }
   val coroutineScope = rememberCoroutineScope()
   val focusManager = LocalFocusManager.current
   val scrollState = rememberScrollState()
@@ -142,11 +143,11 @@ fun LoginScreen(
       return
     }
 
-    val isBioOn = isBiometricEnabled?.invoke(targetCode) == true
-    val isPassOk = isPasswordVerified?.invoke(targetCode) == true
+    val isBioOn = sharedPrefs.getBoolean("fingerprint_enabled_$targetCode", false) || (isBiometricEnabled?.invoke(targetCode) == true)
+    val isPassOk = sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
 
     if (!isPassOk && !isBioOn) {
-      errorMessage = "প্রথমবার ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে লগইন করলে পরবর্তী সকল সময়ে সরাসরি ফিঙ্গারপ্রিন্ট দিয়ে ঢুকতে পারবেন। (Please sign in with username & password for the first time. Fingerprint will be enabled for subsequent logins.)"
+      errorMessage = "প্রথমবার ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে লগইন করলে পরবর্তী সকল সময়ে সরাসরি ফিঙ্গারপ্রিন্ট দিয়ে ঢুকতে পারবেন।"
       return
     }
 
@@ -479,10 +480,14 @@ fun LoginScreen(
                   color = EblNavyDark
                 )
                 val target = usernameInput.ifBlank { lastLoggedRmCode }.trim().uppercase()
-                val isBioActive = target.isNotBlank() && (isBiometricEnabled?.invoke(target) == true)
+                val isBioActive = target.isNotBlank() && (
+                  sharedPrefs.getBoolean("password_login_verified_$target", false) ||
+                  sharedPrefs.getBoolean("fingerprint_enabled_$target", false) ||
+                  (isBiometricEnabled?.invoke(target) == true)
+                )
                 if (target.isNotBlank()) {
                   Text(
-                    text = if (isBioActive) "✓ ফিঙ্গারপ্রিন্ট প্রস্তুত ($target) - ট্যাপ করুন" else "প্রথমবার পাসওয়ার্ড দিয়ে লগইন করুন (এরপর সক্রিয় হবে)",
+                    text = if (isBioActive) "✓ ফিঙ্গারপ্রিন্ট সক্রিয় ($target) - ট্যাপ করুন" else "প্রথমবার পাসওয়ার্ড দিয়ে লগইন করুন (এরপর সক্রিয় হবে)",
                     fontSize = 10.sp,
                     color = if (isBioActive) Color(0xFF059669) else Color(0xFFB45309),
                     fontWeight = if (isBioActive) FontWeight.Bold else FontWeight.Normal

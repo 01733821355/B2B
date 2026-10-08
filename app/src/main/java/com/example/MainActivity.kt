@@ -279,7 +279,9 @@ fun EblMainApp(viewModel: AppViewModel) {
               onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
               onUpdateLocation = { lat, lng, addr ->
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
-              }
+              },
+              isBiometricEnabled = viewModel.isBiometricEnabled(user.rmCode),
+              onToggleBiometric = { viewModel.setBiometricEnabled(user.rmCode, it) }
             )
           }
 

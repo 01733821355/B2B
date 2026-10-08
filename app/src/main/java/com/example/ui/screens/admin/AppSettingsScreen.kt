@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -57,6 +58,7 @@ import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.AppViewModel
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AppSettingsScreen(
   viewModel: AppViewModel,
@@ -193,7 +195,8 @@ fun AppSettingsScreen(
     Spacer(modifier = Modifier.height(16.dp))
 
     // Checklist Sender Items Management
-    val checklistPresets = listOf(
+    val defaultChecklistPresets = listOf(
+      Triple("PENDING_DOCS_LIST", "Pending Docs Checklist", "NID\nTIN\nOffice ID\nSalary Certificate\nAccount Statement (6 Months)\nBIN\nTrade License 2024-25\nTrade License 2025-26\nTrade License 2026-27\nLoan Certificate\nCard Statement (Month)\nCard Copy"),
       Triple("CHECKLIST_ENHANCE_DOCS", "Limit Enhancement Docs", "Front & back photocopy of existing Credit Card\nLatest 6-month Salary / Business Bank Account Statement (sealed)\nLatest Salary Certificate / Original Pay Slips / Trade License renewal copy\nLatest E-TIN Certificate & Tax Return Assessment Acknowledgement Slip\nPhotocopy of National ID Card (NID) / Smart Card"),
       Triple("CHECKLIST_CORP_COMPANY_DOCS", "Corporate Card (Company)", "Valid Trade License (last 3-5 years renewal copies)\nMemorandum & Articles of Association (MOA & AOA) / Partnership Deed\nBoard Resolution authorizing Corporate Card facility & authorized signatories\nLatest 2 consecutive years Audited Financial Statements & Balance Sheet\nForm XII / Schedule X / List of Directors certified copy\nCompany E-TIN Certificate & BIN / VAT Registration Certificate\n12-Month Company Bank Account Statement (with bank seal & signature)"),
       Triple("CHECKLIST_CORP_EMPLOYEE_DOCS", "Corporate Card (Employee)", "Applicant Employee NID / Smart Card / Valid Passport photocopy\nEmployee Office ID Card photocopy & Business Visiting Card\nLetter of Introduction (LOI) / Corporate Card authorization on official company letterhead\n2 copies recent Passport size lab-print photographs of applicant\nApplicant Employee E-TIN Certificate photocopy\nLatest 6-Month Salary Account Bank Statement"),
@@ -204,10 +207,23 @@ fun AppSettingsScreen(
       Triple("CHECKLIST_REGARDS_TEMPLATE", "Checklist Footer / Regards", "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC")
     )
 
+    // Gather any additional custom checklist items stored in Universal Settings
+    val customChecklistPresets = remember(settings) {
+      settings.filter { it.settingKey.startsWith("CHECKLIST_CUSTOM_") }.map {
+        Triple(it.settingKey, it.settingKey.removePrefix("CHECKLIST_CUSTOM_").replace("_", " "), it.settingValue)
+      }
+    }
+    val checklistPresets = defaultChecklistPresets + customChecklistPresets
+
     var selectedPresetKey by remember { mutableStateOf(checklistPresets[0].first) }
     val currentPresetObj = checklistPresets.find { it.first == selectedPresetKey } ?: checklistPresets[0]
     val savedPresetVal = settings.find { it.settingKey == selectedPresetKey }?.settingValue ?: currentPresetObj.third
     var checklistPresetInput by remember(selectedPresetKey, savedPresetVal) { mutableStateOf(savedPresetVal) }
+
+    var showAddNewCategoryDialog by remember { mutableStateOf(false) }
+    var newCategoryKeyInput by remember { mutableStateOf("") }
+    var newCategoryTitleInput by remember { mutableStateOf("") }
+    var newCategoryItemsInput by remember { mutableStateOf("") }
 
     Card(
       modifier = Modifier.fillMaxWidth().testTag("card_checklist_sender_settings"),
@@ -219,14 +235,26 @@ fun AppSettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Checklist Sender Items Management (চেকলিস্ট সেন্ডার)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Text("Checklist Sender & Pending Docs Items (চেকলিস্ট সেন্ডার ও পেন্ডিং ডক্স)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
         }
-        Text("চেকলিস্ট সেন্ডারের প্রতিটি অপশনের আইটেম অ্যাড বা এডিট করুন। সেভ করলে গুগল শিটের Universal_Settings ট্যাবে নতুন রো হিসেবে লোড হবে।", fontSize = 11.sp, color = Color.Gray)
+        Text("পেন্ডিং ডক্স এবং চেকলিস্ট সেন্ডারের প্রতিটি অপশনের আইটেম অ্যাড বা এডিট করুন। সেভ করলে গুগল শিটের Universal_Settings ট্যাবে নতুন রো হিসেবে স্বয়ংক্রিয়ভাবে লোড হবে।", fontSize = 11.sp, color = Color.Gray)
         Spacer(modifier = Modifier.height(10.dp))
 
         // Preset selector chips
-        Text("Select Preset Category to Edit:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
-        Spacer(modifier = Modifier.height(6.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text("Select Category / Docs to Edit:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
+          androidx.compose.material3.TextButton(
+            onClick = { showAddNewCategoryDialog = true },
+            modifier = Modifier.testTag("btn_add_new_checklist_category")
+          ) {
+            Text("+ Add New Category / Row", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
+          }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         FlowRow(
           horizontalArrangement = Arrangement.spacedBy(6.dp),
           verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -285,7 +313,11 @@ fun AppSettingsScreen(
             onClick = {
               val cleanVal = checklistPresetInput.trim()
               viewModel.updateSetting(selectedPresetKey, cleanVal)
-              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced to Universal Settings tab!", Toast.LENGTH_SHORT).show()
+              // If PENDING_DOCS_LIST was updated, keep pendingDocsInput in sync
+              if (selectedPresetKey == "PENDING_DOCS_LIST") {
+                pendingDocsInput = cleanVal
+              }
+              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced as a row in Universal Settings tab!", Toast.LENGTH_SHORT).show()
             },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
             modifier = Modifier.testTag("btn_save_checklist_preset")
@@ -296,6 +328,70 @@ fun AppSettingsScreen(
           }
         }
       }
+    }
+
+    // Add New Custom Checklist Category Dialog
+    if (showAddNewCategoryDialog) {
+      androidx.compose.material3.AlertDialog(
+        onDismissRequest = { showAddNewCategoryDialog = false },
+        title = { Text("Add New Checklist / Universal Setting Row", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+        text = {
+          Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("একটি নতুন চেকলিস্ট অপশন যোগ করুন। এটি সেভ করলে গুগল শিটের Universal_Settings ট্যাবে নতুন একটি রো হিসেবে লোড হবে।", fontSize = 12.sp, color = Color.Gray)
+            OutlinedTextField(
+              value = newCategoryTitleInput,
+              onValueChange = { newCategoryTitleInput = it },
+              label = { Text("Category Title (যেমন: Special Loan Docs)") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth()
+            )
+            OutlinedTextField(
+              value = newCategoryKeyInput,
+              onValueChange = { newCategoryKeyInput = it },
+              label = { Text("Setting Key (যেমন: CHECKLIST_CUSTOM_SPECIAL_DOCS)") },
+              placeholder = { Text("CHECKLIST_CUSTOM_...") },
+              singleLine = true,
+              modifier = Modifier.fillMaxWidth()
+            )
+            com.example.ui.common.VoiceInputField(
+              value = newCategoryItemsInput,
+              onValueChange = { newCategoryItemsInput = it },
+              label = "Item List (One per line)",
+              singleLine = false,
+              maxLines = 6,
+              modifier = Modifier.fillMaxWidth()
+            )
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              val key = if (newCategoryKeyInput.isNotBlank()) {
+                newCategoryKeyInput.trim().uppercase()
+              } else {
+                "CHECKLIST_CUSTOM_" + newCategoryTitleInput.trim().replace("\\s+".toRegex(), "_").uppercase()
+              }
+              if (key.isNotBlank() && newCategoryItemsInput.isNotBlank()) {
+                viewModel.updateSetting(key, newCategoryItemsInput.trim())
+                selectedPresetKey = key
+                showAddNewCategoryDialog = false
+                newCategoryKeyInput = ""
+                newCategoryTitleInput = ""
+                newCategoryItemsInput = ""
+                Toast.makeText(context, "New category added and loaded into Universal Settings tab!", Toast.LENGTH_SHORT).show()
+              }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+          ) {
+            Text("Add & Sync to Sheet")
+          }
+        },
+        dismissButton = {
+          androidx.compose.material3.TextButton(onClick = { showAddNewCategoryDialog = false }) {
+            Text("Cancel")
+          }
+        }
+      )
     }
 
     Spacer(modifier = Modifier.height(16.dp))

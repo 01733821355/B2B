@@ -459,8 +459,8 @@ class EblRepository(
     )
 
     // Immediately synchronize deletion with Google Sheets
+    syncFileDeletionToGoogleSheets(fileId, file.ccNumber)
     applicationScope.launch {
-      syncFileDeletionToGoogleSheets(fileId, file.ccNumber)
       triggerGoogleSheetsSync()
     }
 
@@ -1276,6 +1276,7 @@ class EblRepository(
             put("activeStatus", f.activeStatus)
             put("assignedRmCode", f.assignedRmCode)
             put("pendingDocuments", f.pendingDocuments)
+            put("remarks", f.remarks)
             put("cpvRemarks", f.cpvRemarks)
             put("cpvStatus", f.cpvStatus)
             put("submissionAddress", f.submissionAddress ?: "")
@@ -1748,6 +1749,15 @@ class EblRepository(
           continue
         }
 
+        // If local file was edited recently by a user (within 30 seconds) and the sheet update did not come from Manual_Sheet_Edit,
+        // NEVER overwrite local edits with stale sheet data!
+        val sheetUpdatedBy = obj.optString("updatedBy", "")
+        val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
+        val wasRecentlyEditedLocally = (now - existing.updatedAt < 30_000) && (existing.updatedBy != "GoogleSheets_Sync")
+        if (wasRecentlyEditedLocally && !isManualSheetEdit) {
+          continue
+        }
+
         val custName = obj.optString("customerName", existing.customerName)
         val compName = obj.optString("companyName", existing.companyName)
         val offAddr = obj.optString("officeAddress", existing.officeAddress)
@@ -1755,8 +1765,8 @@ class EblRepository(
         val em = obj.optString("email", existing.email)
         val prodType = obj.optString("productType", existing.productType)
         val cpvStatus = obj.optString("cpvStatus", existing.cpvStatus)
-        val cpvRemarks = obj.optString("cpvRemarks", obj.optString("remarks", existing.cpvRemarks))
-        val remarksVal = obj.optString("remarks", obj.optString("cpvRemarks", existing.remarks))
+        val cpvRemarks = if (obj.has("cpvRemarks")) obj.optString("cpvRemarks", existing.cpvRemarks) else existing.cpvRemarks
+        val remarksVal = if (obj.has("remarks")) obj.optString("remarks", existing.remarks) else existing.remarks
 
         val hasStatusChanged = existing.applicationStatus != appStatus
         val hasActiveChanged = existing.activeStatus != activeStatus

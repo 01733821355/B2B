@@ -195,7 +195,27 @@ function doPost(e) {
 
     // Handle File Deletions (Immediately removes rows from Google Sheets across Customer_Files and other tabs)
     if (data.action === 'DELETE_FILE' || (data.deletedFileIds && data.deletedFileIds.length > 0)) {
-      var toDelete = data.deletedFileIds || [data.fileId, data.ccNumber].filter(Boolean);
+      var toDelete = [];
+      if (data.deletedFileIds && Array.isArray(data.deletedFileIds)) {
+        for (var di = 0; di < data.deletedFileIds.length; di++) {
+          var idStr = String(data.deletedFileIds[di] || '').trim();
+          if (idStr) {
+            toDelete.push(idStr.toLowerCase());
+            toDelete.push(idStr.replace(/[-\s]/g, '').toLowerCase());
+          }
+        }
+      }
+      if (data.fileId) {
+        var fIdStr = String(data.fileId).trim();
+        toDelete.push(fIdStr.toLowerCase());
+        toDelete.push(fIdStr.replace(/[-\s]/g, '').toLowerCase());
+      }
+      if (data.ccNumber) {
+        var ccStr = String(data.ccNumber).trim();
+        toDelete.push(ccStr.toLowerCase());
+        toDelete.push(ccStr.replace(/[-\s]/g, '').toLowerCase());
+      }
+
       var sheetsToCheck = [fileSheet];
       try {
         var allSheets = ss.getSheets();
@@ -215,27 +235,17 @@ function doPost(e) {
         var curFiles = curTargetSheet.getDataRange().getValues();
         for (var d = curFiles.length - 1; d >= 1; d--) {
           var rowMatch = false;
-          var rCc = String(curFiles[d][0] || '').trim().toLowerCase();
-          var rFid = String(curFiles[d][1] || '').trim().toLowerCase();
-          for (var k = 0; k < toDelete.length; k++) {
-            var targetK = String(toDelete[k] || '').trim().toLowerCase();
-            if (targetK && (rFid === targetK || rCc === targetK)) {
-              rowMatch = true;
-              break;
-            }
-          }
-          if (!rowMatch) {
-            for (var col = 2; col < Math.min(curFiles[d].length, 6); col++) {
-              var cellVal = String(curFiles[d][col] || '').trim().toLowerCase();
-              for (var k2 = 0; k2 < toDelete.length; k2++) {
-                var targetK2 = String(toDelete[k2] || '').trim().toLowerCase();
-                if (targetK2 && cellVal === targetK2) {
-                  rowMatch = true;
-                  break;
-                }
+          for (var col = 0; col < curFiles[d].length; col++) {
+            var cellVal = String(curFiles[d][col] || '').trim().toLowerCase();
+            var cleanCell = cellVal.replace(/[-\s]/g, '');
+            if (!cellVal) continue;
+            for (var k = 0; k < toDelete.length; k++) {
+              if (cellVal === toDelete[k] || cleanCell === toDelete[k]) {
+                rowMatch = true;
+                break;
               }
-              if (rowMatch) break;
             }
+            if (rowMatch) break;
           }
           if (rowMatch) {
             curTargetSheet.deleteRow(d + 1);
@@ -293,13 +303,25 @@ function doPost(e) {
       var fileExistingData = fileSheet.getDataRange().getValues();
       var fileIdRowMap = {};
       for (var r = 1; r < fileExistingData.length; r++) {
-        var key = String(fileExistingData[r][1] || fileExistingData[r][0] || '').trim();
-        if (key) fileIdRowMap[key] = r + 1;
+        var ccVal = String(fileExistingData[r][0] || '').trim();
+        var fidVal = String(fileExistingData[r][1] || '').trim();
+        if (fidVal) {
+          fileIdRowMap[fidVal] = r + 1;
+          fileIdRowMap[fidVal.toLowerCase()] = r + 1;
+        }
+        if (ccVal) {
+          fileIdRowMap[ccVal] = r + 1;
+          fileIdRowMap[ccVal.toLowerCase()] = r + 1;
+        }
       }
 
       data.files.forEach(function(f) {
-        var matchKey = String(f.fileId || f.ccNumber || '').trim();
-        if (!matchKey) return;
+        var fId = String(f.fileId || '').trim();
+        var cc = String(f.ccNumber || '').trim();
+        if (!fId && !cc) return;
+
+        var targetRowIndex = (fId && fileIdRowMap[fId]) || (fId && fileIdRowMap[fId.toLowerCase()]) ||
+                             (cc && fileIdRowMap[cc]) || (cc && fileIdRowMap[cc.toLowerCase()]);
 
         var row = [
           f.ccNumber || '',
@@ -314,7 +336,7 @@ function doPost(e) {
           f.activeStatus || 'N',
           f.assignedRmCode || '',
           f.pendingDocuments || '',
-          f.cpvRemarks || '',
+          f.cpvRemarks || f.remarks || '',
           f.cpvStatus || 'Pending',
           f.submissionAddress || '',
           f.submissionLat || 0.0,
@@ -323,12 +345,19 @@ function doPost(e) {
           f.updatedBy || 'App'
         ];
 
-        if (fileIdRowMap[matchKey]) {
-          var rowIndex = fileIdRowMap[matchKey];
-          fileSheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+        if (targetRowIndex) {
+          fileSheet.getRange(targetRowIndex, 1, 1, row.length).setValues([row]);
         } else {
           fileSheet.appendRow(row);
-          fileIdRowMap[matchKey] = fileSheet.getLastRow();
+          var newRowIdx = fileSheet.getLastRow();
+          if (fId) {
+            fileIdRowMap[fId] = newRowIdx;
+            fileIdRowMap[fId.toLowerCase()] = newRowIdx;
+          }
+          if (cc) {
+            fileIdRowMap[cc] = newRowIdx;
+            fileIdRowMap[cc.toLowerCase()] = newRowIdx;
+          }
         }
       });
     }
@@ -708,7 +737,7 @@ function extractAllSheetSettings(sheet) {
           Column {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
               Text(
-                text = "Continuous Live Auto-Sync",
+                text = "Continuous Live Auto-Sync (0.05s)",
                 fontWeight = FontWeight.Bold,
                 fontSize = 13.sp,
                 color = if (isRealtimeAutoSyncEnabled) Color(0xFF14532D) else MaterialTheme.colorScheme.onSurface
@@ -724,7 +753,7 @@ function extractAllSheetSettings(sheet) {
             }
             Text(
               text = if (isRealtimeAutoSyncEnabled)
-                "প্রতি ০.০৫ সেকেন্ডে (0.05s) অ্যাপ এবং গুগল শিট স্বয়ংক্রিয়ভাবে লাইভ সিঙ্ক হচ্ছে (ম্যানুয়ালি পুশ বা পুল চাপার প্রয়োজন নেই)।"
+                "প্রতি ০.০৫ সেকেন্ডে (0.05 second / 50ms) অ্যাপ এবং গুগল শিট স্বয়ংক্রিয়ভাবে লাইভ সিঙ্ক হচ্ছে (ম্যানুয়ালি পুশ বা পুল চাপার প্রয়োজন নেই)।"
               else
                 "অটো-সিঙ্ক বন্ধ রয়েছে। স্বয়ংক্রিয় সিঙ্ক চালু করতে টগল করুন।",
               fontSize = 11.sp,

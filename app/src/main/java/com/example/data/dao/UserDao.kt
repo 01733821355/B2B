@@ -10,10 +10,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface UserDao {
-  @Query("SELECT * FROM users WHERE rmCode = :rmCode LIMIT 1")
+  @Query("SELECT * FROM users WHERE UPPER(TRIM(rmCode)) = UPPER(TRIM(:rmCode)) LIMIT 1")
   suspend fun getUser(rmCode: String): UserEntity?
 
-  @Query("SELECT * FROM users WHERE rmCode = :rmCode LIMIT 1")
+  @Query("SELECT * FROM users WHERE UPPER(TRIM(rmCode)) = UPPER(TRIM(:rmCode)) LIMIT 1")
   fun getUserFlow(rmCode: String): Flow<UserEntity?>
 
   @Query("SELECT * FROM users WHERE role = 'RM' ORDER BY createdAt DESC")

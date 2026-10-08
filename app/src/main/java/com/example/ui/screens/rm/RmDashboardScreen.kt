@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocationOn
@@ -83,6 +84,8 @@ fun RmDashboardScreen(
   onOpenSmsInbox: () -> Unit = {},
   onOpenDbrChecklist: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
+  isBiometricEnabled: Boolean = false,
+  onToggleBiometric: ((Boolean) -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
@@ -194,6 +197,47 @@ fun RmDashboardScreen(
               Spacer(modifier = Modifier.width(4.dp))
               Text("Report", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Biometric Fingerprint Login Switch for RM
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(8.dp))
+              .background(Color(0xFF0F2642))
+              .padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = "Fingerprint Login",
+                tint = if (isBiometricEnabled) Color(0xFF34D399) else Color(0xFF94A3B8),
+                modifier = Modifier.size(20.dp)
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Column {
+                Text(
+                  text = "Fingerprint Login (ফিঙ্গারপ্রিন্ট লগইন)",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color.White
+                )
+                Text(
+                  text = if (isBiometricEnabled) "Enabled (লগইনে ফিঙ্গারপ্রিন্ট সক্রিয়)" else "Disabled (পাসওয়ার্ড লগইন প্রয়োজন)",
+                  fontSize = 9.sp,
+                  color = if (isBiometricEnabled) Color(0xFF34D399) else Color.LightGray
+                )
+              }
+            }
+            androidx.compose.material3.Switch(
+              checked = isBiometricEnabled,
+              onCheckedChange = { onToggleBiometric?.invoke(it) },
+              modifier = Modifier.testTag("switch_rm_biometric")
+            )
           }
         }
       }
