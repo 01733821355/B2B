@@ -1181,18 +1181,38 @@ fun DocumentChecklistSenderTab(
   var customerMobile by remember { mutableStateOf("") }
 
   // Presets requested by user: Credit Card Limit Enhance, Corporate Card, etc.
-  val presetOptions = listOf(
+  val defaultPresets = listOf(
     "Credit Card Limit Enhance",
     "Corporate Card",
     "New Credit Card (Salaried)",
     "New Credit Card (Business Person)",
     "Personal / Auto / Home Loan"
   )
+  val appSettingsList = viewModel?.appSettings?.collectAsState()?.value ?: emptyList()
+  val customPresetsSetting = appSettingsList.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue
+  val customPresetsList = remember(customPresetsSetting) {
+    if (!customPresetsSetting.isNullOrBlank()) {
+      try {
+        val arr = org.json.JSONArray(customPresetsSetting)
+        val l = mutableListOf<String>()
+        for (i in 0 until arr.length()) l.add(arr.getString(i))
+        l
+      } catch (_: Exception) {
+        customPresetsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }
+      }
+    } else emptyList()
+  }
+  val presetOptions = remember(customPresetsList) { defaultPresets + customPresetsList.filter { it !in defaultPresets } }
+
   var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
   var presetExpanded by remember { mutableStateOf(false) }
 
+  var showCreatePresetDialog by remember { mutableStateOf(false) }
+  var editingItemTarget by remember { mutableStateOf<Pair<Int, String>?>(null) }
+  var editingCorpCompanyTarget by remember { mutableStateOf<Pair<Int, String>?>(null) }
+  var editingCorpEmployeeTarget by remember { mutableStateOf<Pair<Int, String>?>(null) }
+
   // Universal Templates (synced from AppSettings if available)
-  val appSettingsList = viewModel?.appSettings?.collectAsState()?.value ?: emptyList()
   val savedHeaderTpl = appSettingsList.find { it.settingKey == "CHECKLIST_HEADER_TEMPLATE" }?.settingValue
     ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
 
@@ -1654,6 +1674,26 @@ fun DocumentChecklistSenderTab(
 
           Spacer(modifier = Modifier.height(10.dp))
 
+          // Preset Selection & Admin "+ New Preset" action
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text("Checklist Preset (প্রিসেট সিলেক্ট করুন):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+              TextButton(
+                onClick = { showCreatePresetDialog = true },
+                modifier = Modifier.testTag("btn_create_new_preset_dialog")
+              ) {
+                Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("+ New Preset", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+              }
+            }
+          }
+          Spacer(modifier = Modifier.height(4.dp))
+
           // Preset Dropdown
           ExposedDropdownMenuBox(
             expanded = presetExpanded,
@@ -1772,6 +1812,14 @@ fun DocumentChecklistSenderTab(
                   fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
                   modifier = Modifier.weight(1f)
                 )
+                if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                  IconButton(
+                    onClick = { editingCorpCompanyTarget = Pair(index, item.title) },
+                    modifier = Modifier.size(24.dp)
+                  ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                  }
+                }
                 IconButton(
                   onClick = { corporateCompanyItems.removeAt(index) },
                   modifier = Modifier.size(20.dp)
@@ -1853,6 +1901,14 @@ fun DocumentChecklistSenderTab(
                   fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
                   modifier = Modifier.weight(1f)
                 )
+                if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                  IconButton(
+                    onClick = { editingCorpEmployeeTarget = Pair(index, item.title) },
+                    modifier = Modifier.size(24.dp)
+                  ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                  }
+                }
                 IconButton(
                   onClick = { corporateEmployeeItems.removeAt(index) },
                   modifier = Modifier.size(20.dp)
@@ -1934,6 +1990,14 @@ fun DocumentChecklistSenderTab(
                   fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
                   modifier = Modifier.weight(1f)
                 )
+                if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                  IconButton(
+                    onClick = { editingItemTarget = Pair(index, item.title) },
+                    modifier = Modifier.size(24.dp)
+                  ) {
+                    Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                  }
+                }
                 IconButton(
                   onClick = { singleChecklistItems.removeAt(index) },
                   modifier = Modifier.size(20.dp)
@@ -1988,6 +2052,16 @@ fun DocumentChecklistSenderTab(
                 val enhanceJson = if (selectedPreset == "Credit Card Limit Enhance") {
                   org.json.JSONArray(singleChecklistItems.map { it.title }).toString()
                 } else ""
+
+                // Save active preset items string
+                val activeItemsStr = singleChecklistItems.map { it.title }.joinToString("\n")
+                val activePresetKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").uppercase()
+                viewModel?.updateSetting(activePresetKey, activeItemsStr)
+
+                // Ensure custom preset name is recorded in CHECKLIST_CUSTOM_PRESETS_LIST
+                val updatedCustomList = (customPresetsList + selectedPreset).distinct()
+                viewModel?.updateSetting("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedCustomList).toString())
+
                 viewModel?.saveUniversalChecklistSettings(
                   headerTemplate = headerTemplate,
                   regardsTemplate = regardsTemplate,
@@ -1995,12 +2069,12 @@ fun DocumentChecklistSenderTab(
                   enhancementDocsJson = enhanceJson
                 ) { success, _ ->
                   if (success) {
-                    Toast.makeText(context, "✓ প্রিসেট ডকুমেন্টস ইউনিভার্সাল হিসেবে সেভ হয়েছে এবং শিটে সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "✓ প্রিসেট '${selectedPreset}' ও ডকুমেন্টস ইউনিভার্সাল হিসেবে গুগল শিটে সেভ ও সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
                   }
                 }
               },
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.fillMaxWidth()
+              modifier = Modifier.fillMaxWidth().testTag("btn_save_universal_checklist")
             ) {
               Icon(Icons.Default.CloudUpload, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
@@ -2170,5 +2244,172 @@ fun DocumentChecklistSenderTab(
     item {
       Spacer(modifier = Modifier.height(24.dp))
     }
+  }
+
+  // Dialog: Edit Item Name for Single Checklist
+  if (editingItemTarget != null) {
+    val target = editingItemTarget!!
+    var editedName by remember(target) { mutableStateOf(target.second) }
+    AlertDialog(
+      onDismissRequest = { editingItemTarget = null },
+      title = { Text("Edit Item Name", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+      text = {
+        OutlinedTextField(
+          value = editedName,
+          onValueChange = { editedName = it },
+          label = { Text("Item Name") },
+          modifier = Modifier.fillMaxWidth().testTag("input_edit_checklist_item_name")
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val idx = target.first
+            if (idx in 0 until singleChecklistItems.size && editedName.isNotBlank()) {
+              singleChecklistItems[idx] = singleChecklistItems[idx].copy(title = editedName.trim())
+            }
+            editingItemTarget = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Update Name")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { editingItemTarget = null }) { Text("Cancel") }
+      }
+    )
+  }
+
+  // Dialog: Edit Item Name for Corporate Company Item
+  if (editingCorpCompanyTarget != null) {
+    val target = editingCorpCompanyTarget!!
+    var editedName by remember(target) { mutableStateOf(target.second) }
+    AlertDialog(
+      onDismissRequest = { editingCorpCompanyTarget = null },
+      title = { Text("Edit Company Doc Name", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+      text = {
+        OutlinedTextField(
+          value = editedName,
+          onValueChange = { editedName = it },
+          label = { Text("Document Name") },
+          modifier = Modifier.fillMaxWidth()
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val idx = target.first
+            if (idx in 0 until corporateCompanyItems.size && editedName.isNotBlank()) {
+              corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(title = editedName.trim())
+            }
+            editingCorpCompanyTarget = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Update Name")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { editingCorpCompanyTarget = null }) { Text("Cancel") }
+      }
+    )
+  }
+
+  // Dialog: Edit Item Name for Corporate Employee Item
+  if (editingCorpEmployeeTarget != null) {
+    val target = editingCorpEmployeeTarget!!
+    var editedName by remember(target) { mutableStateOf(target.second) }
+    AlertDialog(
+      onDismissRequest = { editingCorpEmployeeTarget = null },
+      title = { Text("Edit Employee Doc Name", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+      text = {
+        OutlinedTextField(
+          value = editedName,
+          onValueChange = { editedName = it },
+          label = { Text("Document Name") },
+          modifier = Modifier.fillMaxWidth()
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val idx = target.first
+            if (idx in 0 until corporateEmployeeItems.size && editedName.isNotBlank()) {
+              corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(title = editedName.trim())
+            }
+            editingCorpEmployeeTarget = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Update Name")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { editingCorpEmployeeTarget = null }) { Text("Cancel") }
+      }
+    )
+  }
+
+  // Dialog: Create Brand New Preset by Admin
+  if (showCreatePresetDialog) {
+    var newPresetName by remember { mutableStateOf("") }
+    var newPresetItemsText by remember { mutableStateOf("") }
+
+    AlertDialog(
+      onDismissRequest = { showCreatePresetDialog = false },
+      title = { Text("Create New Checklist Preset", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Text("অ্যাডমিন নতুন প্রিসেট যোগ করলে তা ইউনিভার্সাল প্রিসেট হিসেবে সব ইউজারের কাছে চলে যাবে।", fontSize = 11.sp, color = Color.Gray)
+          OutlinedTextField(
+            value = newPresetName,
+            onValueChange = { newPresetName = it },
+            label = { Text("Preset Name (e.g. SME Business Loan)") },
+            modifier = Modifier.fillMaxWidth().testTag("input_new_preset_name")
+          )
+          OutlinedTextField(
+            value = newPresetItemsText,
+            onValueChange = { newPresetItemsText = it },
+            label = { Text("Required Documents (প্রতি লাইনে একটি আইটেম)") },
+            placeholder = { Text("Trade License\nBank Statement\nNID Copy\n...") },
+            maxLines = 6,
+            modifier = Modifier.fillMaxWidth().testTag("input_new_preset_items")
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val cleanName = newPresetName.trim()
+            if (cleanName.isNotBlank()) {
+              val itemsList = newPresetItemsText.lines().map { it.trim() }.filter { it.isNotBlank() }
+              val updatedCustom = (customPresetsList + cleanName).distinct()
+              viewModel?.updateSetting("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedCustom).toString())
+
+              val presetKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").uppercase()
+              viewModel?.updateSetting(presetKey, itemsList.joinToString("\n"))
+
+              // Switch to this new preset immediately
+              selectedPreset = cleanName
+              singleChecklistItems.clear()
+              itemsList.forEachIndexed { i, doc ->
+                singleChecklistItems.add(ChecklistItem(id = i + 1, title = doc, isChecked = true))
+              }
+
+              showCreatePresetDialog = false
+              Toast.makeText(context, "✓ নতুন প্রিসেট '$cleanName' সফলভাবে তৈরি হয়েছে!", Toast.LENGTH_SHORT).show()
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+          modifier = Modifier.testTag("btn_save_new_preset")
+        ) {
+          Text("সেভ করুন")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showCreatePresetDialog = false }) { Text("বাতিল") }
+      }
+    )
   }
 }

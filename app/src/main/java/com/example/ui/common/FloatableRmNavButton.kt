@@ -5,7 +5,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +24,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Warning
@@ -60,7 +61,9 @@ fun FloatableRmNavButton(
   onNavigateMyFiles: () -> Unit,
   onNavigatePendingDocs: () -> Unit,
   onNavigateDashboard: () -> Unit,
+  onNavigateCommunication: (() -> Unit)? = null,
   onNavigateDbrChecklist: (() -> Unit)? = null,
+  onNavigateImportantDocuments: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   var offsetX by remember { mutableFloatStateOf(0f) }
@@ -164,7 +167,112 @@ fun FloatableRmNavButton(
               }
             }
 
-            // Option 3: My Files
+            // Option 3: Messages & Team Events Hub
+            if (onNavigateCommunication != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = EblNavyDark,
+                  shadowElevation = 4.dp
+                ) {
+                  Text(
+                    text = "Messages & Events",
+                    color = Color(0xFFA78BFA),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                SmallFloatingActionButton(
+                  onClick = {
+                    isExpanded = false
+                    onNavigateCommunication()
+                  },
+                  containerColor = Color(0xFF7C3AED),
+                  contentColor = Color.White,
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("float_btn_communication")
+                ) {
+                  Icon(Icons.Default.Event, contentDescription = "Messages & Events")
+                }
+              }
+            }
+
+            // Option 4: DBR & Checklist Tool
+            if (onNavigateDbrChecklist != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = EblNavyDark,
+                  shadowElevation = 4.dp
+                ) {
+                  Text(
+                    text = "DBR & Checklist",
+                    color = EblGold,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                SmallFloatingActionButton(
+                  onClick = {
+                    isExpanded = false
+                    onNavigateDbrChecklist()
+                  },
+                  containerColor = EblGold,
+                  contentColor = EblNavyDark,
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("float_btn_dbr_checklist")
+                ) {
+                  Icon(Icons.Default.Calculate, contentDescription = "DBR & Checklist")
+                }
+              }
+            }
+
+            // Option 5: Important Documents Repository
+            if (onNavigateImportantDocuments != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = EblNavyDark,
+                  shadowElevation = 4.dp
+                ) {
+                  Text(
+                    text = "Important Docs",
+                    color = Color(0xFF67E8F9),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                SmallFloatingActionButton(
+                  onClick = {
+                    isExpanded = false
+                    onNavigateImportantDocuments()
+                  },
+                  containerColor = Color(0xFF0284C7),
+                  contentColor = Color.White,
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("float_btn_important_docs")
+                ) {
+                  Icon(Icons.Default.Description, contentDescription = "Important Documents")
+                }
+              }
+            }
+
+            // Option 5: My Files
             Row(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.padding(end = 4.dp)
@@ -197,7 +305,7 @@ fun FloatableRmNavButton(
               }
             }
 
-            // Option 4: RM Dashboard
+            // Option 6: RM Dashboard
             Row(
               verticalAlignment = Alignment.CenterVertically,
               modifier = Modifier.padding(end = 4.dp)
@@ -227,41 +335,6 @@ fun FloatableRmNavButton(
                 modifier = Modifier.testTag("float_btn_dashboard")
               ) {
                 Icon(Icons.Default.Assessment, contentDescription = "Dashboard")
-              }
-            }
-
-            // Option 5: DBR & Checklist Tool
-            if (onNavigateDbrChecklist != null) {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(end = 4.dp)
-              ) {
-                Surface(
-                  shape = RoundedCornerShape(8.dp),
-                  color = EblNavyDark,
-                  shadowElevation = 4.dp
-                ) {
-                  Text(
-                    text = "DBR Tool",
-                    color = EblGold,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                  )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                SmallFloatingActionButton(
-                  onClick = {
-                    isExpanded = false
-                    onNavigateDbrChecklist()
-                  },
-                  containerColor = EblGold,
-                  contentColor = EblNavyDark,
-                  shape = CircleShape,
-                  modifier = Modifier.testTag("float_btn_dbr_checklist")
-                ) {
-                  Icon(Icons.Default.Calculate, contentDescription = "DBR Tool")
-                }
               }
             }
           }

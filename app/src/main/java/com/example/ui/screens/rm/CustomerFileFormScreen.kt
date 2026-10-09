@@ -242,10 +242,42 @@ fun CustomerFileFormScreen(
   var altMobile by remember { mutableStateOf("") }
   var email by remember { mutableStateOf("") }
   var ccNumber by remember { mutableStateOf("") }
+  var serialNumber by remember { mutableStateOf("") }
   var assignedRmCode by remember { mutableStateOf(currentUser.rmCode) }
   val allRms by viewModel.allRms.collectAsState()
+  val allFiles by viewModel.allFiles.collectAsState()
+  val allActiveFiles = remember(allFiles) { allFiles.filter { !it.isDeleted } }
   var rmDropdownExpanded by remember { mutableStateOf(false) }
   var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+  fun normalizePhone(raw: String): String {
+    return raw.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0')
+  }
+
+  // Live duplicate checking against active files in database / sheet
+  val duplicateMobileFile = remember(mobile, existingFile, allActiveFiles) {
+    val norm = normalizePhone(mobile)
+    if (norm.length >= 6) {
+      allActiveFiles.firstOrNull { f ->
+        f.fileId != (existingFile?.fileId ?: "") && (
+          normalizePhone(f.mobile) == norm ||
+          (f.altMobile.isNotBlank() && normalizePhone(f.altMobile) == norm)
+        )
+      }
+    } else null
+  }
+
+  val duplicateAltMobileFile = remember(altMobile, existingFile, allActiveFiles) {
+    val norm = normalizePhone(altMobile)
+    if (norm.length >= 6) {
+      allActiveFiles.firstOrNull { f ->
+        f.fileId != (existingFile?.fileId ?: "") && (
+          normalizePhone(f.mobile) == norm ||
+          (f.altMobile.isNotBlank() && normalizePhone(f.altMobile) == norm)
+        )
+      }
+    } else null
+  }
 
   val locationPermissionLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
@@ -352,13 +384,24 @@ fun CustomerFileFormScreen(
 
   var isSaving by remember { mutableStateOf(false) }
 
+  // Auto-assign sequential SL for new file
+  LaunchedEffect(allActiveFiles, editFileId) {
+    if (editFileId == null && serialNumber.isBlank()) {
+      val maxSl = allActiveFiles.mapNotNull { it.serialNumber.toIntOrNull() }.maxOrNull() ?: allActiveFiles.size
+      serialNumber = (maxSl + 1).toString()
+    }
+  }
+
   // Load existing file data if editing
   LaunchedEffect(editFileId) {
     if (editFileId != null) {
-      val file = viewModel.eblRepository.getFileById(editFileId)
+      val file = viewModel.eblRepository.getFileByAnyId(editFileId) ?: viewModel.eblRepository.getFileById(editFileId)
       if (file != null) {
         existingFile = file
         fileId = file.fileId
+        serialNumber = file.serialNumber.ifBlank {
+          (allActiveFiles.indexOfFirst { it.fileId == file.fileId }.takeIf { it >= 0 }?.plus(1) ?: 1).toString()
+        }
         customerName = file.customerName
         companyName = file.companyName
         officeAddress = file.officeAddress
@@ -397,6 +440,16 @@ fun CustomerFileFormScreen(
       errorMessage = "Office / Company name is required."
       return
     }
+    if (duplicateMobileFile != null) {
+      val dupId = duplicateMobileFile.ccNumber.ifBlank { duplicateMobileFile.fileId }
+      errorMessage = "This number already exists! Mobile is already registered with Customer: ${duplicateMobileFile.customerName} ($dupId). Duplicate mobile numbers are not allowed."
+      return
+    }
+    if (duplicateAltMobileFile != null) {
+      val dupId = duplicateAltMobileFile.ccNumber.ifBlank { duplicateAltMobileFile.fileId }
+      errorMessage = "This number already exists! Alternate mobile is already registered with Customer: ${duplicateAltMobileFile.customerName} ($dupId)."
+      return
+    }
 
     isSaving = true
     errorMessage = null
@@ -417,7 +470,7 @@ fun CustomerFileFormScreen(
       }
 
       viewModel.saveCustomerFile(
-        fileId = fileId,
+        fileId = existingFile?.fileId ?: fileId,
         customerName = customerName,
         companyName = companyName,
         officeAddress = officeAddress,
@@ -437,14 +490,15 @@ fun CustomerFileFormScreen(
         cpvRemarks = cpvRemarks,
         submissionLatitude = currentLat,
         submissionLongitude = currentLng,
-        submissionAddress = currentAddr
+        submissionAddress = currentAddr,
+        serialNumber = serialNumber.trim()
       ) { success, targetId ->
         isSaving = false
         if (success && targetId != null) {
           viewModel.resetFilters()
           onSaveSuccess(targetId)
         } else {
-          errorMessage = "Failed to save customer file. Please check permissions."
+          errorMessage = targetId ?: "Failed to save customer file. Please check permissions."
         }
       }
     }
@@ -517,15 +571,32 @@ fun CustomerFileFormScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // CC-Number is the primary identifier
-        VoiceInputField(
-          value = ccNumber,
-          onValueChange = { ccNumber = it },
-          label = "CC-Number (Account / Reference No.) *",
-          placeholder = "e.g. 4532-8901-2345-6789 or CC-9982",
-          leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = EblNavyPrimary) },
-          testTag = "form_cc_number"
-        )
+        // Serial Number (SL / SL Wise) & CC-Number side-by-side
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          VoiceInputField(
+            value = serialNumber,
+            onValueChange = { serialNumber = it },
+            label = "Serial No. (SL) *",
+            placeholder = "e.g. 1, 2, 3...",
+            leadingIcon = { Icon(Icons.Default.List, contentDescription = null, tint = EblNavyPrimary) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f),
+            testTag = "form_serial_number"
+          )
+
+          VoiceInputField(
+            value = ccNumber,
+            onValueChange = { ccNumber = it },
+            label = "CC-Number (Account / Ref) *",
+            placeholder = "e.g. 4532-8901 or CC-9982",
+            leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = EblNavyPrimary) },
+            modifier = Modifier.weight(1.3f),
+            testTag = "form_cc_number"
+          )
+        }
 
         // Admin & Mentor RM Reassignment Control
         if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
@@ -682,7 +753,7 @@ fun CustomerFileFormScreen(
             onValueChange = { mobile = it; errorMessage = null },
             label = "Mobile Number *",
             placeholder = "017XXXXXXXX",
-            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = EblNavyPrimary) },
+            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = if (duplicateMobileFile != null) Color(0xFFDC2626) else EblNavyPrimary) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.weight(1f),
             testTag = "form_mobile"
@@ -692,9 +763,44 @@ fun CustomerFileFormScreen(
             onValueChange = { altMobile = it },
             label = "Alt Mobile",
             placeholder = "018XXXXXXXX",
+            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = if (duplicateAltMobileFile != null) Color(0xFFDC2626) else EblNavyPrimary) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             modifier = Modifier.weight(1f),
             testTag = "form_alt_mobile"
+          )
+        }
+
+        // Live Duplicate Mobile Alert (Prompt: "mobaile number jodi kao tyoe kore abond sheta jodi already sheet a thake tahole sey data entri nibe na massa dekhabe thus number alr3ady exist")
+        if (duplicateMobileFile != null) {
+          Spacer(modifier = Modifier.height(4.dp))
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFFEF2F2),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text(
+                text = "This number already exists! Registered with: ${duplicateMobileFile.customerName} (${duplicateMobileFile.ccNumber.ifBlank { duplicateMobileFile.fileId }})",
+                color = Color(0xFFDC2626),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.testTag("error_duplicate_mobile")
+              )
+            }
+          }
+        }
+        if (duplicateAltMobileFile != null) {
+          Spacer(modifier = Modifier.height(4.dp))
+          Text(
+            text = "⚠️ Alt Mobile already registered with: ${duplicateAltMobileFile.customerName} (${duplicateAltMobileFile.ccNumber.ifBlank { duplicateAltMobileFile.fileId }})",
+            color = Color(0xFFDC2626),
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
           )
         }
 

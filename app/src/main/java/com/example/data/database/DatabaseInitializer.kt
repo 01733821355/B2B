@@ -32,6 +32,86 @@ object DatabaseInitializer {
     // Ensure old non-auth audit logs are purged so only login/logout logs are kept
     database.auditLogDao().purgeNonAuthLogs()
 
+    // Seed default important banking documents if not yet present
+    if (database.importantDocumentDao().getAllActiveDocuments().isEmpty()) {
+      val now = DateUtils.currentDhakaMillis()
+      val sampleDocs = listOf(
+        com.example.data.model.ImportantDocumentEntity(
+          docId = "DOC_CIRCULAR_2026_01",
+          title = "EBL Retail Lending & Credit Card Policy 2026",
+          category = "Policies & Circulars",
+          description = "Official operational circular containing eligibility criteria, minimum salary threshold, and credit assessment rules.",
+          fileName = "EBL_Retail_Credit_Policy_2026.pdf",
+          fileType = "application/pdf",
+          fileSizeBytes = 284000L,
+          fileUri = "",
+          storagePath = "",
+          uploadedBy = "Admin0",
+          uploaderName = "System Administrator",
+          uploaderRole = "ADMIN",
+          createdAt = now - 86400000L * 5,
+          updatedAt = now - 86400000L * 5,
+          isDeleted = false,
+          isSynced = true
+        ),
+        com.example.data.model.ImportantDocumentEntity(
+          docId = "DOC_CPV_SOP_02",
+          title = "Customer Physical Verification (CPV) Guidelines",
+          category = "CPV & Compliance",
+          description = "Step-by-step Standard Operating Procedure (SOP) for residential and office verification by sales field agents.",
+          fileName = "CPV_Verification_Guidelines_v2.pdf",
+          fileType = "application/pdf",
+          fileSizeBytes = 192000L,
+          fileUri = "",
+          storagePath = "",
+          uploadedBy = "12345",
+          uploaderName = "Senior Operations Mentor",
+          uploaderRole = "MENTOR",
+          createdAt = now - 86400000L * 3,
+          updatedAt = now - 86400000L * 3,
+          isDeleted = false,
+          isSynced = true
+        ),
+        com.example.data.model.ImportantDocumentEntity(
+          docId = "DOC_SALARY_CERT_03",
+          title = "Standard Salary Certificate & Pay Slip Format",
+          category = "Forms & Formats",
+          description = "Standard corporate salary certificate and HR declaration template required for salaried professionals.",
+          fileName = "Standard_Salary_Certificate_Format.pdf",
+          fileType = "application/pdf",
+          fileSizeBytes = 145000L,
+          fileUri = "",
+          storagePath = "",
+          uploadedBy = "Admin0",
+          uploaderName = "System Administrator",
+          uploaderRole = "ADMIN",
+          createdAt = now - 86400000L * 2,
+          updatedAt = now - 86400000L * 2,
+          isDeleted = false,
+          isSynced = true
+        ),
+        com.example.data.model.ImportantDocumentEntity(
+          docId = "DOC_RATES_CHART_04",
+          title = "Schedule of Charges & Product Rates Chart 2026",
+          category = "Product Guidelines",
+          description = "Updated interest rates, annual fees, card issuance charges, and reward points structure for all EBL cards.",
+          fileName = "Schedule_of_Charges_Rates_2026.pdf",
+          fileType = "application/pdf",
+          fileSizeBytes = 312000L,
+          fileUri = "",
+          storagePath = "",
+          uploadedBy = "12345",
+          uploaderName = "Senior Operations Mentor",
+          uploaderRole = "MENTOR",
+          createdAt = now - 86400000L,
+          updatedAt = now - 86400000L,
+          isDeleted = false,
+          isSynced = true
+        )
+      )
+      database.importantDocumentDao().insertDocuments(sampleDocs)
+    }
+
     val existingUsers = database.userDao().getAllUsers()
     if (existingUsers.isNotEmpty()) {
       return@withContext

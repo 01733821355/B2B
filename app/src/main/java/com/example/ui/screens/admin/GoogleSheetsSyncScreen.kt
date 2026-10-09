@@ -151,7 +151,7 @@ function doPost(e) {
 
     // 1. Auto-create & format 'Customer_Files' Tab
     var fileSheet = getOrCreateSheet(ss, 'Customer_Files', [
-      'CC-Number', 'File ID', 'Customer Name', 'Company Name',
+      'SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name',
       'Office Address', 'Mobile', 'Email', 'Product Type',
       'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
       'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng',
@@ -301,29 +301,36 @@ function doPost(e) {
     // Upsert Customer Files (ONLY files sent by app - NEVER overwrite manual sheet edits)
     if (data.files && data.files.length > 0) {
       var fileExistingData = fileSheet.getDataRange().getValues();
+      var headers = fileExistingData.length > 0 ? fileExistingData[0].map(function(h) { return String(h || '').trim().toLowerCase(); }) : [];
+      var hasSlCol = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial');
       var fileIdRowMap = {};
       for (var r = 1; r < fileExistingData.length; r++) {
-        var ccVal = String(fileExistingData[r][0] || '').trim();
-        var fidVal = String(fileExistingData[r][1] || '').trim();
-        if (fidVal) {
-          fileIdRowMap[fidVal] = r + 1;
-          fileIdRowMap[fidVal.toLowerCase()] = r + 1;
-        }
-        if (ccVal) {
-          fileIdRowMap[ccVal] = r + 1;
-          fileIdRowMap[ccVal.toLowerCase()] = r + 1;
+        var rowVals = fileExistingData[r];
+        for (var c = 0; c < Math.min(rowVals.length, 6); c++) {
+          var val = String(rowVals[c] || '').trim();
+          if (val) {
+            fileIdRowMap[val] = r + 1;
+            fileIdRowMap[val.toLowerCase()] = r + 1;
+            fileIdRowMap[val.replace(/[-\s]/g, '')] = r + 1;
+            fileIdRowMap[val.replace(/[-\s]/g, '').toLowerCase()] = r + 1;
+          }
         }
       }
 
-      data.files.forEach(function(f) {
+      data.files.forEach(function(f, index) {
         var fId = String(f.fileId || '').trim();
         var cc = String(f.ccNumber || '').trim();
+        var sl = String(f.serialNumber || f.sl || (index + 1)).trim();
         if (!fId && !cc) return;
 
+        var fClean = fId.replace(/[-\s]/g, '');
+        var ccClean = cc.replace(/[-\s]/g, '');
         var targetRowIndex = (fId && fileIdRowMap[fId]) || (fId && fileIdRowMap[fId.toLowerCase()]) ||
-                             (cc && fileIdRowMap[cc]) || (cc && fileIdRowMap[cc.toLowerCase()]);
+                             (fClean && fileIdRowMap[fClean]) || (fClean && fileIdRowMap[fClean.toLowerCase()]) ||
+                             (cc && fileIdRowMap[cc]) || (cc && fileIdRowMap[cc.toLowerCase()]) ||
+                             (ccClean && fileIdRowMap[ccClean]) || (ccClean && fileIdRowMap[ccClean.toLowerCase()]);
 
-        var row = [
+        var baseRow = [
           f.ccNumber || '',
           f.fileId || '',
           f.customerName || '',
@@ -344,6 +351,8 @@ function doPost(e) {
           f.updatedAt || '',
           f.updatedBy || 'App'
         ];
+
+        var row = hasSlCol ? [sl || (index + 1)].concat(baseRow) : baseRow;
 
         if (targetRowIndex) {
           fileSheet.getRange(targetRowIndex, 1, 1, row.length).setValues([row]);
@@ -566,29 +575,39 @@ function getOrCreateSheet(ss, sheetName, headers, headerColor) {
 
 function extractAllSheetFiles(sheet) {
   var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var headers = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+  var hasSl = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial' || headers[0] === 'serial no');
+  var offset = hasSl ? 1 : 0;
+
   var list = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
-    if (!row[0] && !row[1]) continue;
+    var slVal = hasSl ? String(row[0] || r).trim() : String(r);
+    var ccVal = String(row[offset] || '');
+    var fIdVal = String(row[offset + 1] || ccVal || '');
+    if (!ccVal && !fIdVal) continue;
     list.push({
-      ccNumber: String(row[0] || ''),
-      fileId: String(row[1] || row[0] || ''),
-      customerName: String(row[2] || ''),
-      companyName: String(row[3] || ''),
-      officeAddress: String(row[4] || ''),
-      mobile: String(row[5] || ''),
-      email: String(row[6] || ''),
-      productType: String(row[7] || ''),
-      applicationStatus: String(row[8] || 'Submitted'),
-      activeStatus: String(row[9] || 'N'),
-      assignedRmCode: String(row[10] || ''),
-      pendingDocuments: String(row[11] || ''),
-      cpvRemarks: String(row[12] || ''),
-      remarks: String(row[12] || ''),
-      cpvStatus: String(row[13] || 'Pending'),
-      submissionAddress: String(row[14] || ''),
-      updatedAt: String(row[17] || ''),
-      updatedBy: String(row[18] || 'Sheet')
+      serialNumber: slVal,
+      sl: slVal,
+      ccNumber: ccVal,
+      fileId: fIdVal,
+      customerName: String(row[offset + 2] || ''),
+      companyName: String(row[offset + 3] || ''),
+      officeAddress: String(row[offset + 4] || ''),
+      mobile: String(row[offset + 5] || ''),
+      email: String(row[offset + 6] || ''),
+      productType: String(row[offset + 7] || ''),
+      applicationStatus: String(row[offset + 8] || 'Submitted'),
+      activeStatus: String(row[offset + 9] || 'N'),
+      assignedRmCode: String(row[offset + 10] || ''),
+      pendingDocuments: String(row[offset + 11] || ''),
+      cpvRemarks: String(row[offset + 12] || ''),
+      remarks: String(row[offset + 12] || ''),
+      cpvStatus: String(row[offset + 13] || 'Pending'),
+      submissionAddress: String(row[offset + 14] || ''),
+      updatedAt: String(row[offset + 17] || ''),
+      updatedBy: String(row[offset + 18] || 'Sheet')
     });
   }
   return list;

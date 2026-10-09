@@ -137,17 +137,26 @@ fun LoginScreen(
   }
 
   fun doBiometricLogin() {
-    val targetCode = usernameInput.ifBlank { lastLoggedRmCode }.trim().uppercase()
+    val currentTyped = usernameInput.trim().uppercase()
+    val lastVerified = lastLoggedRmCode.trim().uppercase()
+    val targetCode = currentTyped.ifBlank { lastVerified }
+
     if (targetCode.isBlank()) {
-      errorMessage = "Please enter your RM Code first."
+      errorMessage = "Please enter your RM Code / Username first."
       return
     }
 
-    val isBioOn = sharedPrefs.getBoolean("fingerprint_enabled_$targetCode", false) || (isBiometricEnabled?.invoke(targetCode) == true)
-    val isPassOk = sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
+    // STRICT RULE: If switching to another ID, password is 100% mandatory!
+    val isSameAsLastVerified = (targetCode == lastVerified) && lastVerified.isNotBlank()
+    if (!isSameAsLastVerified && currentTyped.isNotBlank()) {
+      errorMessage = "অন্য কোনো আইডি ($targetCode) দিয়ে লগইন করতে হলে অবশ্যই পাসওয়ার্ড দিয়ে লগইন করতে হবে। একবার পাসওয়ার্ড দিয়ে সফলভাবে ঢুকলে পরবর্তীতে সেই আইডিতে ফিঙ্গারপ্রিন্ট সক্রিয় হবে।"
+      return
+    }
 
-    if (!isPassOk && !isBioOn) {
-      errorMessage = "প্রথমবার ইউজারনেম ও পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে লগইন করলে পরবর্তী সকল সময়ে সরাসরি ফিঙ্গারপ্রিন্ট দিয়ে ঢুকতে পারবেন।"
+    // Check if password has been verified for this specific ID on this device
+    val isPassOk = sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
+    if (!isPassOk) {
+      errorMessage = "এই আইডির জন্য পাসওয়ার্ড পরিবর্তন করা হয়েছে অথবা নতুন লগইন। অনুগ্রহ করে পাসওয়ার্ড দিয়ে একবার লগইন করুন।"
       return
     }
 
@@ -479,18 +488,23 @@ fun LoginScreen(
                   fontWeight = FontWeight.Bold,
                   color = EblNavyDark
                 )
-                val target = usernameInput.ifBlank { lastLoggedRmCode }.trim().uppercase()
-                val isBioActive = target.isNotBlank() && (
-                  sharedPrefs.getBoolean("password_login_verified_$target", false) ||
-                  sharedPrefs.getBoolean("fingerprint_enabled_$target", false) ||
-                  (isBiometricEnabled?.invoke(target) == true)
-                )
+                val currentTyped = usernameInput.trim().uppercase()
+                val lastVerified = lastLoggedRmCode.trim().uppercase()
+                val target = currentTyped.ifBlank { lastVerified }
+                val isSameAsLast = target.isNotBlank() && target == lastVerified
+                val isPassOk = isSameAsLast && (sharedPrefs.getBoolean("password_login_verified_$target", false) || (isPasswordVerified?.invoke(target) == true))
+
                 if (target.isNotBlank()) {
+                  val statusMsg = when {
+                    !isSameAsLast && currentTyped.isNotBlank() -> "অন্য আইডিতে ($target) পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক"
+                    isPassOk -> "✓ কুইক ফিঙ্গারপ্রিন্ট সক্রিয় ($target) - সরাসরি ঢুকুন"
+                    else -> "পাসওয়ার্ড দিয়ে একবার লগইন করুন (এরপর ফিঙ্গারপ্রিন্ট চালু হবে)"
+                  }
                   Text(
-                    text = if (isBioActive) "✓ ফিঙ্গারপ্রিন্ট সক্রিয় ($target) - ট্যাপ করুন" else "প্রথমবার পাসওয়ার্ড দিয়ে লগইন করুন (এরপর সক্রিয় হবে)",
+                    text = statusMsg,
                     fontSize = 10.sp,
-                    color = if (isBioActive) Color(0xFF059669) else Color(0xFFB45309),
-                    fontWeight = if (isBioActive) FontWeight.Bold else FontWeight.Normal
+                    color = if (isPassOk) Color(0xFF059669) else Color(0xFFB45309),
+                    fontWeight = if (isPassOk) FontWeight.Bold else FontWeight.Normal
                   )
                 }
               }

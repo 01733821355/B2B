@@ -213,7 +213,9 @@ fun EblMainApp(viewModel: AppViewModel) {
           if (user.role == "RM") viewModel.clearSmsForCurrentRm() else viewModel.clearAllSms()
         },
         onDeleteSms = { viewModel.deleteSms(it) },
-        onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) }
+        onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
+        onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
+        onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) }
       )
     },
     bottomBar = {
@@ -277,6 +279,8 @@ fun EblMainApp(viewModel: AppViewModel) {
               onFileClick = { f -> viewModel.navigateTo(Screen.CustomerForm(f.fileId)) },
               onDownloadReport = { viewModel.navigateTo(Screen.Reports) },
               onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
+              onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
+              onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) },
               onUpdateLocation = { lat, lng, addr ->
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
               },
@@ -391,6 +395,20 @@ fun EblMainApp(viewModel: AppViewModel) {
               onNavigateBack = { viewModel.navigateBack() }
             )
           }
+
+          is Screen.CommunicationHub -> {
+            com.example.ui.screens.tools.CommunicationHubScreen(
+              viewModel = viewModel
+            )
+          }
+
+          is Screen.ImportantDocuments -> {
+            com.example.ui.screens.tools.ImportantDocumentsScreen(
+              viewModel = viewModel,
+              currentUser = user,
+              onNavigateBack = { viewModel.navigateBack() }
+            )
+          }
         }
       }
     }
@@ -463,6 +481,13 @@ fun EblBottomNav(
         onClick = { onSelectScreen(Screen.Reports) },
         icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports", modifier = Modifier.size(20.dp)) },
         label = { Text("Reports", fontSize = 9.sp) },
+        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
+      )
+      NavigationBarItem(
+        selected = currentScreen is Screen.CommunicationHub,
+        onClick = { onSelectScreen(Screen.CommunicationHub) },
+        icon = { Icon(Icons.Default.PhoneInTalk, contentDescription = "Connect", modifier = Modifier.size(20.dp)) },
+        label = { Text("Connect", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     } else if (userRole == "ADMIN") {

@@ -280,14 +280,31 @@ fun CustomerFileListScreen(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Column(modifier = Modifier.weight(1f)) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (file.serialNumber.isNotBlank()) {
+                      Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = EblNavyDark,
+                        modifier = Modifier.padding(end = 6.dp)
+                      ) {
+                        Text(
+                          text = "SL #${file.serialNumber}",
+                          color = EblGold,
+                          fontSize = 11.sp,
+                          fontWeight = FontWeight.Bold,
+                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                      }
+                    }
+                    Text(
+                      text = file.customerName,
+                      fontSize = 15.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = EblNavyDark
+                    )
+                  }
                   Text(
-                    text = file.customerName,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = EblNavyDark
-                  )
-                  Text(
-                    text = "${file.fileId} • ${file.companyName}",
+                    text = "${file.ccNumber.ifBlank { file.fileId }} • ${file.companyName}",
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                   )
@@ -448,7 +465,10 @@ fun CustomerFileListScreen(
       onNavigateNewFile = onAddNewFile,
       onNavigateMyFiles = { viewModel.pendingDocsOnlyFilter.value = false },
       onNavigatePendingDocs = { viewModel.pendingDocsOnlyFilter.value = true },
-      onNavigateDashboard = { viewModel.navigateTo(Screen.RmDashboard) }
+      onNavigateDashboard = { viewModel.navigateTo(Screen.RmDashboard) },
+      onNavigateCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
+      onNavigateDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
+      onNavigateImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) }
     )
   }
 }

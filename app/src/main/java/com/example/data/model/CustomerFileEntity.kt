@@ -10,7 +10,8 @@ import androidx.room.PrimaryKey
     Index(value = ["assignedRmCode"]),
     Index(value = ["applicationStatus"]),
     Index(value = ["productType"]),
-    Index(value = ["isDeleted"])
+    Index(value = ["isDeleted"]),
+    Index(value = ["mobile"])
   ]
 )
 data class CustomerFileEntity(
@@ -43,6 +44,9 @@ data class CustomerFileEntity(
   val submissionLatitude: Double? = null,
   val submissionLongitude: Double? = null,
   val submissionAddress: String? = null,
+
+  // Serial Number / SL Wise (e.g. 1, 2, 3...)
+  val serialNumber: String = "",
 
   // Timestamps and Tracking
   val createdAt: Long,

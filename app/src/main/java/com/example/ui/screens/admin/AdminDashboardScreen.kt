@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Group
@@ -189,6 +190,18 @@ fun AdminDashboardScreen(
               Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
               Spacer(modifier = Modifier.width(4.dp))
               Text("Reports", fontSize = 11.sp, maxLines = 1, softWrap = false)
+            }
+
+            OutlinedButton(
+              onClick = { onNavigate(Screen.ImportantDocuments) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF67E8F9)),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+              modifier = Modifier.weight(1f).testTag("admin_nav_important_docs")
+            ) {
+              Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF67E8F9))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
           }
         }

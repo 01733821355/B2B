@@ -47,6 +47,8 @@ sealed class Screen {
   object MentorUserLocationTracking : Screen()
   object ProfilePassword : Screen()
   object DbrChecklist : Screen()
+  object CommunicationHub : Screen()
+  object ImportantDocuments : Screen()
 }
 
 data class KpiStats(
@@ -132,6 +134,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   // Raw authorized files
   private val authorizedFilesFlow = eblRepository.getAllFilesIncludingDeletedFlow()
+  val allFiles: StateFlow<List<CustomerFileEntity>> = authorizedFilesFlow
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  // Important Documents Flow for all users
+  val importantDocuments: StateFlow<List<com.example.data.model.ImportantDocumentEntity>> = eblRepository.getAllImportantDocumentsFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   // Filtered files according to user search & filters
   val filteredFiles: StateFlow<List<CustomerFileEntity>> = combine(
@@ -688,9 +696,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   fun changePassword(oldPass: String, newPass: String, onResult: (Boolean, String?) -> Unit) {
     viewModelScope.launch {
+      val currentUser = authRepository.currentUser.value
       val res = authRepository.changePassword(oldPass, newPass)
       res.onSuccess {
-        onResult(true, "Password changed successfully!")
+        if (currentUser != null) {
+          val clean = currentUser.rmCode.trim().uppercase()
+          // Invalidate password login verification and fingerprint bypass for this ID
+          authPrefs.edit()
+            .putBoolean("password_login_verified_$clean", false)
+            .putBoolean("fingerprint_enabled_$clean", false)
+            .apply()
+          try {
+            val now = DateUtils.currentDhakaMillis()
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity("password_login_verified_$clean", "false", clean, now)
+            )
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity("fingerprint_enabled_$clean", "false", clean, now)
+            )
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity("RM_PASS_UPDATED_AT_$clean", now.toString(), clean, now)
+            )
+          } catch (_: Exception) {}
+
+          // Synchronize new password to Google Sheets
+          val updatedUser = database.userDao().getUser(clean)
+          if (updatedUser != null) {
+            eblRepository.syncRmPasswordToGoogleSheets(clean, updatedUser.passwordHash, updatedUser.salt)
+            eblRepository.triggerGoogleSheetsSync()
+          }
+        }
+        onResult(true, "Password changed successfully! You must use this new password on your next login.")
       }.onFailure { err ->
         onResult(false, err.message ?: "Failed to change password.")
       }
@@ -721,6 +757,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     submissionLatitude: Double? = null,
     submissionLongitude: Double? = null,
     submissionAddress: String? = null,
+    serialNumber: String? = null,
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
@@ -747,7 +784,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         cpvSupportingDocUri = cpvSupportingDocUri,
         submissionLatitude = submissionLatitude,
         submissionLongitude = submissionLongitude,
-        submissionAddress = submissionAddress
+        submissionAddress = submissionAddress,
+        serialNumber = serialNumber
       )
       res.onSuccess { entity ->
         _uiMessage.emit("File ${entity.fileId} saved successfully.")
@@ -799,6 +837,51 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiMessage.emit("File $fileId permanently deleted by Mentor.")
       }.onFailure { err ->
         _uiMessage.emit("Failed: ${err.message}")
+      }
+    }
+  }
+
+  fun saveImportantDocument(
+    title: String,
+    category: String,
+    description: String,
+    fileName: String,
+    fileType: String,
+    fileSizeBytes: Long,
+    fileUri: String,
+    storagePath: String,
+    docId: String? = null,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.saveImportantDocument(
+        docId = docId,
+        title = title,
+        category = category,
+        description = description,
+        fileName = fileName,
+        fileType = fileType,
+        fileSizeBytes = fileSizeBytes,
+        fileUri = fileUri,
+        storagePath = storagePath
+      )
+      res.onSuccess {
+        _uiMessage.emit("ডকুমেন্ট '${it.title}' সফলভাবে সেভ করা হয়েছে।")
+        onResult(true, null)
+      }.onFailure {
+        onResult(false, it.message ?: "Failed to save document.")
+      }
+    }
+  }
+
+  fun deleteImportantDocument(docId: String, onResult: (Boolean, String?) -> Unit) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteImportantDocument(docId)
+      res.onSuccess {
+        _uiMessage.emit("ডকুমেন্ট সফলভাবে মুছে ফেলা হয়েছে।")
+        onResult(true, null)
+      }.onFailure {
+        onResult(false, it.message ?: "Failed to delete document.")
       }
     }
   }
@@ -1065,4 +1148,182 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     showDeletedFilesOnly.value = false
     pendingDocsOnlyFilter.value = false
   }
+
+  // ==========================================
+  // Communication & Internet Calling Features
+  // ==========================================
+  private val _callState = MutableStateFlow<CallUiState>(CallUiState.Idle)
+  val callState: StateFlow<CallUiState> = _callState.asStateFlow()
+
+  private var callTimerJob: kotlinx.coroutines.Job? = null
+
+  val teamHubMessages: StateFlow<List<com.example.data.model.ChatMessageEntity>> = eblRepository.getTeamHubMessagesFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val teamEvents: StateFlow<List<com.example.data.model.TeamEventEntity>> = eblRepository.getAllTeamEventsFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  fun sendChatMessage(
+    text: String,
+    recipientRmCode: String? = null,
+    messageType: String = "TEXT",
+    eventId: String? = null,
+    onResult: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
+    if (text.isBlank()) return
+    viewModelScope.launch {
+      val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId)
+      res.onSuccess {
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun createTeamEvent(
+    title: String,
+    description: String,
+    targetDate: String,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.createTeamEvent(title, description, targetDate)
+      res.onSuccess {
+        _uiMessage.emit("✓ Event created & shared with all team members!")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun submitEventResponse(
+    eventId: String,
+    filesCount: Int,
+    requestedDate: String,
+    location: String,
+    remarks: String,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.submitEventResponse(eventId, filesCount, requestedDate, location, remarks)
+      res.onSuccess {
+        _uiMessage.emit("✓ Your delivery details have been submitted!")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun getEventResponses(eventId: String, onResult: (List<com.example.data.model.EventResponseEntity>) -> Unit) {
+    viewModelScope.launch {
+      val list = eblRepository.getResponsesForEvent(eventId)
+      onResult(list)
+    }
+  }
+
+  // Internet Calling
+  fun startCall(targetUser: com.example.data.model.UserEntity) {
+    callTimerJob?.cancel()
+    _callState.value = CallUiState.Calling(targetUser)
+    com.example.util.CallingService.playDialTone()
+
+    // Automatically transition to Connected after 2.5s simulated ringing
+    callTimerJob = viewModelScope.launch {
+      kotlinx.coroutines.delay(2500)
+      com.example.util.CallingService.playConnectedTone()
+      var duration = 0
+      while (true) {
+        _callState.value = CallUiState.Connected(targetUser, duration, isMuted = false, isSpeakerOn = false)
+        kotlinx.coroutines.delay(1000)
+        duration++
+      }
+    }
+  }
+
+  fun startGroupCall(title: String) {
+    callTimerJob?.cancel()
+    val myUser = currentUser.value
+    val allActiveUsers = allRms.value.take(4)
+    val participants = if (myUser != null) listOf(myUser) + allActiveUsers.filter { it.rmCode != myUser.rmCode } else allActiveUsers
+
+    com.example.util.CallingService.playConnectedTone()
+    callTimerJob = viewModelScope.launch {
+      var duration = 0
+      while (true) {
+        _callState.value = CallUiState.GroupCall(
+          title = title.ifBlank { "Team Live Huddle" },
+          participants = participants,
+          durationSeconds = duration,
+          isMuted = false,
+          isSpeakerOn = true
+        )
+        kotlinx.coroutines.delay(1000)
+        duration++
+      }
+    }
+
+    // Broadcast into chat
+    sendChatMessage(
+      text = "📞 Active Group Call: '$title' started by ${myUser?.name ?: "Team"}. Tap to join!",
+      recipientRmCode = null,
+      messageType = "CALL_LOG"
+    )
+  }
+
+  fun toggleMute() {
+    val current = _callState.value
+    if (current is CallUiState.Connected) {
+      _callState.value = current.copy(isMuted = !current.isMuted)
+    } else if (current is CallUiState.GroupCall) {
+      _callState.value = current.copy(isMuted = !current.isMuted)
+    }
+  }
+
+  fun toggleSpeaker() {
+    val current = _callState.value
+    if (current is CallUiState.Connected) {
+      _callState.value = current.copy(isSpeakerOn = !current.isSpeakerOn)
+    } else if (current is CallUiState.GroupCall) {
+      _callState.value = current.copy(isSpeakerOn = !current.isSpeakerOn)
+    }
+  }
+
+  fun endCall() {
+    callTimerJob?.cancel()
+    callTimerJob = null
+    com.example.util.CallingService.playEndCallTone()
+    val current = _callState.value
+    if (current is CallUiState.Connected) {
+      val min = current.durationSeconds / 60
+      val sec = current.durationSeconds % 60
+      val timeStr = String.format("%02d:%02d", min, sec)
+      sendChatMessage(
+        text = "📞 Voice Call with ${current.targetUser.name} (${current.targetUser.rmCode}) ended. Duration: $timeStr",
+        recipientRmCode = null,
+        messageType = "CALL_LOG"
+      )
+    }
+    _callState.value = CallUiState.Idle
+  }
+}
+
+sealed class CallUiState {
+  object Idle : CallUiState()
+  data class Calling(val targetUser: com.example.data.model.UserEntity) : CallUiState()
+  data class Connected(
+    val targetUser: com.example.data.model.UserEntity,
+    val durationSeconds: Int = 0,
+    val isMuted: Boolean = false,
+    val isSpeakerOn: Boolean = false
+  ) : CallUiState()
+  data class GroupCall(
+    val title: String,
+    val participants: List<com.example.data.model.UserEntity>,
+    val durationSeconds: Int = 0,
+    val isMuted: Boolean = false,
+    val isSpeakerOn: Boolean = false
+  ) : CallUiState()
 }

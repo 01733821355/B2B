@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Group
@@ -185,16 +186,33 @@ fun MentorDashboardScreen(
           }
 
           Spacer(modifier = Modifier.height(8.dp))
-          OutlinedButton(
-            onClick = { onNavigate(Screen.DbrChecklist) },
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
-            modifier = Modifier.fillMaxWidth().testTag("mentor_btn_dbr_checklist")
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp), tint = EblGold)
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("DBR Calculator & Document Checklist Tool", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            OutlinedButton(
+              onClick = { onNavigate(Screen.DbrChecklist) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
+              modifier = Modifier.weight(1.2f).testTag("mentor_btn_dbr_checklist")
+            ) {
+              Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(13.dp), tint = EblGold)
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("DBR & Checklist", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+
+            OutlinedButton(
+              onClick = { onNavigate(Screen.ImportantDocuments) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF67E8F9)),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
+              modifier = Modifier.weight(1.1f).testTag("mentor_btn_important_docs")
+            ) {
+              Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color(0xFF67E8F9))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
           }
 
           Spacer(modifier = Modifier.height(10.dp))

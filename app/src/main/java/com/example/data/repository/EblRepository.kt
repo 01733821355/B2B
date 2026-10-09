@@ -173,7 +173,11 @@ class EblRepository(
   }
 
   suspend fun getFileById(fileId: String): CustomerFileEntity? = withContext(Dispatchers.IO) {
-    database.customerFileDao().getFileById(fileId)
+    database.customerFileDao().getFileById(fileId) ?: database.customerFileDao().getFileByAnyId(fileId)
+  }
+
+  suspend fun getFileByAnyId(id: String): CustomerFileEntity? = withContext(Dispatchers.IO) {
+    database.customerFileDao().getFileByAnyId(id) ?: database.customerFileDao().getFileById(id)
   }
 
   suspend fun saveCustomerFile(
@@ -199,7 +203,8 @@ class EblRepository(
     cpvSupportingDocUri: String = "",
     submissionLatitude: Double? = null,
     submissionLongitude: Double? = null,
-    submissionAddress: String? = null
+    submissionAddress: String? = null,
+    serialNumber: String? = null
   ): Result<CustomerFileEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
@@ -212,14 +217,52 @@ class EblRepository(
     }).trim().uppercase()
 
     val now = DateUtils.currentDhakaMillis()
-    val targetFileId = if (fileId.isNullOrBlank()) {
-      SecurityUtils.generateFileId(resolvedRmCode)
-    } else {
-      fileId.trim()
+    val cleanId = fileId?.trim().orEmpty()
+    val cleanCc = ccNumber.trim()
+
+    // Robust resolution: find existing file by fileId, secondary lookup by ccNumber, or any alternate ID
+    val existing = if (cleanId.isNotBlank()) {
+      database.customerFileDao().getFileById(cleanId)
+        ?: database.customerFileDao().getFileByAnyId(cleanId)
+        ?: (if (cleanCc.isNotBlank()) database.customerFileDao().getFileByAnyId(cleanCc) else null)
+    } else if (cleanCc.isNotBlank()) {
+      database.customerFileDao().getFileByAnyId(cleanCc)
+    } else null
+
+    // Always keep consistent primary key fileId so Room's @Update updates the exact database row!
+    val targetFileId = existing?.fileId ?: (if (cleanId.isNotBlank()) cleanId else SecurityUtils.generateFileId(resolvedRmCode))
+    val isNew = existing == null
+
+    // CRITICAL REQUIREMENT: Mobile number MUST be strictly unique across all active files
+    val cleanMobile = mobile.trim()
+    val normalizedMobile = cleanMobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0')
+    if (normalizedMobile.length >= 6) {
+      val allActive = database.customerFileDao().getAllActiveFiles()
+      val duplicate = allActive.firstOrNull { f ->
+        !f.isDeleted && f.fileId != targetFileId && (
+          f.mobile.trim().equals(cleanMobile, ignoreCase = true) ||
+          f.mobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0') == normalizedMobile ||
+          (f.altMobile.isNotBlank() && f.altMobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0') == normalizedMobile)
+        )
+      }
+      if (duplicate != null) {
+        val dupIdentifier = duplicate.ccNumber.ifBlank { duplicate.fileId }
+        return@withContext Result.failure(
+          Exception("This number already exists! Mobile '$cleanMobile' is already registered with Customer '${duplicate.customerName}' ($dupIdentifier). Duplicate mobile numbers are strictly prohibited.")
+        )
+      }
     }
 
-    val existing = database.customerFileDao().getFileById(targetFileId)
-    val isNew = existing == null
+    // Resolve Serial Number (SL / SL Wise): sequential by default, customizable later
+    val allActiveFiles = database.customerFileDao().getAllActiveFiles()
+    val resolvedSl = if (!serialNumber.isNullOrBlank()) {
+      serialNumber.trim()
+    } else if (existing != null && existing.serialNumber.isNotBlank()) {
+      existing.serialNumber
+    } else {
+      val maxSl = allActiveFiles.mapNotNull { it.serialNumber.toIntOrNull() }.maxOrNull() ?: allActiveFiles.size
+      (maxSl + 1).toString()
+    }
 
     // Check authorization for edit
     if (existing != null && currentUser.role == "RM" && !existing.assignedRmCode.trim().equals(currentUser.rmCode.trim(), ignoreCase = true)) {
@@ -267,6 +310,7 @@ class EblRepository(
       submissionLatitude = resolvedSubmissionLat,
       submissionLongitude = resolvedSubmissionLng,
       submissionAddress = resolvedSubmissionAddr,
+      serialNumber = resolvedSl,
       createdAt = createdTimestamp,
       updatedAt = now,
       submittedAt = submittedAt,
@@ -1249,7 +1293,10 @@ class EblRepository(
 
     try {
       val allFiles = database.customerFileDao().getAllActiveFiles()
-      val filesToPush = allFiles.filter { !it.isDeleted }
+      val filesToPush = allFiles.filter { !it.isDeleted }.sortedWith(
+        compareBy<CustomerFileEntity> { it.serialNumber.toIntOrNull() ?: Int.MAX_VALUE }
+          .thenBy { it.createdAt }
+      )
 
       val allUsers = database.userDao().getAllUsers()
       val allRms = allUsers.filter { it.role == "RM" }
@@ -1262,8 +1309,10 @@ class EblRepository(
       // If an Apps Script Web App URL is provided, send real HTTP request
       if (activeWebAppUrl.isNotBlank() && activeWebAppUrl.startsWith("http")) {
         val filesArray = org.json.JSONArray()
-        for (f in filesToPush) {
+        for ((idx, f) in filesToPush.withIndex()) {
           val fObj = JSONObject().apply {
+            put("serialNumber", f.serialNumber.ifBlank { (idx + 1).toString() })
+            put("sl", f.serialNumber.ifBlank { (idx + 1).toString() })
             put("ccNumber", f.ccNumber.ifBlank { f.fileId })
             put("fileId", f.fileId)
             put("customerName", f.customerName)
@@ -1767,6 +1816,7 @@ class EblRepository(
         val cpvStatus = obj.optString("cpvStatus", existing.cpvStatus)
         val cpvRemarks = if (obj.has("cpvRemarks")) obj.optString("cpvRemarks", existing.cpvRemarks) else existing.cpvRemarks
         val remarksVal = if (obj.has("remarks")) obj.optString("remarks", existing.remarks) else existing.remarks
+        val sheetSl = obj.optString("serialNumber", obj.optString("sl", existing.serialNumber))
 
         val hasStatusChanged = existing.applicationStatus != appStatus
         val hasActiveChanged = existing.activeStatus != activeStatus
@@ -1774,11 +1824,12 @@ class EblRepository(
         val hasDocsChanged = existing.pendingDocuments != pendingDocs
         val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber != ccNumber
         val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.equals(rmCode, ignoreCase = true)
+        val hasSlChanged = sheetSl.isNotBlank() && existing.serialNumber != sheetSl
         val hasDetailsChanged = existing.customerName != custName || existing.companyName != compName ||
                                 existing.mobile != mob || existing.email != em || existing.officeAddress != offAddr ||
                                 existing.productType != prodType || existing.cpvStatus != cpvStatus
 
-        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged) {
+        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged) {
           val updated = existing.copy(
             customerName = custName,
             companyName = compName,
@@ -1794,6 +1845,7 @@ class EblRepository(
             pendingDocuments = pendingDocs,
             ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
             assignedRmCode = if (rmCode.isNotBlank()) rmCode else existing.assignedRmCode,
+            serialNumber = if (sheetSl.isNotBlank()) sheetSl else existing.serialNumber,
             updatedAt = now,
             updatedBy = "GoogleSheets_Sync",
             isSynced = true
@@ -1853,13 +1905,26 @@ class EblRepository(
           }
         }
       } else {
-        // New file row added in Google Sheets
+        // New file row added in Google Sheets - prevent duplicate mobile numbers
+        val sheetMobile = obj.optString("mobile", "").trim()
+        val normSheetMobile = sheetMobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0')
+        if (normSheetMobile.length >= 6) {
+          val isDuplicate = database.customerFileDao().getAllActiveFiles().any { f ->
+            f.mobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0') == normSheetMobile
+          }
+          if (isDuplicate) {
+            // Skip inserting duplicate mobile number from sheet
+            continue
+          }
+        }
+
+        val sheetSl = obj.optString("serialNumber", obj.optString("sl", ""))
         val newFile = CustomerFileEntity(
           fileId = targetId,
           customerName = custName,
           companyName = obj.optString("companyName", "N/A"),
           officeAddress = obj.optString("officeAddress", ""),
-          mobile = obj.optString("mobile", ""),
+          mobile = sheetMobile,
           altMobile = "",
           email = obj.optString("email", ""),
           productType = obj.optString("productType", "Credit Card"),
@@ -1870,6 +1935,7 @@ class EblRepository(
           pendingDocuments = pendingDocs,
           remarks = remarks,
           cpvStatus = obj.optString("cpvRemarks", "Pending"),
+          serialNumber = sheetSl,
           createdAt = now,
           updatedAt = now,
           createdBy = "GoogleSheets",
@@ -1888,13 +1954,13 @@ class EblRepository(
     val sb = StringBuilder()
     val headers = if (isRmUser) {
       listOf(
-        "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
+        "SL", "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
         "Product Type", "Status", "Active", "Pending Docs", "Remarks",
         "CPV Status", "Created Date", "Last Updated"
       )
     } else {
       listOf(
-        "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
+        "SL", "CC-Number", "File ID", "Customer Name", "Company", "Mobile", "Email",
         "Product Type", "Status", "Active", "RM Code", "Pending Docs", "Remarks",
         "CPV Status", "Created Date", "Last Updated"
       )
@@ -1905,6 +1971,7 @@ class EblRepository(
       val ccDisplay = if (f.ccNumber.isNotBlank()) f.ccNumber else f.fileId
       val row = if (isRmUser) {
         listOf(
+          escapeCsv(f.serialNumber),
           escapeCsv(ccDisplay),
           escapeCsv(f.fileId),
           escapeCsv(f.customerName),
@@ -1922,6 +1989,7 @@ class EblRepository(
         )
       } else {
         listOf(
+          escapeCsv(f.serialNumber),
           escapeCsv(ccDisplay),
           escapeCsv(f.fileId),
           escapeCsv(f.customerName),
@@ -2011,5 +2079,218 @@ class EblRepository(
 
   fun getLocationLogsForRmFlow(rmCode: String, limit: Int = 50): Flow<List<com.example.data.model.UserLocationLogEntity>> {
     return database.userLocationLogDao().getLocationLogsForRmFlow(rmCode, limit)
+  }
+
+  // 8. Communication: Messages, Team Events & Submissions
+  fun getTeamHubMessagesFlow(): Flow<List<com.example.data.model.ChatMessageEntity>> {
+    return database.communicationDao().getTeamHubMessagesFlow()
+  }
+
+  fun getVisibleMessagesFlow(myRmCode: String): Flow<List<com.example.data.model.ChatMessageEntity>> {
+    return database.communicationDao().getVisibleMessagesFlow(myRmCode)
+  }
+
+  suspend fun sendChatMessage(
+    messageText: String,
+    recipientRmCode: String? = null,
+    messageType: String = "TEXT",
+    eventId: String? = null
+  ): Result<com.example.data.model.ChatMessageEntity> = withContext(Dispatchers.IO) {
+    val user = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    val now = DateUtils.currentDhakaMillis()
+    val msg = com.example.data.model.ChatMessageEntity(
+      id = "MSG-${System.currentTimeMillis()}-${SecurityUtils.generateUniqueId().take(4)}",
+      senderRmCode = user.rmCode,
+      senderName = user.name,
+      senderRole = user.role,
+      recipientRmCode = recipientRmCode,
+      messageText = messageText.trim(),
+      timestamp = now,
+      messageType = messageType,
+      eventId = eventId
+    )
+    database.communicationDao().insertMessage(msg)
+    Result.success(msg)
+  }
+
+  fun getAllTeamEventsFlow(): Flow<List<com.example.data.model.TeamEventEntity>> {
+    return database.communicationDao().getAllEventsFlow()
+  }
+
+  suspend fun createTeamEvent(
+    title: String,
+    description: String,
+    targetDate: String
+  ): Result<com.example.data.model.TeamEventEntity> = withContext(Dispatchers.IO) {
+    val user = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    val now = DateUtils.currentDhakaMillis()
+    val eventId = "EVT-${System.currentTimeMillis()}"
+    val event = com.example.data.model.TeamEventEntity(
+      eventId = eventId,
+      title = title.trim(),
+      description = description.trim(),
+      creatorRmCode = user.rmCode,
+      creatorName = user.name,
+      targetDate = targetDate.trim(),
+      createdAt = now,
+      status = "ACTIVE"
+    )
+    database.communicationDao().insertEvent(event)
+
+    // Automatically post announcement message into General Team Chat so everyone gets notified!
+    val broadcastText = "📢 NEW EVENT: '${event.title}'\nTarget Date: ${event.targetDate}\n${event.description}\n(Tap this event below to submit your details)"
+    sendChatMessage(
+      messageText = broadcastText,
+      recipientRmCode = null,
+      messageType = "EVENT",
+      eventId = eventId
+    )
+    Result.success(event)
+  }
+
+  suspend fun submitEventResponse(
+    eventId: String,
+    filesCount: Int,
+    requestedDate: String,
+    location: String,
+    remarks: String
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val user = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    val now = DateUtils.currentDhakaMillis()
+    val respId = "RESP-$eventId-${user.rmCode.trim().uppercase()}"
+    val resp = com.example.data.model.EventResponseEntity(
+      responseId = respId,
+      eventId = eventId,
+      rmCode = user.rmCode,
+      rmName = user.name,
+      filesCount = filesCount,
+      requestedDate = requestedDate.trim(),
+      location = location.trim(),
+      remarks = remarks.trim(),
+      submittedAt = now
+    )
+    database.communicationDao().insertOrUpdateResponse(resp)
+    Result.success(Unit)
+  }
+
+  fun getResponsesForEventFlow(eventId: String): Flow<List<com.example.data.model.EventResponseEntity>> {
+    return database.communicationDao().getResponsesForEventFlow(eventId)
+  }
+
+  suspend fun getResponsesForEvent(eventId: String): List<com.example.data.model.EventResponseEntity> = withContext(Dispatchers.IO) {
+    database.communicationDao().getResponsesForEvent(eventId)
+  }
+
+  suspend fun getUserResponseForEvent(eventId: String, rmCode: String): com.example.data.model.EventResponseEntity? = withContext(Dispatchers.IO) {
+    database.communicationDao().getUserResponseForEvent(eventId, rmCode)
+  }
+
+  // Important Documents Repository Methods (Admin & Mentor upload/edit/delete, everyone can view/download)
+  fun getAllImportantDocumentsFlow(): Flow<List<com.example.data.model.ImportantDocumentEntity>> {
+    return database.importantDocumentDao().getAllDocumentsFlow()
+  }
+
+  suspend fun getAllImportantDocuments(): List<com.example.data.model.ImportantDocumentEntity> = withContext(Dispatchers.IO) {
+    database.importantDocumentDao().getAllActiveDocuments()
+  }
+
+  suspend fun saveImportantDocument(
+    docId: String?,
+    title: String,
+    category: String,
+    description: String,
+    fileName: String,
+    fileType: String,
+    fileSizeBytes: Long,
+    fileUri: String,
+    storagePath: String
+  ): Result<com.example.data.model.ImportantDocumentEntity> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+
+    // User prompt constraint: ONLY Admin or Mentor can save or edit important documents
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can upload or edit important documents."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    val cleanId = docId?.trim().orEmpty()
+    val existing = if (cleanId.isNotBlank()) database.importantDocumentDao().getDocumentById(cleanId) else null
+    val targetDocId = existing?.docId ?: (if (cleanId.isNotBlank()) cleanId else "DOC_${System.currentTimeMillis()}")
+
+    val entity = com.example.data.model.ImportantDocumentEntity(
+      docId = targetDocId,
+      title = title.trim(),
+      category = category.trim().ifBlank { "Policies & Circulars" },
+      description = description.trim(),
+      fileName = fileName.trim().ifBlank { existing?.fileName ?: "Document_$targetDocId.pdf" },
+      fileType = fileType.ifBlank { existing?.fileType ?: "application/pdf" },
+      fileSizeBytes = if (fileSizeBytes > 0) fileSizeBytes else (existing?.fileSizeBytes ?: 1024L),
+      fileUri = fileUri.ifBlank { existing?.fileUri ?: "" },
+      storagePath = storagePath.ifBlank { existing?.storagePath ?: "" },
+      uploadedBy = existing?.uploadedBy ?: currentUser.rmCode,
+      uploaderName = existing?.uploaderName ?: currentUser.name,
+      uploaderRole = existing?.uploaderRole ?: currentUser.role,
+      createdAt = existing?.createdAt ?: now,
+      updatedAt = now,
+      isDeleted = false,
+      isSynced = false
+    )
+
+    if (existing == null) {
+      database.importantDocumentDao().insertDocument(entity)
+    } else {
+      database.importantDocumentDao().updateDocument(entity)
+    }
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = if (existing == null) "CREATE_DOC" else "UPDATE_DOC",
+        targetId = entity.docId,
+        details = "Important Document '${entity.title}' saved by ${currentUser.role} (${currentUser.name})",
+        timestamp = now
+      )
+    )
+
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
+
+    Result.success(entity)
+  }
+
+  suspend fun deleteImportantDocument(docId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+
+    // User prompt constraint: ONLY Admin or Mentor can delete
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can delete important documents."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    database.importantDocumentDao().softDeleteDocument(docId, now)
+
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "DELETE_DOC",
+        targetId = docId,
+        details = "Important Document '$docId' deleted by ${currentUser.role} (${currentUser.name})",
+        timestamp = now
+      )
+    )
+
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
+
+    Result.success(Unit)
   }
 }

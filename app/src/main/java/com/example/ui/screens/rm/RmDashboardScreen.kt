@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Folder
@@ -83,6 +84,8 @@ fun RmDashboardScreen(
   unreadSmsCount: Int = 0,
   onOpenSmsInbox: () -> Unit = {},
   onOpenDbrChecklist: () -> Unit = {},
+  onOpenCommunication: () -> Unit = {},
+  onOpenImportantDocuments: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   isBiometricEnabled: Boolean = false,
   onToggleBiometric: ((Boolean) -> Unit)? = null,
@@ -238,6 +241,70 @@ fun RmDashboardScreen(
               onCheckedChange = { onToggleBiometric?.invoke(it) },
               modifier = Modifier.testTag("switch_rm_biometric")
             )
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Important Documents Repository Quick Banner
+          Card(
+            shape = RoundedCornerShape(8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F2642)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E3A8A)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onOpenImportantDocuments() }
+              .testTag("rm_important_docs_quick_card")
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFF0284C7),
+                  modifier = Modifier.size(30.dp)
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                      imageVector = Icons.Default.Description,
+                      contentDescription = null,
+                      tint = Color.White,
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
+                }
+                Column {
+                  Text(
+                    text = "Important Documents (জরুরি ডকুমেন্টস)",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                  )
+                  Text(
+                    text = "View bank policies, forms & product circulars",
+                    color = Color(0xFF94A3B8),
+                    fontSize = 9.sp
+                  )
+                }
+              }
+              Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color(0xFF1E3A8A)
+              ) {
+                Text(
+                  text = "View",
+                  color = Color(0xFF67E8F9),
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+              }
+            }
           }
         }
       }
@@ -687,7 +754,10 @@ fun RmDashboardScreen(
     onNavigateNewFile = onAddNewFile,
     onNavigateMyFiles = onViewAllFiles,
     onNavigatePendingDocs = onViewPendingDocs,
-    onNavigateDashboard = { /* Already on dashboard */ }
+    onNavigateDashboard = { /* Already on dashboard */ },
+    onNavigateCommunication = onOpenCommunication,
+    onNavigateDbrChecklist = onOpenDbrChecklist,
+    onNavigateImportantDocuments = onOpenImportantDocuments
   )
 }
 }

@@ -16,6 +16,9 @@ interface CustomerFileDao {
   @Query("SELECT * FROM customer_files WHERE UPPER(TRIM(fileId)) = UPPER(TRIM(:id)) OR UPPER(TRIM(ccNumber)) = UPPER(TRIM(:id)) LIMIT 1")
   suspend fun getFileByAnyId(id: String): CustomerFileEntity?
 
+  @Query("SELECT * FROM customer_files WHERE isDeleted = 0 AND (mobile = :mobile OR altMobile = :mobile) LIMIT 1")
+  suspend fun findFileByMobile(mobile: String): CustomerFileEntity?
+
   @Query("SELECT * FROM customer_files WHERE fileId = :fileId LIMIT 1")
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?>
 
