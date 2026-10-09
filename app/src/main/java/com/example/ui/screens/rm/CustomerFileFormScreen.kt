@@ -581,7 +581,7 @@ fun CustomerFileFormScreen(
             onValueChange = { serialNumber = it },
             label = "Serial No. (SL) *",
             placeholder = "e.g. 1, 2, 3...",
-            leadingIcon = { Icon(Icons.Default.List, contentDescription = null, tint = EblNavyPrimary) },
+            leadingIcon = { Icon(Icons.Default.Description, contentDescription = null, tint = EblNavyPrimary) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.weight(1f),
             testTag = "form_serial_number"

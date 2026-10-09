@@ -68,6 +68,7 @@ import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.CpvStatusBadge
 import com.example.ui.common.FloatableRmNavButton
+import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.AppViewModel

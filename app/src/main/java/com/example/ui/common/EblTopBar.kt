@@ -17,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LockReset
@@ -252,7 +253,7 @@ fun EblTopBar(
           modifier = Modifier.testTag("top_bar_communication_button")
         ) {
           Icon(
-            imageVector = Icons.Default.PhoneInTalk,
+            imageVector = Icons.Default.Call,
             contentDescription = "Team Communication & Net Calling",
             tint = Color(0xFF38BDF8)
           )

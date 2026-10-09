@@ -2248,10 +2248,11 @@ class EblRepository(
 
     database.auditLogDao().insertLog(
       AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
         userId = currentUser.rmCode,
         role = currentUser.role,
         action = if (existing == null) "CREATE_DOC" else "UPDATE_DOC",
-        targetId = entity.docId,
+        fileId = entity.docId,
         details = "Important Document '${entity.title}' saved by ${currentUser.role} (${currentUser.name})",
         timestamp = now
       )
@@ -2278,10 +2279,11 @@ class EblRepository(
 
     database.auditLogDao().insertLog(
       AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
         userId = currentUser.rmCode,
         role = currentUser.role,
         action = "DELETE_DOC",
-        targetId = docId,
+        fileId = docId,
         details = "Important Document '$docId' deleted by ${currentUser.role} (${currentUser.name})",
         timestamp = now
       )

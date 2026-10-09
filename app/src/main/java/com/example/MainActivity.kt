@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Group
@@ -486,7 +487,7 @@ fun EblBottomNav(
       NavigationBarItem(
         selected = currentScreen is Screen.CommunicationHub,
         onClick = { onSelectScreen(Screen.CommunicationHub) },
-        icon = { Icon(Icons.Default.PhoneInTalk, contentDescription = "Connect", modifier = Modifier.size(20.dp)) },
+        icon = { Icon(Icons.Default.Call, contentDescription = "Connect", modifier = Modifier.size(20.dp)) },
         label = { Text("Connect", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
