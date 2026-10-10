@@ -427,7 +427,7 @@ fun CustomerFileListScreen(
                   ) {
                     Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Details", fontSize = 11.sp)
+                    Text("Details", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
                   OutlinedButton(
@@ -438,7 +438,7 @@ fun CustomerFileListScreen(
                   ) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Edit", fontSize = 11.sp)
+                    Text("Edit", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
                   IconButton(

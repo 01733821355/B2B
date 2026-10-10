@@ -662,11 +662,12 @@ fun ImportantDocCard(
           onClick = onOpen,
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
           modifier = Modifier.weight(1.2f).testTag("btn_open_${doc.docId}")
         ) {
           Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("View / Open", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("View / Open", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
 
         if (isPrivileged) {
@@ -675,11 +676,12 @@ fun ImportantDocCard(
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF059669)),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669)),
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier.weight(1f).testTag("btn_download_${doc.docId}")
           ) {
             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF059669))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
 
           IconButton(

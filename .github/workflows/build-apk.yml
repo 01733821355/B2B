@@ -17,7 +17,7 @@ jobs:
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
       ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      KEYSTORE_PATH: my-upload-key.jks
+      KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
       STORE_PASSWORD: android
       KEY_PASSWORD: android
 
@@ -174,7 +174,7 @@ jobs:
           files: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/*/*.apk
-          tag_name: v1.0.${{ github.run_number }}
+          tag_name: v1.0.${{ github.run_number }}-${{ github.run_attempt }}
           name: "RM File Management Suite v1.0.${{ github.run_number }}"
           fail_on_unmatched_files: false
           body: |

@@ -242,32 +242,39 @@ fun CommunicationHubScreen(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Column {
+          Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
             Text(
               text = "Team Communication & Net Calling",
-              fontSize = 17.sp,
+              fontSize = 16.sp,
               fontWeight = FontWeight.Bold,
-              color = Color.White
+              color = Color.White,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
             Text(
               text = "লাইভ মেসেজ, নেট ভয়েস কলিং এবং টিম ইভেন্ট",
               fontSize = 11.sp,
-              color = EblGold
+              color = EblGold,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis
             )
           }
 
-          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
             // Group Call Button
             Button(
               onClick = { showStartGroupCallDialog = true },
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
               shape = RoundedCornerShape(20.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
               modifier = Modifier.testTag("btn_group_call")
             ) {
-              Icon(Icons.Default.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+              Icon(Icons.Default.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("গ্রুপ কল", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("গ্রুপ কল", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
 
             // Direct Call Button
@@ -275,12 +282,12 @@ fun CommunicationHubScreen(
               onClick = { showStartCallDialog = true },
               colors = ButtonDefaults.buttonColors(containerColor = EblGold),
               shape = RoundedCornerShape(20.dp),
-              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
               modifier = Modifier.testTag("btn_direct_call")
             ) {
-              Icon(Icons.Default.Call, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(16.dp))
+              Icon(Icons.Default.Call, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("কল করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+              Text("কল করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -343,10 +350,21 @@ fun CommunicationHubScreen(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(
+          modifier = Modifier.weight(1f, fill = false),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
           Icon(Icons.Default.Event, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Team Events / টিম ইভেন্ট নোটিশ:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text(
+            text = "Team Events / টিম ইভেন্ট:",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = EblNavyDark,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
+          )
         }
 
         OutlinedButton(
@@ -357,7 +375,7 @@ fun CommunicationHubScreen(
         ) {
           Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("+ নতুন ইভেন্ট তৈরি", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
+          Text("+ নতুন ইভেন্ট", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
         }
       }
     }
@@ -680,13 +698,14 @@ fun EventCardItem(
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
           modifier = Modifier
             .weight(1f)
             .testTag("btn_submit_event_details")
         ) {
           Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
         }
 
         // Admin & Mentor (or creator) button to view summary table of all RMs
@@ -694,11 +713,12 @@ fun EventCardItem(
           OutlinedButton(
             onClick = { onViewSubmissions(event) },
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
               .testTag("btn_view_all_submissions")
           ) {
-            Text("সব RM এর তালিকা", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+            Text("সব RM এর তালিকা", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
           }
         }
       }

@@ -139,7 +139,7 @@ fun DbrAndChecklistScreen(
 ) {
   var selectedTab by remember { mutableIntStateOf(0) }
   val context = LocalContext.current
-  val allFiles by viewModel.filteredFiles.collectAsState()
+  val allFiles by viewModel.allFiles.collectAsState()
 
   BackHandler {
     onNavigateBack()
@@ -520,12 +520,18 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 text = "2. Existing Credit Cards",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = EblNavyDark,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = "Enter total limits & outstandings directly or add card-by-card",
+                text = "Enter total limits & outstandings",
                 fontSize = 11.sp,
-                color = Color.Gray
+                color = Color.Gray,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
               )
             }
             OutlinedButton(
@@ -544,7 +550,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 modifier = Modifier.size(15.dp)
               )
               Spacer(modifier = Modifier.width(4.dp))
-              Text(if (showItemizedBreakdown) "Hide Details" else "+ Itemize Cards", fontSize = 11.sp)
+              Text(if (showItemizedBreakdown) "Hide Details" else "+ Itemize", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -757,12 +763,18 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 text = "3. Existing Loans",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = EblNavyDark,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
               )
               Text(
-                text = "Personal, Auto, Home or other bank loan EMIs",
+                text = "Personal, Auto, Home loan EMIs",
                 fontSize = 11.sp,
-                color = Color.Gray
+                color = Color.Gray,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
               )
             }
             OutlinedButton(
@@ -781,7 +793,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 modifier = Modifier.size(15.dp)
               )
               Spacer(modifier = Modifier.width(4.dp))
-              Text(if (showItemizedLoans) "Hide Details" else "+ Itemize Loans", fontSize = 11.sp)
+              Text(if (showItemizedLoans) "Hide Details" else "+ Itemize", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -1103,7 +1115,7 @@ Assessed by RM: ${currentUser.name} (${currentUser.rmCode})
             ) {
               Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Copy Summary", fontSize = 11.sp)
+              Text("Copy Summary", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
 
             Button(
@@ -1130,7 +1142,7 @@ Safe Proposed Limit: BDT ${nf.format(maxSafeProposedLimit.roundToInt())}
             ) {
               Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Share DBR", fontSize = 11.sp)
+              Text("Share DBR", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -1647,10 +1659,14 @@ fun DocumentChecklistSenderTab(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "1. Select Checklist Preset & Customer",
+              text = "1. Checklist Preset & Customer",
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = EblNavyDark,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false)
             )
             if (availableFiles.isNotEmpty()) {
               Surface(
@@ -1662,7 +1678,9 @@ fun DocumentChecklistSenderTab(
                   fontSize = 11.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = EblNavyPrimary,
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                  maxLines = 1,
+                  softWrap = false
                 )
               }
             }
@@ -1670,225 +1688,238 @@ fun DocumentChecklistSenderTab(
 
           Spacer(modifier = Modifier.height(10.dp))
 
-          // Quick Pick from Recent Customer Files (NO TEXT WRAPPING)
-          if (availableFiles.isNotEmpty()) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Text(
-                text = "Select Recent Customer (সাম্প্রতিক কাস্টমার):",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = EblNavyDark
-              )
-              if (customerName.isNotBlank() || customerMobile.isNotBlank()) {
-                TextButton(
-                  onClick = {
-                    customerName = ""
-                    customerMobile = ""
-                  },
-                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                  modifier = Modifier.height(28.dp)
-                ) {
-                  Text("Clear", fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
-                }
-              }
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-
-            ExposedDropdownMenuBox(
-              expanded = selectedFilePickerExpanded,
-              onExpandedChange = { selectedFilePickerExpanded = !selectedFilePickerExpanded },
-              modifier = Modifier.fillMaxWidth()
-            ) {
-              OutlinedTextField(
-                value = if (customerName.isNotBlank() && customerMobile.isNotBlank()) {
-                  "$customerName ($customerMobile)"
-                } else if (customerName.isNotBlank()) {
-                  customerName
-                } else {
-                  ""
+          // Customer Selection from existing files (always available)
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "Select Existing Customer:",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false)
+            )
+            if (customerName.isNotBlank() || customerMobile.isNotBlank()) {
+              TextButton(
+                onClick = {
+                  customerName = ""
+                  customerMobile = ""
                 },
-                onValueChange = {},
-                readOnly = true,
-                placeholder = {
-                  Text(
-                    "Choose a recent customer to auto-fill...",
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis
-                  )
-                },
-                leadingIcon = {
-                  Icon(
-                    Icons.Default.RecentActors,
-                    contentDescription = null,
-                    tint = EblNavyPrimary,
-                    modifier = Modifier.size(20.dp)
-                  )
-                },
-                trailingIcon = {
-                  ExposedDropdownMenuDefaults.TrailingIcon(expanded = selectedFilePickerExpanded)
-                },
-                singleLine = true,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .menuAnchor()
-                  .testTag("dropdown_recent_customer_picker"),
-                colors = OutlinedTextFieldDefaults.colors(
-                  focusedBorderColor = EblNavyPrimary,
-                  unfocusedBorderColor = Color(0xFFCBD5E1)
-                )
-              )
-
-              ExposedDropdownMenu(
-                expanded = selectedFilePickerExpanded,
-                onDismissRequest = {
-                  selectedFilePickerExpanded = false
-                  customerSearchQuery = ""
-                },
-                modifier = Modifier.heightIn(max = 350.dp)
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                modifier = Modifier.height(28.dp)
               ) {
-                if (availableFiles.size > 5) {
-                  OutlinedTextField(
-                    value = customerSearchQuery,
-                    onValueChange = { customerSearchQuery = it },
-                    placeholder = { Text("Search name, mobile or card...", fontSize = 11.sp) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray) },
-                    singleLine = true,
-                    modifier = Modifier
-                      .fillMaxWidth()
-                      .padding(horizontal = 8.dp, vertical = 4.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                      focusedBorderColor = EblNavyPrimary,
-                      unfocusedBorderColor = Color(0xFFE2E8F0)
-                    )
+                Text("Clear", fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+              }
+            }
+          }
+          Spacer(modifier = Modifier.height(4.dp))
+
+          ExposedDropdownMenuBox(
+            expanded = selectedFilePickerExpanded,
+            onExpandedChange = { selectedFilePickerExpanded = !selectedFilePickerExpanded },
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            OutlinedTextField(
+              value = if (customerName.isNotBlank() && customerMobile.isNotBlank()) {
+                "$customerName ($customerMobile)"
+              } else if (customerName.isNotBlank()) {
+                customerName
+              } else {
+                ""
+              },
+              onValueChange = {},
+              readOnly = true,
+              placeholder = {
+                Text(
+                  if (availableFiles.isNotEmpty()) "Choose customer to auto-fill name & mobile..." else "No saved files (enter name & mobile below)",
+                  fontSize = 12.sp,
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis
+                )
+              },
+              leadingIcon = {
+                Icon(
+                  Icons.Default.RecentActors,
+                  contentDescription = null,
+                  tint = EblNavyPrimary,
+                  modifier = Modifier.size(20.dp)
+                )
+              },
+              trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = selectedFilePickerExpanded)
+              },
+              singleLine = true,
+              modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+                .testTag("dropdown_recent_customer_picker"),
+              colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = EblNavyPrimary,
+                unfocusedBorderColor = Color(0xFFCBD5E1)
+              )
+            )
+
+            ExposedDropdownMenu(
+              expanded = selectedFilePickerExpanded,
+              onDismissRequest = {
+                selectedFilePickerExpanded = false
+                customerSearchQuery = ""
+              },
+              modifier = Modifier.heightIn(max = 350.dp)
+            ) {
+              if (availableFiles.isNotEmpty()) {
+                OutlinedTextField(
+                  value = customerSearchQuery,
+                  onValueChange = { customerSearchQuery = it },
+                  placeholder = { Text("Search name, mobile or card...", fontSize = 11.sp) },
+                  leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray) },
+                  singleLine = true,
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                  colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = EblNavyPrimary,
+                    unfocusedBorderColor = Color(0xFFE2E8F0)
                   )
-                  HorizontalDivider(color = Color(0xFFE2E8F0))
-                }
+                )
+                HorizontalDivider(color = Color(0xFFE2E8F0))
+              }
 
-                val filteredList = if (customerSearchQuery.isBlank()) {
-                  availableFiles
-                } else {
-                  availableFiles.filter {
-                    it.customerName.contains(customerSearchQuery, ignoreCase = true) ||
-                    it.mobile.contains(customerSearchQuery) ||
-                    it.productType.contains(customerSearchQuery, ignoreCase = true) ||
-                    it.ccNumber.contains(customerSearchQuery, ignoreCase = true)
-                  }
+              val filteredList = if (customerSearchQuery.isBlank()) {
+                availableFiles
+              } else {
+                availableFiles.filter {
+                  it.customerName.contains(customerSearchQuery, ignoreCase = true) ||
+                  it.mobile.contains(customerSearchQuery) ||
+                  it.productType.contains(customerSearchQuery, ignoreCase = true) ||
+                  it.ccNumber.contains(customerSearchQuery, ignoreCase = true)
                 }
+              }
 
-                if (filteredList.isEmpty()) {
+              if (availableFiles.isEmpty()) {
+                DropdownMenuItem(
+                  text = {
+                    Text(
+                      "No saved customers found. Enter name and mobile below, or sync from Google Sheets.",
+                      fontSize = 11.sp,
+                      color = Color.Gray
+                    )
+                  },
+                  onClick = { selectedFilePickerExpanded = false }
+                )
+              } else if (filteredList.isEmpty()) {
+                DropdownMenuItem(
+                  text = { Text("No matching customer file found", fontSize = 12.sp, color = Color.Gray) },
+                  onClick = {}
+                )
+              } else {
+                filteredList.take(25).forEach { f ->
                   DropdownMenuItem(
-                    text = { Text("No matching customer file found", fontSize = 12.sp, color = Color.Gray) },
-                    onClick = {}
-                  )
-                } else {
-                  filteredList.take(25).forEach { f ->
-                    DropdownMenuItem(
-                      text = {
-                        Row(
-                          modifier = Modifier.fillMaxWidth(),
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                          verticalAlignment = Alignment.CenterVertically
-                        ) {
-                          Column(modifier = Modifier.weight(1f, fill = false)) {
+                    text = {
+                      Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                      ) {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                          Text(
+                            text = f.customerName.ifBlank { "Unnamed Applicant" },
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = EblNavyDark,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                          )
+                          Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                          ) {
                             Text(
-                              text = f.customerName.ifBlank { "Unnamed Applicant" },
-                              fontWeight = FontWeight.Bold,
-                              fontSize = 13.sp,
-                              color = EblNavyDark,
+                              text = f.mobile.ifBlank { f.altMobile.ifBlank { "No Mobile" } },
+                              fontSize = 11.sp,
+                              fontWeight = FontWeight.Medium,
+                              color = Color(0xFF059669),
                               maxLines = 1,
-                              softWrap = false,
-                              overflow = TextOverflow.Ellipsis
+                              softWrap = false
                             )
-                            Row(
-                              verticalAlignment = Alignment.CenterVertically,
-                              modifier = Modifier.padding(top = 2.dp)
-                            ) {
+                            if (f.productType.isNotBlank()) {
                               Text(
-                                text = f.mobile.ifBlank { "No Mobile" },
+                                text = " • ${f.productType}",
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color(0xFF059669),
+                                color = Color(0xFF64748B),
                                 maxLines = 1,
-                                softWrap = false
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                               )
-                              if (f.productType.isNotBlank()) {
-                                Text(
-                                  text = " • ${f.productType}",
-                                  fontSize = 11.sp,
-                                  color = Color(0xFF64748B),
-                                  maxLines = 1,
-                                  softWrap = false,
-                                  overflow = TextOverflow.Ellipsis
-                                )
-                              }
                             }
                           }
-                          if (f.applicationStatus.isNotBlank()) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Surface(
+                        }
+                        if (f.applicationStatus.isNotBlank()) {
+                          Spacer(modifier = Modifier.width(8.dp))
+                          Surface(
+                            color = when (f.applicationStatus.uppercase()) {
+                              "APPROVED" -> Color(0xFFDEF7EC)
+                              "DECLINED" -> Color(0xFFFDE8E8)
+                              else -> Color(0xFFEFF6FF)
+                            },
+                            shape = RoundedCornerShape(4.dp)
+                          ) {
+                            Text(
+                              text = f.applicationStatus,
+                              fontSize = 10.sp,
+                              fontWeight = FontWeight.Medium,
                               color = when (f.applicationStatus.uppercase()) {
-                                "APPROVED" -> Color(0xFFDEF7EC)
-                                "DECLINED" -> Color(0xFFFDE8E8)
-                                else -> Color(0xFFEFF6FF)
+                                "APPROVED" -> Color(0xFF03543F)
+                                "DECLINED" -> Color(0xFF9B1C1C)
+                                else -> Color(0xFF1E40AF)
                               },
-                              shape = RoundedCornerShape(4.dp)
-                            ) {
-                              Text(
-                                text = f.applicationStatus,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = when (f.applicationStatus.uppercase()) {
-                                  "APPROVED" -> Color(0xFF03543F)
-                                  "DECLINED" -> Color(0xFF9B1C1C)
-                                  else -> Color(0xFF1E40AF)
-                                },
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                maxLines = 1,
-                                softWrap = false
-                              )
-                            }
+                              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                              maxLines = 1,
+                              softWrap = false
+                            )
                           }
                         }
-                      },
-                      onClick = {
-                        customerName = f.customerName
-                        customerMobile = f.mobile
-                        val prod = f.productType.lowercase()
-                        if (prod.contains("corporate")) {
-                          selectedPreset = "Corporate Card"
-                        } else if (prod.contains("enhance")) {
-                          selectedPreset = "Credit Card Limit Enhance"
-                        } else if (prod.contains("business")) {
-                          if ("New Credit Card (Business Person)" in presetOptions) {
-                            selectedPreset = "New Credit Card (Business Person)"
-                          }
-                        } else if (prod.contains("salaried")) {
-                          if ("New Credit Card (Salaried)" in presetOptions) {
-                            selectedPreset = "New Credit Card (Salaried)"
-                          }
-                        } else if (prod.contains("loan")) {
-                          if ("Personal / Auto / Home Loan" in presetOptions) {
-                            selectedPreset = "Personal / Auto / Home Loan"
-                          }
+                      }
+                    },
+                    onClick = {
+                      customerName = f.customerName
+                      customerMobile = if (f.mobile.isNotBlank()) f.mobile else f.altMobile
+                      val prod = f.productType.lowercase()
+                      if (prod.contains("corporate")) {
+                        selectedPreset = "Corporate Card"
+                      } else if (prod.contains("enhance")) {
+                        selectedPreset = "Credit Card Limit Enhance"
+                      } else if (prod.contains("business")) {
+                        if ("New Credit Card (Business Person)" in presetOptions) {
+                          selectedPreset = "New Credit Card (Business Person)"
                         }
-                        selectedFilePickerExpanded = false
-                        customerSearchQuery = ""
-                      },
-                      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                    )
-                    HorizontalDivider(color = Color(0xFFF1F5F9))
-                  }
+                      } else if (prod.contains("salaried")) {
+                        if ("New Credit Card (Salaried)" in presetOptions) {
+                          selectedPreset = "New Credit Card (Salaried)"
+                        }
+                      } else if (prod.contains("loan")) {
+                        if ("Personal / Auto / Home Loan" in presetOptions) {
+                          selectedPreset = "Personal / Auto / Home Loan"
+                        }
+                      }
+                      selectedFilePickerExpanded = false
+                      customerSearchQuery = ""
+                    },
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                  )
+                  HorizontalDivider(color = Color(0xFFF1F5F9))
                 }
               }
             }
-            Spacer(modifier = Modifier.height(10.dp))
           }
+          Spacer(modifier = Modifier.height(10.dp))
 
           // Preset Selection & Admin "+ New Preset" action
           Row(
@@ -1896,15 +1927,25 @@ fun DocumentChecklistSenderTab(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("Checklist Preset (প্রিসেট সিলেক্ট করুন):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+            Text(
+              text = "Checklist Preset:",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false)
+            )
             if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
               TextButton(
                 onClick = { showCreatePresetDialog = true },
-                modifier = Modifier.testTag("btn_create_new_preset_dialog")
+                modifier = Modifier.testTag("btn_create_new_preset_dialog"),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
               ) {
                 Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("+ New Preset", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                Text("+ New Preset", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary, maxLines = 1, softWrap = false)
               }
             }
           }
@@ -1997,12 +2038,16 @@ fun DocumentChecklistSenderTab(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "🏢 Part 1: Company Documents (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
+                text = "🏢 Part 1: Company Docs (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = EblNavyDark,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
               )
-              Text("কোম্পানি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray)
+              Text("কোম্পানি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
             }
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2086,12 +2131,16 @@ fun DocumentChecklistSenderTab(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "👤 Part 2: Employee Documents (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
+                text = "👤 Part 2: Employee Docs (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = EblNavyDark,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
               )
-              Text("এমপ্লয়ি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray)
+              Text("এমপ্লয়ি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
             }
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2177,9 +2226,13 @@ fun DocumentChecklistSenderTab(
                 text = "$selectedPreset (${singleChecklistItems.count { it.isChecked }}/${singleChecklistItems.size})",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = EblNavyDark,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
               )
-              Text("Check/uncheck items", fontSize = 11.sp, color = Color.Gray)
+              Text("Items", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -2294,7 +2347,15 @@ fun DocumentChecklistSenderTab(
             ) {
               Icon(Icons.Default.CloudUpload, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Save Preset Items as Universal (সকল RM এর জন্য সেভ করুন)", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
+              Text(
+                text = "Save as Universal Preset (সকলের জন্য সেভ)",
+                fontSize = 11.sp,
+                color = EblNavyPrimary,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+              )
             }
           }
         }
@@ -2318,13 +2379,19 @@ fun DocumentChecklistSenderTab(
               text = "Dispatched Message Preview",
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = EblNavyDark,
+              maxLines = 1,
+              softWrap = false,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.weight(1f, fill = false)
             )
             Text(
-              text = "Universal Header & RM Info Auto-Applied",
+              text = "Auto-Formatted",
               fontSize = 10.sp,
               color = Color(0xFF059669),
-              fontWeight = FontWeight.SemiBold
+              fontWeight = FontWeight.SemiBold,
+              maxLines = 1,
+              softWrap = false
             )
           }
 
@@ -2383,7 +2450,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Send SMS", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Send SMS", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
 
               // 2. Send via WhatsApp Button
@@ -2410,7 +2477,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Icon(Icons.Default.Send, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("WhatsApp", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("WhatsApp", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
               }
             }
 
@@ -2431,7 +2498,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Copy Text", fontSize = 12.sp)
+                Text("Copy Text", fontSize = 12.sp, maxLines = 1, softWrap = false)
               }
 
               // 4. Share Sheet Button
@@ -2449,7 +2516,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("Share", fontSize = 12.sp)
+                Text("Share", fontSize = 12.sp, maxLines = 1, softWrap = false)
               }
             }
           }

@@ -1329,6 +1329,7 @@ function extractAllSheetSettings(sheet) {
             enabled = !isSavingScriptUrl,
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier.weight(1f)
           ) {
             if (isSavingScriptUrl) {
@@ -1336,7 +1337,7 @@ function extractAllSheetSettings(sheet) {
             } else {
               Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Save Connector", fontSize = 11.sp)
+              Text("Save Connector", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -1348,11 +1349,12 @@ function extractAllSheetSettings(sheet) {
               feedbackMessage = "Google Apps Script code copied to clipboard! Paste it into Extensions > Apps Script."
             },
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier.weight(1f)
           ) {
             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Copy Script Code", fontSize = 11.sp)
+            Text("Copy Script Code", fontSize = 11.sp, maxLines = 1, softWrap = false)
           }
         }
 
@@ -1459,16 +1461,17 @@ function extractAllSheetSettings(sheet) {
             enabled = !isSyncingNow && !isPullingNow,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0F172A)),
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier.weight(1f).testTag("btn_sync_now")
           ) {
             if (isSyncingNow) {
               CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Pushing...", fontSize = 11.sp)
+              Text("Pushing...", fontSize = 11.sp, maxLines = 1, softWrap = false)
             } else {
               Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Push to Sheet", fontSize = 11.sp)
+              Text("Push to Sheet", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
 
@@ -1483,16 +1486,17 @@ function extractAllSheetSettings(sheet) {
             enabled = !isSyncingNow && !isPullingNow,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
             shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier.weight(1f).testTag("btn_pull_sheets")
           ) {
             if (isPullingNow) {
               CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
               Spacer(modifier = Modifier.width(6.dp))
-              Text("Pulling...", fontSize = 11.sp)
+              Text("Pulling...", fontSize = 11.sp, maxLines = 1, softWrap = false)
             } else {
               Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Pull from Sheet", fontSize = 11.sp)
+              Text("Pull from Sheet", fontSize = 11.sp, maxLines = 1, softWrap = false)
             }
           }
         }
