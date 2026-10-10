@@ -410,42 +410,49 @@ fun CustomerFileListScreen(
 
               Spacer(modifier = Modifier.height(8.dp))
 
-              // Action buttons row
+              // Action buttons row (compact and wrap-safe)
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                CpvStatusBadge(file.cpvStatus)
+                Box(modifier = Modifier.weight(1f, fill = false)) {
+                  CpvStatusBadge(file.cpvStatus)
+                }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Row(
+                  horizontalArrangement = Arrangement.spacedBy(4.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
                   OutlinedButton(
                     onClick = { viewingFile = file },
                     shape = RoundedCornerShape(6.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.testTag("btn_view_${file.fileId}")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp).testTag("btn_view_${file.fileId}")
                   ) {
-                    Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text("Details", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
                   OutlinedButton(
                     onClick = { onEditFile(file.fileId) },
                     shape = RoundedCornerShape(6.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                    modifier = Modifier.testTag("btn_edit_${file.fileId}")
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                    modifier = Modifier.height(30.dp).testTag("btn_edit_${file.fileId}")
                   ) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text("Edit", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
                   IconButton(
                     onClick = { fileToDelete = file },
-                    modifier = Modifier.size(32.dp).testTag("btn_delete_${file.fileId}")
+                    modifier = Modifier.size(30.dp).testTag("btn_delete_${file.fileId}")
                   ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
                   }
                 }
               }
