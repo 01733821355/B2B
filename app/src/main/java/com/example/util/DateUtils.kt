@@ -159,4 +159,33 @@ object DateUtils {
       }
     }
   }
+
+  fun parseDateTime(dateStr: String?): Long? {
+    if (dateStr.isNullOrBlank()) return null
+    val trimmed = dateStr.trim()
+    trimmed.toLongOrNull()?.let { return it }
+    val patterns = listOf(
+      "yyyy-MM-dd HH:mm:ss",
+      "yyyy-MM-dd HH:mm",
+      "yyyy-MM-dd'T'HH:mm:ss",
+      "yyyy-MM-dd'T'HH:mm:ss.SSS",
+      "dd MMM yyyy, hh:mm a",
+      "dd MMM yyyy, hh:mm:ss a",
+      "dd/MM/yyyy",
+      "yyyy-MM-dd"
+    )
+    for (p in patterns) {
+      try {
+        val formatter = DateTimeFormatter.ofPattern(p)
+        if (p == "yyyy-MM-dd" || p == "dd/MM/yyyy") {
+          val ld = LocalDate.parse(trimmed, formatter)
+          return ld.atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
+        } else {
+          val ldt = LocalDateTime.parse(trimmed, formatter)
+          return ldt.atZone(DHAKA_ZONE).toInstant().toEpochMilli()
+        }
+      } catch (_: Exception) {}
+    }
+    return null
+  }
 }

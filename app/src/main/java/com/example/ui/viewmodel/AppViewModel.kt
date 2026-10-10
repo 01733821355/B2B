@@ -1078,7 +1078,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun triggerGoogleSheetsSync(onResult: (Boolean, String?) -> Unit) {
+  fun triggerGoogleSheetsSync(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     viewModelScope.launch {
       val res = eblRepository.triggerGoogleSheetsSync()
       res.onSuccess { msg ->
@@ -1091,7 +1091,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun pullDataFromGoogleSheets(onResult: (Boolean, String?) -> Unit) {
+  fun pullDataFromGoogleSheets(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     viewModelScope.launch {
       val res = eblRepository.pullDataFromGoogleSheets()
       res.onSuccess { msg ->

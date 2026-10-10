@@ -22,9 +22,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CallEnd
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.Mic
@@ -46,6 +49,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -61,6 +65,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -812,6 +817,11 @@ fun CreateEventDialog(
   )
 }
 
+data class CustomerEntryItem(
+  val name: String = "",
+  val mobile: String = ""
+)
+
 // Dialog for RMs to submit their response (with Multiple Customers support)
 @Composable
 fun SubmitDeliveryResponseDialog(
@@ -834,9 +844,7 @@ fun SubmitDeliveryResponseDialog(
 
   // Dynamic customer list (Name and Mobile)
   val customerList = remember {
-    mutableStateListOf(
-      Pair(mutableStateOf(""), mutableStateOf(""))
-    )
+    mutableStateListOf(CustomerEntryItem())
   }
 
   AlertDialog(
@@ -863,7 +871,7 @@ fun SubmitDeliveryResponseDialog(
             )
             TextButton(
               onClick = {
-                customerList.add(Pair(mutableStateOf(""), mutableStateOf("")))
+                customerList.add(CustomerEntryItem())
               }
             ) {
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
@@ -872,7 +880,7 @@ fun SubmitDeliveryResponseDialog(
             }
           }
 
-          customerList.forEachIndexed { idx, pair ->
+          customerList.forEachIndexed { idx, item ->
             Card(
               shape = RoundedCornerShape(8.dp),
               colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
@@ -896,8 +904,8 @@ fun SubmitDeliveryResponseDialog(
                   }
                 }
                 OutlinedTextField(
-                  value = pair.first.value,
-                  onValueChange = { pair.first.value = it },
+                  value = item.name,
+                  onValueChange = { customerList[idx] = item.copy(name = it) },
                   label = { Text("Customer Name") },
                   placeholder = { Text("কাস্টমার নাম") },
                   singleLine = true,
@@ -905,8 +913,8 @@ fun SubmitDeliveryResponseDialog(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
-                  value = pair.second.value,
-                  onValueChange = { pair.second.value = it },
+                  value = item.mobile,
+                  onValueChange = { customerList[idx] = item.copy(mobile = it) },
                   label = { Text("Mobile Number") },
                   placeholder = { Text("01XXXXXXXXX") },
                   singleLine = true,
@@ -966,14 +974,14 @@ fun SubmitDeliveryResponseDialog(
         onClick = {
           val cnt = filesCountText.toIntOrNull() ?: 1
           val validCustomers = customerList.filter {
-            it.first.value.isNotBlank() || it.second.value.isNotBlank()
+            it.name.isNotBlank() || it.mobile.isNotBlank()
           }
           val customersJson = if (validCustomers.isNotEmpty()) {
             val arr = org.json.JSONArray()
             for (c in validCustomers) {
               arr.put(org.json.JSONObject().apply {
-                put("name", c.first.value.trim())
-                put("mobile", c.second.value.trim())
+                put("name", c.name.trim())
+                put("mobile", c.mobile.trim())
               })
             }
             arr.toString()
