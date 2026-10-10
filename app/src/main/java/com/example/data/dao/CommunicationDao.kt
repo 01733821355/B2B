@@ -25,9 +25,16 @@ interface CommunicationDao {
   @Query("DELETE FROM chat_messages WHERE id = :id")
   suspend fun deleteMessage(id: String)
 
+  @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT 200")
+  suspend fun getAllMessages(): List<ChatMessageEntity>
+
   // Events
   @Query("SELECT * FROM team_events ORDER BY createdAt DESC")
   fun getAllEventsFlow(): Flow<List<TeamEventEntity>>
+
+  @Query("SELECT * FROM team_events ORDER BY createdAt DESC")
+  suspend fun getAllEventsList(): List<TeamEventEntity>
+
 
   @Query("SELECT * FROM team_events WHERE eventId = :eventId LIMIT 1")
   suspend fun getEventById(eventId: String): TeamEventEntity?
@@ -53,4 +60,13 @@ interface CommunicationDao {
 
   @Query("SELECT COUNT(*) FROM event_responses WHERE eventId = :eventId")
   suspend fun getResponseCountForEvent(eventId: String): Int
+
+  @Query("SELECT * FROM event_responses ORDER BY submittedAt DESC")
+  suspend fun getAllResponsesList(): List<EventResponseEntity>
+
+  @Query("DELETE FROM team_events WHERE eventId = :eventId")
+  suspend fun deleteEvent(eventId: String)
+
+  @Query("DELETE FROM event_responses WHERE responseId = :responseId")
+  suspend fun deleteResponse(responseId: String)
 }

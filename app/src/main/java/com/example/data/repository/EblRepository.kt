@@ -1447,6 +1447,80 @@ class EblRepository(
           deletedRmCodes.put(it)
         }
 
+        // Gather all Important Documents so they are synced to Google Sheets for all RMs to view!
+        val allImportantDocs = database.importantDocumentDao().getAllActiveDocuments()
+        val docsArray = org.json.JSONArray()
+        for (doc in allImportantDocs) {
+          docsArray.put(JSONObject().apply {
+            put("docId", doc.docId)
+            put("title", doc.title)
+            put("category", doc.category)
+            put("description", doc.description)
+            put("fileName", doc.fileName)
+            put("fileType", doc.fileType)
+            put("fileSizeBytes", doc.fileSizeBytes)
+            put("fileUri", doc.fileUri)
+            put("storagePath", doc.storagePath)
+            put("uploadedBy", doc.uploadedBy)
+            put("uploaderName", doc.uploaderName)
+            put("uploaderRole", doc.uploaderRole)
+            put("createdAt", DateUtils.formatDateTime(doc.createdAt))
+            put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
+          })
+        }
+
+        // Gather chat and communication messages
+        val allMessages = database.communicationDao().getAllMessages()
+        val chatMessagesArray = org.json.JSONArray()
+        for (m in allMessages) {
+          chatMessagesArray.put(JSONObject().apply {
+            put("id", m.id)
+            put("senderRmCode", m.senderRmCode)
+            put("senderName", m.senderName)
+            put("senderRole", m.senderRole)
+            put("recipientRmCode", m.recipientRmCode ?: "")
+            put("messageText", m.messageText)
+            put("timestamp", DateUtils.formatDateTime(m.timestamp))
+            put("messageType", m.messageType)
+            put("eventId", m.eventId ?: "")
+          })
+        }
+
+        // Gather Team Events
+        val allEvents = database.communicationDao().getAllEventsList()
+        val eventsArray = org.json.JSONArray()
+        for (ev in allEvents) {
+          eventsArray.put(JSONObject().apply {
+            put("eventId", ev.eventId)
+            put("title", ev.title)
+            put("description", ev.description)
+            put("creatorRmCode", ev.creatorRmCode)
+            put("creatorName", ev.creatorName)
+            put("targetDate", ev.targetDate)
+            put("createdAt", DateUtils.formatDateTime(ev.createdAt))
+            put("status", ev.status)
+            put("allowedFields", ev.allowedFields)
+          })
+        }
+
+        // Gather Event Responses
+        val allResponses = database.communicationDao().getAllResponsesList()
+        val responsesArray = org.json.JSONArray()
+        for (r in allResponses) {
+          responsesArray.put(JSONObject().apply {
+            put("responseId", r.responseId)
+            put("eventId", r.eventId)
+            put("rmCode", r.rmCode)
+            put("rmName", r.rmName)
+            put("filesCount", r.filesCount)
+            put("requestedDate", r.requestedDate)
+            put("location", r.location)
+            put("remarks", r.remarks)
+            put("customerEntriesJson", r.customerEntriesJson)
+            put("submittedAt", DateUtils.formatDateTime(r.submittedAt))
+          })
+        }
+
         val payload = JSONObject().apply {
           put("action", "SYNC_ALL_DATA")
           put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
@@ -1463,6 +1537,10 @@ class EblRepository(
           put("attachments", attachmentsArray)
           put("sms", smsArray)
           put("locations", locationsArray)
+          put("importantDocuments", docsArray)
+          put("chatMessages", chatMessagesArray)
+          put("events", eventsArray)
+          put("eventResponses", responsesArray)
         }
 
         val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
@@ -1491,6 +1569,22 @@ class EblRepository(
                 val sheetSettings = respJson.optJSONArray("settings")
                 if (sheetSettings != null && sheetSettings.length() > 0) {
                   processSheetSettings(sheetSettings)
+                }
+                val sheetDocs = respJson.optJSONArray("importantDocuments") ?: respJson.optJSONArray("documents")
+                if (sheetDocs != null && sheetDocs.length() > 0) {
+                  processSheetDocuments(sheetDocs)
+                }
+                val sheetChat = respJson.optJSONArray("chatMessages") ?: respJson.optJSONArray("messages")
+                if (sheetChat != null && sheetChat.length() > 0) {
+                  processSheetChatMessages(sheetChat)
+                }
+                val sheetEvents = respJson.optJSONArray("events") ?: respJson.optJSONArray("teamEvents")
+                if (sheetEvents != null && sheetEvents.length() > 0) {
+                  processSheetEvents(sheetEvents)
+                }
+                val sheetResponses = respJson.optJSONArray("eventResponses") ?: respJson.optJSONArray("responses")
+                if (sheetResponses != null && sheetResponses.length() > 0) {
+                  processSheetEventResponses(sheetResponses)
                 }
               } catch (_: Exception) {}
             }
@@ -1577,8 +1671,20 @@ class EblRepository(
       val settingsArray = json.optJSONArray("settings") ?: JSONArray()
       val updatedSettingsCount = processSheetSettings(settingsArray)
 
+      val docsArray = json.optJSONArray("importantDocuments") ?: json.optJSONArray("documents") ?: JSONArray()
+      val updatedDocsCount = processSheetDocuments(docsArray)
+
+      val chatArray = json.optJSONArray("chatMessages") ?: json.optJSONArray("messages") ?: JSONArray()
+      processSheetChatMessages(chatArray)
+
+      val eventsArray = json.optJSONArray("events") ?: json.optJSONArray("teamEvents") ?: JSONArray()
+      processSheetEvents(eventsArray)
+
+      val responsesArray = json.optJSONArray("eventResponses") ?: json.optJSONArray("responses") ?: JSONArray()
+      processSheetEventResponses(responsesArray)
+
       val now = DateUtils.currentDhakaMillis()
-      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s) updated."
+      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s), $updatedDocsCount document(s) updated."
       database.appSettingDao().insertOrUpdateSyncStatus(
         currentStatus.copy(
           appsScriptUrl = activeWebAppUrl,
@@ -1737,6 +1843,152 @@ class EblRepository(
       }
     }
     return updatedCount
+  }
+
+  private suspend fun processSheetDocuments(sheetDocsJson: JSONArray): Int {
+    var count = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetDocsJson.length()) {
+      val obj = sheetDocsJson.optJSONObject(i) ?: continue
+      val docId = obj.optString("docId").trim()
+      if (docId.isBlank()) continue
+      val title = obj.optString("title", "Document").trim()
+      val category = obj.optString("category", "Policies & Circulars").trim()
+      val description = obj.optString("description", "").trim()
+      val fileName = obj.optString("fileName", "$title.pdf").trim()
+      val fileType = obj.optString("fileType", "application/pdf").trim()
+      val fileSizeBytes = obj.optLong("fileSizeBytes", 1024L)
+      val fileUri = obj.optString("fileUri", "").trim()
+      val storagePath = obj.optString("storagePath", "").trim()
+      val uploadedBy = obj.optString("uploadedBy", "ADMIN").trim()
+      val uploaderName = obj.optString("uploaderName", "Bank Official").trim()
+      val uploaderRole = obj.optString("uploaderRole", "ADMIN").trim()
+      val createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now
+      val updatedAt = DateUtils.parseDateTime(obj.optString("updatedAt")) ?: now
+
+      val entity = com.example.data.model.ImportantDocumentEntity(
+        docId = docId,
+        title = title,
+        category = category,
+        description = description,
+        fileName = fileName,
+        fileType = fileType,
+        fileSizeBytes = fileSizeBytes,
+        fileUri = fileUri,
+        storagePath = storagePath,
+        uploadedBy = uploadedBy,
+        uploaderName = uploaderName,
+        uploaderRole = uploaderRole,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        isDeleted = false,
+        isSynced = true
+      )
+      database.importantDocumentDao().insertDocument(entity)
+      count++
+    }
+    return count
+  }
+
+  private suspend fun processSheetChatMessages(sheetChatJson: JSONArray): Int {
+    var count = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetChatJson.length()) {
+      val obj = sheetChatJson.optJSONObject(i) ?: continue
+      val id = obj.optString("id").trim()
+      if (id.isBlank()) continue
+      val senderRmCode = obj.optString("senderRmCode").trim()
+      val senderName = obj.optString("senderName", "Officer").trim()
+      val senderRole = obj.optString("senderRole", "RM").trim()
+      val recipientRmCode = obj.optString("recipientRmCode").trim().ifBlank { null }
+      val messageText = obj.optString("messageText").trim()
+      val timestamp = DateUtils.parseDateTime(obj.optString("timestamp")) ?: now
+      val messageType = obj.optString("messageType", "TEXT").trim()
+      val eventId = obj.optString("eventId").trim().ifBlank { null }
+
+      val entity = com.example.data.model.ChatMessageEntity(
+        id = id,
+        senderRmCode = senderRmCode,
+        senderName = senderName,
+        senderRole = senderRole,
+        recipientRmCode = recipientRmCode,
+        messageText = messageText,
+        timestamp = timestamp,
+        messageType = messageType,
+        eventId = eventId
+      )
+      database.communicationDao().insertMessage(entity)
+      count++
+    }
+    return count
+  }
+
+  private suspend fun processSheetEvents(sheetEventsJson: JSONArray): Int {
+    var count = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetEventsJson.length()) {
+      val obj = sheetEventsJson.optJSONObject(i) ?: continue
+      val eventId = obj.optString("eventId").trim()
+      if (eventId.isBlank()) continue
+      val title = obj.optString("title").trim()
+      val description = obj.optString("description").trim()
+      val creatorRmCode = obj.optString("creatorRmCode").trim()
+      val creatorName = obj.optString("creatorName").trim()
+      val targetDate = obj.optString("targetDate").trim()
+      val createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now
+      val status = obj.optString("status", "ACTIVE").trim()
+      val allowedFields = obj.optString("allowedFields", "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS").trim()
+
+      val entity = com.example.data.model.TeamEventEntity(
+        eventId = eventId,
+        title = title,
+        description = description,
+        creatorRmCode = creatorRmCode,
+        creatorName = creatorName,
+        targetDate = targetDate,
+        createdAt = createdAt,
+        status = status,
+        allowedFields = allowedFields
+      )
+      database.communicationDao().insertEvent(entity)
+      count++
+    }
+    return count
+  }
+
+  private suspend fun processSheetEventResponses(sheetResponsesJson: JSONArray): Int {
+    var count = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetResponsesJson.length()) {
+      val obj = sheetResponsesJson.optJSONObject(i) ?: continue
+      val respId = obj.optString("responseId").trim()
+      if (respId.isBlank()) continue
+      val eventId = obj.optString("eventId").trim()
+      val rmCode = obj.optString("rmCode").trim()
+      val rmName = obj.optString("rmName").trim()
+      val filesCount = obj.optInt("filesCount", 1)
+      val requestedDate = obj.optString("requestedDate").trim()
+      val location = obj.optString("location").trim()
+      val remarks = obj.optString("remarks").trim()
+      val customerEntriesJson = obj.optString("customerEntriesJson").trim()
+      val submittedAt = DateUtils.parseDateTime(obj.optString("submittedAt")) ?: now
+
+      val entity = com.example.data.model.EventResponseEntity(
+        responseId = respId,
+        eventId = eventId,
+        rmCode = rmCode,
+        rmName = rmName,
+        filesCount = filesCount,
+        requestedDate = requestedDate,
+        location = location,
+        remarks = remarks,
+        customerEntriesJson = customerEntriesJson,
+        submittedAt = submittedAt
+      )
+      database.communicationDao().insertOrUpdateResponse(entity)
+      count++
+    }
+    return count
   }
 
   private suspend fun processSheetFiles(sheetFilesJson: JSONArray): Int {
@@ -2111,7 +2363,18 @@ class EblRepository(
       eventId = eventId
     )
     database.communicationDao().insertMessage(msg)
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(msg)
+  }
+
+  suspend fun deleteChatMessage(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+    database.communicationDao().deleteMessage(id)
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
+    Result.success(Unit)
   }
 
   fun getAllTeamEventsFlow(): Flow<List<com.example.data.model.TeamEventEntity>> {
@@ -2121,7 +2384,8 @@ class EblRepository(
   suspend fun createTeamEvent(
     title: String,
     description: String,
-    targetDate: String
+    targetDate: String,
+    allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS"
   ): Result<com.example.data.model.TeamEventEntity> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -2135,7 +2399,8 @@ class EblRepository(
       creatorName = user.name,
       targetDate = targetDate.trim(),
       createdAt = now,
-      status = "ACTIVE"
+      status = "ACTIVE",
+      allowedFields = allowedFields
     )
     database.communicationDao().insertEvent(event)
 
@@ -2147,6 +2412,9 @@ class EblRepository(
       messageType = "EVENT",
       eventId = eventId
     )
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(event)
   }
 
@@ -2155,7 +2423,8 @@ class EblRepository(
     filesCount: Int,
     requestedDate: String,
     location: String,
-    remarks: String
+    remarks: String,
+    customerEntriesJson: String = ""
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -2170,9 +2439,13 @@ class EblRepository(
       requestedDate = requestedDate.trim(),
       location = location.trim(),
       remarks = remarks.trim(),
+      customerEntriesJson = customerEntriesJson.trim(),
       submittedAt = now
     )
     database.communicationDao().insertOrUpdateResponse(resp)
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 

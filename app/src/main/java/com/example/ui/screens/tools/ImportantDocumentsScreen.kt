@@ -112,6 +112,15 @@ fun ImportantDocumentsScreen(
   var documentToEdit by remember { mutableStateOf<ImportantDocumentEntity?>(null) }
   var documentToDelete by remember { mutableStateOf<ImportantDocumentEntity?>(null) }
   var previewDocument by remember { mutableStateOf<ImportantDocumentEntity?>(null) }
+  var isSyncing by remember { mutableStateOf(false) }
+
+  LaunchedEffect(Unit) {
+    isSyncing = true
+    try {
+      viewModel.triggerGoogleSheetsSync()
+    } catch (_: Exception) {}
+    isSyncing = false
+  }
 
   val categories = listOf(
     "All",
@@ -172,38 +181,62 @@ fun ImportantDocumentsScreen(
         }
       }
 
-      // Upload button for Admin & Mentor ONLY
-      if (isPrivileged) {
-        Button(
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        // Sync with Google Sheets button
+        IconButton(
           onClick = {
-            documentToEdit = null
-            showUploadDialog = true
+            coroutineScope.launch {
+              isSyncing = true
+              viewModel.triggerGoogleSheetsSync()
+              isSyncing = false
+              Toast.makeText(context, "গুগল শিট থেকে ডকুমেন্টস সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
+            }
           },
-          colors = ButtonDefaults.buttonColors(
-            containerColor = EblGold,
-            contentColor = EblNavyDark
-          ),
-          shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.testTag("btn_add_important_doc")
+          modifier = Modifier.testTag("btn_sync_important_docs")
         ) {
-          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("+ Upload Doc", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          Icon(
+            Icons.Default.Sync,
+            contentDescription = "Sync from Sheets",
+            tint = if (isSyncing) EblGold else EblNavyPrimary,
+            modifier = Modifier.size(20.dp)
+          )
         }
-      } else {
-        // Read-only indicator badge for RM officers
-        Surface(
-          shape = RoundedCornerShape(6.dp),
-          color = Color(0xFFEFF6FF),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        // Upload button for Admin & Mentor ONLY
+        if (isPrivileged) {
+          Button(
+            onClick = {
+              documentToEdit = null
+              showUploadDialog = true
+            },
+            colors = ButtonDefaults.buttonColors(
+              containerColor = EblGold,
+              contentColor = EblNavyDark
+            ),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.testTag("btn_add_important_doc")
           ) {
-            Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(13.dp))
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Verified Repository", fontSize = 10.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
+            Text("+ Upload Doc", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          }
+        } else {
+          // Read-only indicator badge for RM officers
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEFF6FF),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(13.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Verified Repository", fontSize = 10.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
+            }
           }
         }
       }

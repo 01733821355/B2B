@@ -112,6 +112,7 @@ fun EblMainApp(viewModel: AppViewModel) {
   val rmSmsList by viewModel.rmSmsNotifications.collectAsState()
   val allSmsList by viewModel.allSmsNotifications.collectAsState()
   val lastLoggedRmCode by viewModel.lastLoggedRmCode.collectAsState()
+  val callState by viewModel.callState.collectAsState()
 
   val snackbarHostState = remember { SnackbarHostState() }
   val scope = rememberCoroutineScope()
@@ -440,6 +441,15 @@ fun EblMainApp(viewModel: AppViewModel) {
       onMarkAllRead = { viewModel.markAllSmsAsRead() },
       onClearAll = { viewModel.clearSmsForCurrentRm() },
       onDeleteSms = { viewModel.deleteSms(it) }
+    )
+  }
+
+  if (callState !is com.example.ui.viewmodel.CallUiState.Idle) {
+    com.example.ui.screens.tools.ActiveCallModal(
+      callState = callState,
+      onToggleMute = { viewModel.toggleMute() },
+      onToggleSpeaker = { viewModel.toggleSpeaker() },
+      onEndCall = { viewModel.endCall() }
     )
   }
 }

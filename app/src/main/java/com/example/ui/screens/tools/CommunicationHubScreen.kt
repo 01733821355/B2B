@@ -132,8 +132,8 @@ fun CommunicationHubScreen(
   if (showCreateEventDialog) {
     CreateEventDialog(
       onDismiss = { showCreateEventDialog = false },
-      onSubmit = { title, desc, date ->
-        viewModel.createTeamEvent(title, desc, date) { success, _ ->
+      onSubmit = { title, desc, date, allowedFields ->
+        viewModel.createTeamEvent(title, desc, date, allowedFields) { success, _ ->
           if (success) {
             showCreateEventDialog = false
           }
@@ -142,17 +142,17 @@ fun CommunicationHubScreen(
     )
   }
 
-  // Dialog: Submit Delivery Response for an Event
+  // Dialog: Submit Response for an Event
   if (activeResponseEvent != null) {
     val evt = activeResponseEvent!!
     SubmitDeliveryResponseDialog(
       event = evt,
       onDismiss = { activeResponseEvent = null },
-      onSubmit = { filesCount, reqDate, loc, remarks ->
-        viewModel.submitEventResponse(evt.eventId, filesCount, reqDate, loc, remarks) { success, _ ->
+      onSubmit = { filesCount, reqDate, loc, remarks, customerEntriesJson ->
+        viewModel.submitEventResponse(evt.eventId, filesCount, reqDate, loc, remarks, customerEntriesJson) { success, _ ->
           if (success) {
             activeResponseEvent = null
-            Toast.makeText(context, "✓ আপনার হ্যান্ড ডেলিভারির তথ্য সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "✓ আপনার এন্ট্রি ও কাস্টমার তালিকা সফলভাবে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
           }
         }
       }
@@ -173,7 +173,7 @@ fun CommunicationHubScreen(
       onDismiss = { activeViewEventSubmissions = null },
       onCopySummary = {
         val summaryText = buildString {
-          appendLine("=== EBL HAND DELIVERY EVENT SUMMARY ===")
+          appendLine("=== EBL ${evt.title.uppercase()} SUMMARY ===")
           appendLine("Event: ${evt.title}")
           appendLine("Target Date: ${evt.targetDate}")
           appendLine("Total Submissions: ${eventResponsesList.size} RMs")
@@ -183,10 +183,11 @@ fun CommunicationHubScreen(
             appendLine("${i + 1}. RM: ${r.rmName} (${r.rmCode}) | Date: ${r.requestedDate} | Files: ${r.filesCount}")
             if (r.location.isNotBlank()) appendLine("   Location: ${r.location}")
             if (r.remarks.isNotBlank()) appendLine("   Remarks: ${r.remarks}")
+            if (r.customerEntriesJson.isNotBlank()) appendLine("   Customers: ${r.customerEntriesJson}")
           }
         }
         clipboardManager.setText(AnnotatedString(summaryText))
-        Toast.makeText(context, "✓ রিমার্কস ও ডেলিভারি তালিকা ক্লিপবোর্ডে কপি হয়েছে!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "✓ ইভেন্ট ও কাস্টমার তালিকা ক্লিপবোর্ডে কপি হয়েছে!", Toast.LENGTH_SHORT).show()
       }
     )
   }
@@ -244,7 +245,7 @@ fun CommunicationHubScreen(
               color = Color.White
             )
             Text(
-              text = "লাইভ মেসেজ, নেট ভয়েস কলিং এবং হ্যান্ড ডেলিভারি ইভেন্ট",
+              text = "লাইভ মেসেজ, নেট ভয়েস কলিং এবং টিম ইভেন্ট",
               fontSize = 11.sp,
               color = EblGold
             )
@@ -340,7 +341,7 @@ fun CommunicationHubScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Event, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Hand Delivery Event / হ্যান্ড ডেলিভারি নোটিশ:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text("Team Events / টিম ইভেন্ট নোটিশ:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
         }
 
         OutlinedButton(
@@ -377,7 +378,7 @@ fun CommunicationHubScreen(
               Icon(Icons.Default.People, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(48.dp))
               Spacer(modifier = Modifier.height(8.dp))
               Text("No messages yet in Team Hub.", color = Color.Gray, fontSize = 13.sp)
-              Text("নিচের বাটন দিয়ে মেসেজ বা হ্যান্ড ডেলিভারি ইভেন্ট তৈরি করুন।", color = Color.Gray, fontSize = 11.sp)
+              Text("নিচের বাটন দিয়ে মেসেজ বা টিম ইভেন্ট তৈরি করুন।", color = Color.Gray, fontSize = 11.sp)
             }
           }
         }
@@ -427,6 +428,9 @@ fun CommunicationHubScreen(
               if (target != null) {
                 viewModel.startCall(target)
               }
+            },
+            onDelete = {
+              viewModel.deleteChatMessage(msg.id)
             }
           )
         }
@@ -482,7 +486,8 @@ fun CommunicationHubScreen(
 fun ChatBubbleItem(
   message: ChatMessageEntity,
   isMine: Boolean,
-  onCallSender: () -> Unit
+  onCallSender: () -> Unit,
+  onDelete: () -> Unit = {}
 ) {
   Row(
     modifier = Modifier.fillMaxWidth(),
@@ -549,13 +554,28 @@ fun ChatBubbleItem(
             fontSize = 13.sp
           )
           Spacer(modifier = Modifier.height(4.dp))
-          Text(
-            text = DateUtils.formatDateTime(message.timestamp).takeLast(8),
-            color = if (isMine) Color.White.copy(alpha = 0.7f) else Color.Gray,
-            fontSize = 9.sp,
-            textAlign = TextAlign.End,
-            modifier = Modifier.fillMaxWidth()
-          )
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            IconButton(
+              onClick = onDelete,
+              modifier = Modifier.size(24.dp)
+            ) {
+              Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete Message",
+                tint = if (isMine) Color.White.copy(alpha = 0.8f) else Color.Gray,
+                modifier = Modifier.size(14.dp)
+              )
+            }
+            Text(
+              text = DateUtils.formatDateTime(message.timestamp).takeLast(8),
+              color = if (isMine) Color.White.copy(alpha = 0.8f) else Color.Gray,
+              fontSize = 9.sp
+            )
+          }
         }
       }
     }
@@ -571,7 +591,7 @@ fun EventCardItem(
   onOpenSubmit: (TeamEventEntity) -> Unit,
   onViewSubmissions: (TeamEventEntity) -> Unit
 ) {
-  val title = event?.title ?: fallbackMessage.messageText.lines().firstOrNull() ?: "Team Hand Delivery Event"
+  val title = event?.title ?: fallbackMessage.messageText.lines().firstOrNull() ?: "Team Event"
   val targetDate = event?.targetDate ?: "As announced"
   val desc = event?.description ?: fallbackMessage.messageText
   val creatorName = event?.creatorName ?: fallbackMessage.senderName
@@ -598,7 +618,7 @@ fun EventCardItem(
               .background(Color(0xFF2563EB), RoundedCornerShape(6.dp))
               .padding(horizontal = 6.dp, vertical = 2.dp)
           ) {
-            Text("HAND DELIVERY EVENT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("TEAM EVENT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
           }
           Spacer(modifier = Modifier.width(6.dp))
           Text(
@@ -608,17 +628,19 @@ fun EventCardItem(
           )
         }
 
-        Surface(
-          shape = RoundedCornerShape(10.dp),
-          color = Color(0xFFDCFCE7)
-        ) {
-          Text(
-            text = "Target: $targetDate",
-            fontSize = 10.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF15803D),
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-          )
+        if (targetDate.isNotBlank()) {
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xFFDCFCE7)
+          ) {
+            Text(
+              text = "Target: $targetDate",
+              fontSize = 10.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFF15803D),
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+            )
+          }
         }
       }
 
@@ -631,13 +653,14 @@ fun EventCardItem(
         color = EblNavyDark
       )
 
-      Spacer(modifier = Modifier.height(4.dp))
-
-      Text(
-        text = desc,
-        fontSize = 12.sp,
-        color = Color(0xFF334155)
-      )
+      if (desc.isNotBlank()) {
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = desc,
+          fontSize = 12.sp,
+          color = Color(0xFF334155)
+        )
+      }
 
       Spacer(modifier = Modifier.height(12.dp))
 
@@ -645,7 +668,7 @@ fun EventCardItem(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        // RM Button to submit date & delivery file details
+        // RM Button to submit details
         Button(
           onClick = {
             if (event != null) onOpenSubmit(event)
@@ -678,51 +701,107 @@ fun EventCardItem(
   }
 }
 
-// Dialog to create a new delivery event
+// Dialog to create a new team event
 @Composable
 fun CreateEventDialog(
   onDismiss: () -> Unit,
-  onSubmit: (String, String, String) -> Unit
+  onSubmit: (String, String, String, String) -> Unit
 ) {
-  var title by remember { mutableStateOf("কার কার হ্যান্ড ডেলিভারি লাগবে?") }
+  var title by remember { mutableStateOf("") }
   var targetDate by remember { mutableStateOf("") }
-  var description by remember { mutableStateOf("অনুগ্রহ করে যে যে RM এর কার্ড বা ফাইলের হ্যান্ড ডেলিভারি লাগবে, তারিখ ও ফাইলের সংখ্যা সহ বিস্তারিত এন্ট্রি দিন।") }
+  var description by remember { mutableStateOf("") }
+
+  // Allowed entry fields configurable by Creator/Admin/Mentor
+  var allowCustomers by remember { mutableStateOf(true) }
+  var allowCount by remember { mutableStateOf(true) }
+  var allowDate by remember { mutableStateOf(true) }
+  var allowLocation by remember { mutableStateOf(true) }
+  var allowRemarks by remember { mutableStateOf(true) }
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Create Hand Delivery Event", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+    title = { Text("Create Team Event / নতুন ইভেন্ট", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
         OutlinedTextField(
           value = title,
           onValueChange = { title = it },
-          label = { Text("Event Title / বিষয়") },
-          modifier = Modifier.fillMaxWidth()
+          label = { Text("Event Name / বিষয়ের নাম *") },
+          placeholder = { Text("যেমন: Customer Audit / কার্ড বিতরণ / Urgent Notice") },
+          modifier = Modifier.fillMaxWidth().testTag("input_event_title")
         )
         OutlinedTextField(
           value = targetDate,
           onValueChange = { targetDate = it },
-          label = { Text("Target Date (e.g. 12/10/2026)") },
+          label = { Text("Target Date (e.g. 15/10/2026)") },
           placeholder = { Text("DD/MM/YYYY") },
-          modifier = Modifier.fillMaxWidth()
+          modifier = Modifier.fillMaxWidth().testTag("input_event_date")
         )
         OutlinedTextField(
           value = description,
           onValueChange = { description = it },
           label = { Text("Instructions / বিবরণ") },
-          maxLines = 4,
-          modifier = Modifier.fillMaxWidth()
+          placeholder = { Text("ইভেন্টের নিয়মাবলী ও আরএমদের জন্য নির্দেশনা") },
+          maxLines = 3,
+          modifier = Modifier.fillMaxWidth().testTag("input_event_desc")
         )
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+          text = "RM-রা কি কি তথ্য এন্ট্রি দিতে পারবে তা নির্বাচন করুন:",
+          fontWeight = FontWeight.Bold,
+          fontSize = 11.sp,
+          color = EblNavyDark
+        )
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Checkbox(checked = allowCustomers, onCheckedChange = { allowCustomers = it })
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("একাধিক কাস্টমার নাম ও মোবাইল নম্বর", fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Checkbox(checked = allowCount, onCheckedChange = { allowCount = it })
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("ফাইলের / কার্ডের সংখ্যা", fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Checkbox(checked = allowDate, onCheckedChange = { allowDate = it })
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("তারিখ নির্বাচন (Target Date)", fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Checkbox(checked = allowLocation, onCheckedChange = { allowLocation = it })
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("লোকেশন / ব্রাঞ্চের নাম", fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Checkbox(checked = allowRemarks, onCheckedChange = { allowRemarks = it })
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("নোট / বিশেষ মন্তব্য", fontSize = 11.sp)
+        }
       }
     },
     confirmButton = {
       Button(
         onClick = {
           if (title.isNotBlank()) {
-            onSubmit(title.trim(), description.trim(), targetDate.trim())
+            val fieldsList = mutableListOf<String>()
+            if (allowCustomers) fieldsList.add("CUSTOMERS")
+            if (allowCount) fieldsList.add("COUNT")
+            if (allowDate) fieldsList.add("DATE")
+            if (allowLocation) fieldsList.add("LOCATION")
+            if (allowRemarks) fieldsList.add("REMARKS")
+            val allowedFieldsStr = if (fieldsList.isNotEmpty()) fieldsList.joinToString(",") else "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS"
+            onSubmit(title.trim(), description.trim(), targetDate.trim(), allowedFieldsStr)
           }
         },
-        colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+        modifier = Modifier.testTag("btn_confirm_create_event")
       ) {
         Text("ইভেন্ট পোস্ট করুন")
       }
@@ -733,61 +812,174 @@ fun CreateEventDialog(
   )
 }
 
-// Dialog for RMs to submit their delivery response
+// Dialog for RMs to submit their response (with Multiple Customers support)
 @Composable
 fun SubmitDeliveryResponseDialog(
   event: TeamEventEntity,
   onDismiss: () -> Unit,
-  onSubmit: (Int, String, String, String) -> Unit
+  onSubmit: (Int, String, String, String, String) -> Unit
 ) {
   var filesCountText by remember { mutableStateOf("1") }
   var requestedDate by remember { mutableStateOf(event.targetDate) }
   var location by remember { mutableStateOf("") }
   var remarks by remember { mutableStateOf("") }
 
+  // Check allowed fields configured by Admin/Mentor
+  val allowed = event.allowedFields.ifBlank { "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS" }
+  val showCustomers = allowed.contains("CUSTOMERS")
+  val showCount = allowed.contains("COUNT")
+  val showDate = allowed.contains("DATE")
+  val showLocation = allowed.contains("LOCATION")
+  val showRemarks = allowed.contains("REMARKS")
+
+  // Dynamic customer list (Name and Mobile)
+  val customerList = remember {
+    mutableStateListOf(
+      Pair(mutableStateOf(""), mutableStateOf(""))
+    )
+  }
+
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("হ্যান্ড ডেলিভারি তথ্য সাবমিট করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+    title = { Text("ইভেন্ট তথ্য এন্ট্রি দিন: ${event.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
     text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("ইভেন্ট: ${event.title}", fontSize = 12.sp, color = Color.Gray)
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        if (showCustomers) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "কাস্টমার তালিকা (Customer List):",
+              fontWeight = FontWeight.Bold,
+              fontSize = 12.sp,
+              color = EblNavyDark
+            )
+            TextButton(
+              onClick = {
+                customerList.add(Pair(mutableStateOf(""), mutableStateOf("")))
+              }
+            ) {
+              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(2.dp))
+              Text("+ কাস্টমার যোগ করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+          }
 
-        OutlinedTextField(
-          value = filesCountText,
-          onValueChange = { filesCountText = it },
-          label = { Text("কয়টি ফাইল / কার্ড ডেলিভারি লাগবে?") },
-          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-          modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-          value = requestedDate,
-          onValueChange = { requestedDate = it },
-          label = { Text("প্রয়োজনীয় তারিখ (Target Date)") },
-          placeholder = { Text("e.g. 12-10-2026") },
-          modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-          value = location,
-          onValueChange = { location = it },
-          label = { Text("ডেলিভারি লোকেশন / ব্রাঞ্চ") },
-          placeholder = { Text("e.g. Gulshan Branch / Customer Office") },
-          modifier = Modifier.fillMaxWidth()
-        )
-        OutlinedTextField(
-          value = remarks,
-          onValueChange = { remarks = it },
-          label = { Text("কাস্টমার নাম / ফাইল আইডি / রিমার্কস") },
-          maxLines = 3,
-          placeholder = { Text("ফাইল নম্বর ও স্পেশাল নোট") },
-          modifier = Modifier.fillMaxWidth()
-        )
+          customerList.forEachIndexed { idx, pair ->
+            Card(
+              shape = RoundedCornerShape(8.dp),
+              colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Column(modifier = Modifier.padding(8.dp)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text("গ্রাহক #${idx + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                  if (customerList.size > 1) {
+                    IconButton(
+                      onClick = { customerList.removeAt(idx) },
+                      modifier = Modifier.size(24.dp)
+                    ) {
+                      Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(14.dp))
+                    }
+                  }
+                }
+                OutlinedTextField(
+                  value = pair.first.value,
+                  onValueChange = { pair.first.value = it },
+                  label = { Text("Customer Name") },
+                  placeholder = { Text("কাস্টমার নাম") },
+                  singleLine = true,
+                  modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                  value = pair.second.value,
+                  onValueChange = { pair.second.value = it },
+                  label = { Text("Mobile Number") },
+                  placeholder = { Text("01XXXXXXXXX") },
+                  singleLine = true,
+                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                  modifier = Modifier.fillMaxWidth()
+                )
+              }
+            }
+          }
+          Spacer(modifier = Modifier.height(4.dp))
+        }
+
+        if (showCount) {
+          OutlinedTextField(
+            value = filesCountText,
+            onValueChange = { filesCountText = it },
+            label = { Text("কয়টি ফাইল / কার্ড লাগবে?") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+
+        if (showDate) {
+          OutlinedTextField(
+            value = requestedDate,
+            onValueChange = { requestedDate = it },
+            label = { Text("প্রয়োজনীয় তারিখ (Target Date)") },
+            placeholder = { Text("DD/MM/YYYY") },
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+
+        if (showLocation) {
+          OutlinedTextField(
+            value = location,
+            onValueChange = { location = it },
+            label = { Text("ডেলিভারি লোকেশন / ব্রাঞ্চ") },
+            placeholder = { Text("e.g. Gulshan Branch / Customer Office") },
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
+
+        if (showRemarks) {
+          OutlinedTextField(
+            value = remarks,
+            onValueChange = { remarks = it },
+            label = { Text("বিশেষ নোট / মন্তব্য") },
+            maxLines = 3,
+            placeholder = { Text("ফাইল নম্বর ও অতিরিক্ত তথ্য") },
+            modifier = Modifier.fillMaxWidth()
+          )
+        }
       }
     },
     confirmButton = {
       Button(
         onClick = {
           val cnt = filesCountText.toIntOrNull() ?: 1
-          onSubmit(cnt, requestedDate.trim(), location.trim(), remarks.trim())
+          val validCustomers = customerList.filter {
+            it.first.value.isNotBlank() || it.second.value.isNotBlank()
+          }
+          val customersJson = if (validCustomers.isNotEmpty()) {
+            val arr = org.json.JSONArray()
+            for (c in validCustomers) {
+              arr.put(org.json.JSONObject().apply {
+                put("name", c.first.value.trim())
+                put("mobile", c.second.value.trim())
+              })
+            }
+            arr.toString()
+          } else ""
+
+          onSubmit(cnt, requestedDate.trim(), location.trim(), remarks.trim(), customersJson)
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
       ) {
@@ -817,7 +1009,7 @@ fun ViewSubmissionsDialog(
         verticalAlignment = Alignment.CenterVertically
       ) {
         Column {
-          Text("RM Delivery Submissions", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+          Text("RM Submissions: ${event.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
           Text("Total: ${responses.size} RMs | ${responses.sumOf { it.filesCount }} Files", fontSize = 11.sp, color = Color(0xFF059669), fontWeight = FontWeight.Bold)
         }
         IconButton(onClick = onCopySummary) {
@@ -843,10 +1035,24 @@ fun ViewSubmissionsDialog(
           LazyColumn(
             modifier = Modifier
               .fillMaxWidth()
-              .height(300.dp),
+              .height(340.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             items(responses, key = { it.responseId }) { r ->
+              val customers = remember(r.customerEntriesJson) {
+                if (r.customerEntriesJson.isNotBlank()) {
+                  try {
+                    val arr = org.json.JSONArray(r.customerEntriesJson)
+                    val l = mutableListOf<Pair<String, String>>()
+                    for (i in 0 until arr.length()) {
+                      val o = arr.getJSONObject(i)
+                      l.add(Pair(o.optString("name"), o.optString("mobile")))
+                    }
+                    l
+                  } catch (_: Exception) { emptyList() }
+                } else emptyList()
+              }
+
               Card(
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
@@ -866,12 +1072,32 @@ fun ViewSubmissionsDialog(
                       Text("${r.filesCount} Files", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
                     }
                   }
-                  Spacer(modifier = Modifier.height(4.dp))
-                  Text("তারিখ: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
+                  if (r.requestedDate.isNotBlank()) {
+                    Text("তারিখ: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
+                  }
                   if (r.location.isNotBlank()) {
                     Text("লোকেশন: ${r.location}", fontSize = 11.sp, color = Color.DarkGray)
                   }
+
+                  // Multiple Customers Section
+                  if (customers.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = Color(0xFFEFF6FF),
+                      modifier = Modifier.fillMaxWidth()
+                    ) {
+                      Column(modifier = Modifier.padding(6.dp)) {
+                        Text("👥 কাস্টমার তালিকা (${customers.size} জন):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                        customers.forEachIndexed { cIdx, cust ->
+                          Text("${cIdx + 1}. ${cust.first} • ${cust.second}", fontSize = 10.sp, color = Color(0xFF1E293B))
+                        }
+                      }
+                    }
+                  }
+
                   if (r.remarks.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text("নোট: ${r.remarks}", fontSize = 11.sp, color = Color(0xFF0369A1))
                   }
                 }

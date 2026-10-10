@@ -40,7 +40,8 @@ data class TeamEventEntity(
   val creatorName: String,
   val targetDate: String, // e.g. "12/10/2026"
   val createdAt: Long,
-  val status: String = "ACTIVE" // "ACTIVE", "COMPLETED"
+  val status: String = "ACTIVE", // "ACTIVE", "COMPLETED"
+  val allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS" // Admin/Mentor configurable fields
 )
 
 @Entity(
@@ -60,5 +61,6 @@ data class EventResponseEntity(
   val requestedDate: String,
   val location: String,
   val remarks: String = "",
+  val customerEntriesJson: String = "", // Multiple customers: JSON list of {name, mobile}
   val submittedAt: Long
 )

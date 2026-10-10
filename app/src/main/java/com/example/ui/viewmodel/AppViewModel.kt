@@ -501,6 +501,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun isPasswordLoginVerified(rmCode: String): Boolean {
     val clean = rmCode.trim().uppercase()
     if (clean.isBlank()) return false
+    val lastPwId = authPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+    if (clean == lastPwId && lastPwId.isNotBlank()) return true
     if (authPrefs.getBoolean("password_login_verified_$clean", false)) return true
     return appSettings.value.find { it.settingKey == "password_login_verified_$clean" }?.settingValue == "true"
   }
@@ -558,6 +560,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
           .putBoolean("password_login_verified_$cleanCode", true)
           .putBoolean("fingerprint_enabled_$cleanCode", true)
           .putString("last_logged_rm_code", cleanCode)
+          .putString("last_password_logged_id", cleanCode)
           .apply()
         try {
           val now = DateUtils.currentDhakaMillis()
@@ -580,6 +583,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
           database.appSettingDao().insertOrUpdateSetting(
             AppSettingEntity(
               settingKey = "last_logged_rm_code",
+              settingValue = cleanCode,
+              updatedBy = cleanCode,
+              updatedAt = now
+            )
+          )
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity(
+              settingKey = "last_password_logged_id",
               settingValue = cleanCode,
               updatedBy = cleanCode,
               updatedAt = now
@@ -615,8 +626,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     onResult: (Boolean, String?) -> Unit
   ) {
     val clean = rmCodeInput.trim().uppercase()
-    if (!isPasswordLoginVerified(clean)) {
-      onResult(false, "প্রথমবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। এরপর থেকে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে চালু থাকবে। (First-time password login is mandatory. Fingerprint will be enabled afterwards.)")
+    val lastPwId = authPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+    val isVerified = (clean == lastPwId && lastPwId.isNotBlank()) || isPasswordLoginVerified(clean)
+    if (!isVerified) {
+      onResult(false, "এই আইডির জন্য একবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে ঢুকলে পরবর্তীতে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে সক্রিয় হবে।")
       return
     }
 
@@ -687,6 +700,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   fun logout() {
     viewModelScope.launch {
+      val user = authRepository.currentUser.value
+      if (user != null) {
+        val clean = user.rmCode.trim().uppercase()
+        lastLoggedRmCode.value = clean
+        authPrefs.edit().putString("last_logged_rm_code", clean).apply()
+      }
       authRepository.logout()
       screenBackstack.clear()
       _currentScreen.value = Screen.Login
@@ -1174,6 +1193,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId)
       res.onSuccess {
+        try {
+          com.example.util.NotificationHelper.sendIncomingSmsNotification(
+            getApplication(),
+            currentUser.value?.name ?: "EBL Hub",
+            text
+          )
+        } catch (_: Exception) {}
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun deleteChatMessage(id: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteChatMessage(id)
+      res.onSuccess {
+        _uiMessage.emit("Message deleted.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1185,12 +1223,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     title: String,
     description: String,
     targetDate: String,
+    allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.createTeamEvent(title, description, targetDate)
+      val res = eblRepository.createTeamEvent(title, description, targetDate, allowedFields)
       res.onSuccess {
-        _uiMessage.emit("✓ Event created & shared with all team members!")
+        _uiMessage.emit("✓ Event '${it.title}' created & shared with all team members!")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1204,12 +1243,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     requestedDate: String,
     location: String,
     remarks: String,
+    customerEntriesJson: String = "",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.submitEventResponse(eventId, filesCount, requestedDate, location, remarks)
+      val res = eblRepository.submitEventResponse(eventId, filesCount, requestedDate, location, remarks, customerEntriesJson)
       res.onSuccess {
-        _uiMessage.emit("✓ Your delivery details have been submitted!")
+        _uiMessage.emit("✓ Your event response details have been submitted!")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1228,11 +1268,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun startCall(targetUser: com.example.data.model.UserEntity) {
     callTimerJob?.cancel()
     _callState.value = CallUiState.Calling(targetUser)
-    com.example.util.CallingService.playDialTone()
+    com.example.util.CallingService.playRingtone(getApplication())
 
-    // Automatically transition to Connected after 2.5s simulated ringing
+    // Automatically transition to Connected after 2.5s ringing
     callTimerJob = viewModelScope.launch {
       kotlinx.coroutines.delay(2500)
+      com.example.util.CallingService.stopRingtone()
       com.example.util.CallingService.playConnectedTone()
       var duration = 0
       while (true) {
@@ -1249,8 +1290,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allActiveUsers = allRms.value.take(4)
     val participants = if (myUser != null) listOf(myUser) + allActiveUsers.filter { it.rmCode != myUser.rmCode } else allActiveUsers
 
-    com.example.util.CallingService.playConnectedTone()
+    com.example.util.CallingService.playRingtone(getApplication())
     callTimerJob = viewModelScope.launch {
+      kotlinx.coroutines.delay(1500)
+      com.example.util.CallingService.stopRingtone()
+      com.example.util.CallingService.playConnectedTone()
       var duration = 0
       while (true) {
         _callState.value = CallUiState.GroupCall(
@@ -1294,6 +1338,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun endCall() {
     callTimerJob?.cancel()
     callTimerJob = null
+    com.example.util.CallingService.stopRingtone()
     com.example.util.CallingService.playEndCallTone()
     val current = _callState.value
     if (current is CallUiState.Connected) {

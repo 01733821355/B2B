@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -43,6 +44,8 @@ import androidx.compose.material.icons.filled.MonetizationOn
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.RecentActors
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Warning
@@ -92,6 +95,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomerFileEntity
@@ -1397,26 +1401,37 @@ fun DocumentChecklistSenderTab(
     )
   }
 
+  fun getPresetItems(presetName: String): List<String> {
+    val cleanKey = "CHECKLIST_PRESET_" + presetName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val saved = appSettingsList.find { it.settingKey == cleanKey }?.settingValue
+    if (!saved.isNullOrBlank()) {
+      val parsed = parseCustomDocs(saved, emptyList())
+      if (parsed.isNotEmpty()) return parsed
+    }
+    return when (presetName) {
+      "Credit Card Limit Enhance" -> defaultEnhanceDocs
+      "New Credit Card (Salaried)" -> defaultSalariedDocs
+      "New Credit Card (Business Person)" -> defaultBusinessDocs
+      "Personal / Auto / Home Loan" -> defaultLoanDocs
+      else -> emptyList()
+    }
+  }
+
   // Active state lists
-  val singleChecklistItems = remember(selectedPreset) {
+  val singleChecklistItems = remember(selectedPreset, appSettingsList) {
     mutableStateListOf<ChecklistItem>().apply {
-      when (selectedPreset) {
-        "Credit Card Limit Enhance" -> defaultEnhanceDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
-        "New Credit Card (Salaried)" -> defaultSalariedDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
-        "New Credit Card (Business Person)" -> defaultBusinessDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
-        "Personal / Auto / Home Loan" -> defaultLoanDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
-        else -> defaultEnhanceDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
-      }
+      val items = getPresetItems(selectedPreset)
+      items.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
     }
   }
 
   // Corporate Card Two-Part state lists
-  val corporateCompanyItems = remember {
+  val corporateCompanyItems = remember(defaultCorporateCompanyDocs) {
     mutableStateListOf<ChecklistItem>().apply {
       defaultCorporateCompanyDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
     }
   }
-  val corporateEmployeeItems = remember {
+  val corporateEmployeeItems = remember(defaultCorporateEmployeeDocs) {
     mutableStateListOf<ChecklistItem>().apply {
       defaultCorporateEmployeeDocs.forEachIndexed { i, t -> add(ChecklistItem(100 + i + 1, t)) }
     }
@@ -1425,6 +1440,7 @@ fun DocumentChecklistSenderTab(
   var newCustomDocText by remember { mutableStateOf("") }
   var newCorpCustomDocText by remember { mutableStateOf("") }
   var selectedFilePickerExpanded by remember { mutableStateOf(false) }
+  var customerSearchQuery by remember { mutableStateOf("") }
 
   // Header and Regards auto-fill
   val custDisplayName = customerName.trim().ifBlank { "Customer" }
@@ -1636,45 +1652,243 @@ fun DocumentChecklistSenderTab(
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
             )
-
-            // Pick from existing files button
             if (availableFiles.isNotEmpty()) {
-              ExposedDropdownMenuBox(
-                expanded = selectedFilePickerExpanded,
-                onExpandedChange = { selectedFilePickerExpanded = !selectedFilePickerExpanded }
+              Surface(
+                color = Color(0xFFEFF6FF),
+                shape = RoundedCornerShape(12.dp)
               ) {
-                OutlinedButton(
-                  onClick = { selectedFilePickerExpanded = true },
-                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                  modifier = Modifier.menuAnchor()
-                ) {
-                  Text("Pick File", fontSize = 11.sp)
-                }
-                ExposedDropdownMenu(
-                  expanded = selectedFilePickerExpanded,
-                  onDismissRequest = { selectedFilePickerExpanded = false }
-                ) {
-                  availableFiles.take(15).forEach { f ->
-                    DropdownMenuItem(
-                      text = { Text("${f.customerName} (${f.mobile})", fontSize = 12.sp) },
-                      onClick = {
-                        customerName = f.customerName
-                        customerMobile = f.mobile
-                        if (f.productType.contains("Corporate", ignoreCase = true)) {
-                          selectedPreset = "Corporate Card"
-                        } else if (f.productType.contains("Enhance", ignoreCase = true)) {
-                          selectedPreset = "Credit Card Limit Enhance"
-                        }
-                        selectedFilePickerExpanded = false
-                      }
-                    )
-                  }
-                }
+                Text(
+                  text = "${availableFiles.size} Recent Files",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = EblNavyPrimary,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
               }
             }
           }
 
           Spacer(modifier = Modifier.height(10.dp))
+
+          // Quick Pick from Recent Customer Files (NO TEXT WRAPPING)
+          if (availableFiles.isNotEmpty()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "Select Recent Customer (সাম্প্রতিক কাস্টমার):",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+              if (customerName.isNotBlank() || customerMobile.isNotBlank()) {
+                TextButton(
+                  onClick = {
+                    customerName = ""
+                    customerMobile = ""
+                  },
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                  modifier = Modifier.height(28.dp)
+                ) {
+                  Text("Clear", fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
+                }
+              }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+
+            ExposedDropdownMenuBox(
+              expanded = selectedFilePickerExpanded,
+              onExpandedChange = { selectedFilePickerExpanded = !selectedFilePickerExpanded },
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              OutlinedTextField(
+                value = if (customerName.isNotBlank() && customerMobile.isNotBlank()) {
+                  "$customerName ($customerMobile)"
+                } else if (customerName.isNotBlank()) {
+                  customerName
+                } else {
+                  ""
+                },
+                onValueChange = {},
+                readOnly = true,
+                placeholder = {
+                  Text(
+                    "Choose a recent customer to auto-fill...",
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                },
+                leadingIcon = {
+                  Icon(
+                    Icons.Default.RecentActors,
+                    contentDescription = null,
+                    tint = EblNavyPrimary,
+                    modifier = Modifier.size(20.dp)
+                  )
+                },
+                trailingIcon = {
+                  ExposedDropdownMenuDefaults.TrailingIcon(expanded = selectedFilePickerExpanded)
+                },
+                singleLine = true,
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .menuAnchor()
+                  .testTag("dropdown_recent_customer_picker"),
+                colors = OutlinedTextFieldDefaults.colors(
+                  focusedBorderColor = EblNavyPrimary,
+                  unfocusedBorderColor = Color(0xFFCBD5E1)
+                )
+              )
+
+              ExposedDropdownMenu(
+                expanded = selectedFilePickerExpanded,
+                onDismissRequest = {
+                  selectedFilePickerExpanded = false
+                  customerSearchQuery = ""
+                },
+                modifier = Modifier.heightIn(max = 350.dp)
+              ) {
+                if (availableFiles.size > 5) {
+                  OutlinedTextField(
+                    value = customerSearchQuery,
+                    onValueChange = { customerSearchQuery = it },
+                    placeholder = { Text("Search name, mobile or card...", fontSize = 11.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.Gray) },
+                    singleLine = true,
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(horizontal = 8.dp, vertical = 4.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                      focusedBorderColor = EblNavyPrimary,
+                      unfocusedBorderColor = Color(0xFFE2E8F0)
+                    )
+                  )
+                  HorizontalDivider(color = Color(0xFFE2E8F0))
+                }
+
+                val filteredList = if (customerSearchQuery.isBlank()) {
+                  availableFiles
+                } else {
+                  availableFiles.filter {
+                    it.customerName.contains(customerSearchQuery, ignoreCase = true) ||
+                    it.mobile.contains(customerSearchQuery) ||
+                    it.productType.contains(customerSearchQuery, ignoreCase = true) ||
+                    it.ccNumber.contains(customerSearchQuery, ignoreCase = true)
+                  }
+                }
+
+                if (filteredList.isEmpty()) {
+                  DropdownMenuItem(
+                    text = { Text("No matching customer file found", fontSize = 12.sp, color = Color.Gray) },
+                    onClick = {}
+                  )
+                } else {
+                  filteredList.take(25).forEach { f ->
+                    DropdownMenuItem(
+                      text = {
+                        Row(
+                          modifier = Modifier.fillMaxWidth(),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                        ) {
+                          Column(modifier = Modifier.weight(1f, fill = false)) {
+                            Text(
+                              text = f.customerName.ifBlank { "Unnamed Applicant" },
+                              fontWeight = FontWeight.Bold,
+                              fontSize = 13.sp,
+                              color = EblNavyDark,
+                              maxLines = 1,
+                              softWrap = false,
+                              overflow = TextOverflow.Ellipsis
+                            )
+                            Row(
+                              verticalAlignment = Alignment.CenterVertically,
+                              modifier = Modifier.padding(top = 2.dp)
+                            ) {
+                              Text(
+                                text = f.mobile.ifBlank { "No Mobile" },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF059669),
+                                maxLines = 1,
+                                softWrap = false
+                              )
+                              if (f.productType.isNotBlank()) {
+                                Text(
+                                  text = " • ${f.productType}",
+                                  fontSize = 11.sp,
+                                  color = Color(0xFF64748B),
+                                  maxLines = 1,
+                                  softWrap = false,
+                                  overflow = TextOverflow.Ellipsis
+                                )
+                              }
+                            }
+                          }
+                          if (f.applicationStatus.isNotBlank()) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Surface(
+                              color = when (f.applicationStatus.uppercase()) {
+                                "APPROVED" -> Color(0xFFDEF7EC)
+                                "DECLINED" -> Color(0xFFFDE8E8)
+                                else -> Color(0xFFEFF6FF)
+                              },
+                              shape = RoundedCornerShape(4.dp)
+                            ) {
+                              Text(
+                                text = f.applicationStatus,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = when (f.applicationStatus.uppercase()) {
+                                  "APPROVED" -> Color(0xFF03543F)
+                                  "DECLINED" -> Color(0xFF9B1C1C)
+                                  else -> Color(0xFF1E40AF)
+                                },
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                maxLines = 1,
+                                softWrap = false
+                              )
+                            }
+                          }
+                        }
+                      },
+                      onClick = {
+                        customerName = f.customerName
+                        customerMobile = f.mobile
+                        val prod = f.productType.lowercase()
+                        if (prod.contains("corporate")) {
+                          selectedPreset = "Corporate Card"
+                        } else if (prod.contains("enhance")) {
+                          selectedPreset = "Credit Card Limit Enhance"
+                        } else if (prod.contains("business")) {
+                          if ("New Credit Card (Business Person)" in presetOptions) {
+                            selectedPreset = "New Credit Card (Business Person)"
+                          }
+                        } else if (prod.contains("salaried")) {
+                          if ("New Credit Card (Salaried)" in presetOptions) {
+                            selectedPreset = "New Credit Card (Salaried)"
+                          }
+                        } else if (prod.contains("loan")) {
+                          if ("Personal / Auto / Home Loan" in presetOptions) {
+                            selectedPreset = "Personal / Auto / Home Loan"
+                          }
+                        }
+                        selectedFilePickerExpanded = false
+                        customerSearchQuery = ""
+                      },
+                      contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    )
+                    HorizontalDivider(color = Color(0xFFF1F5F9))
+                  }
+                }
+              }
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+          }
 
           // Preset Selection & Admin "+ New Preset" action
           Row(
@@ -2269,6 +2483,12 @@ fun DocumentChecklistSenderTab(
             val idx = target.first
             if (idx in 0 until singleChecklistItems.size && editedName.isNotBlank()) {
               singleChecklistItems[idx] = singleChecklistItems[idx].copy(title = editedName.trim())
+              if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+                val cleanKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+                val updatedStr = singleChecklistItems.map { it.title }.joinToString("\n")
+                viewModel?.updateSetting(cleanKey, updatedStr)
+                viewModel?.triggerGoogleSheetsSync()
+              }
             }
             editingItemTarget = null
           },
@@ -2389,7 +2609,7 @@ fun DocumentChecklistSenderTab(
               val updatedCustom = (customPresetsList + cleanName).distinct()
               viewModel?.updateSetting("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedCustom).toString())
 
-              val presetKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").uppercase()
+              val presetKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
               viewModel?.updateSetting(presetKey, itemsList.joinToString("\n"))
 
               // Switch to this new preset immediately
@@ -2399,8 +2619,11 @@ fun DocumentChecklistSenderTab(
                 singleChecklistItems.add(ChecklistItem(id = i + 1, title = doc, isChecked = true))
               }
 
+              // Trigger sync to Google Sheets immediately so all RMs receive it!
+              viewModel?.triggerGoogleSheetsSync()
+
               showCreatePresetDialog = false
-              Toast.makeText(context, "✓ নতুন প্রিসেট '$cleanName' সফলভাবে তৈরি হয়েছে!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "✓ নতুন প্রিসেট '$cleanName' সফলভাবে তৈরি ও সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
             }
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),

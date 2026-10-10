@@ -129,6 +129,12 @@ jobs:
           fi
           cp my-upload-key.jks app/my-upload-key.jks || true
 
+          # Ensure Gradle wrapper exists
+          if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+            echo "Generating Gradle wrapper jar..."
+            gradle wrapper --gradle-version 9.3.1 2>/dev/null || true
+          fi
+
           # Ensure gradlew executable bit
           chmod +x gradlew || true
 

@@ -212,4 +212,49 @@ object NotificationHelper {
       notificationManager.notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }
+
+  fun sendIncomingSmsNotification(
+    context: Context,
+    senderTitle: String,
+    messageText: String
+  ) {
+    try {
+      createNotificationChannels(context)
+
+      // Alert tone for incoming SMS
+      try {
+        val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+        toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 300)
+      } catch (_: Exception) {}
+
+      val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      }
+
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        System.currentTimeMillis().toInt(),
+        intent,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+      )
+
+      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+      val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.sym_action_chat)
+        .setContentTitle("SMS / Team Hub: $senderTitle")
+        .setContentText(messageText)
+        .setStyle(NotificationCompat.BigTextStyle().bigText("$senderTitle:\n$messageText"))
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setSound(soundUri)
+        .setVibrate(longArrayOf(0, 180, 100, 250))
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+
+      val notificationManager = NotificationManagerCompat.from(context)
+      val notificationId = (System.currentTimeMillis() % 100000).toInt() + 10
+      notificationManager.notify(notificationId, builder.build())
+    } catch (_: Exception) {}
+  }
 }
+

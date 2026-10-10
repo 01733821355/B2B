@@ -86,6 +86,12 @@ fun LoginScreen(
   isPasswordVerified: ((String) -> Boolean)? = null,
   modifier: Modifier = Modifier
 ) {
+  val context = LocalContext.current
+  val sharedPrefs = remember { context.getSharedPreferences("ebl_auth_preferences", android.content.Context.MODE_PRIVATE) }
+  val coroutineScope = rememberCoroutineScope()
+  val focusManager = LocalFocusManager.current
+  val scrollState = rememberScrollState()
+
   var usernameInput by remember { mutableStateOf(lastLoggedRmCode) }
   var passwordInput by remember { mutableStateOf("") }
   var passwordVisible by remember { mutableStateOf(false) }
@@ -93,16 +99,12 @@ fun LoginScreen(
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
   LaunchedEffect(lastLoggedRmCode) {
-    if (usernameInput.isBlank() && lastLoggedRmCode.isNotBlank()) {
-      usernameInput = lastLoggedRmCode
+    val lastPw = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+    val bestDefault = lastPw.ifBlank { lastLoggedRmCode }
+    if (bestDefault.isNotBlank()) {
+      usernameInput = bestDefault
     }
   }
-
-  val context = LocalContext.current
-  val sharedPrefs = remember { context.getSharedPreferences("ebl_auth_preferences", android.content.Context.MODE_PRIVATE) }
-  val coroutineScope = rememberCoroutineScope()
-  val focusManager = LocalFocusManager.current
-  val scrollState = rememberScrollState()
 
   fun doLogin() {
     if (usernameInput.isBlank() || passwordInput.isBlank()) {
@@ -139,24 +141,19 @@ fun LoginScreen(
   fun doBiometricLogin() {
     val currentTyped = usernameInput.trim().uppercase()
     val lastVerified = lastLoggedRmCode.trim().uppercase()
-    val targetCode = currentTyped.ifBlank { lastVerified }
+    val lastPasswordLoggedId = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+    val targetCode = currentTyped.ifBlank { lastPasswordLoggedId.ifBlank { lastVerified } }
 
     if (targetCode.isBlank()) {
       errorMessage = "Please enter your RM Code / Username first."
       return
     }
 
-    // STRICT RULE: If switching to another ID, password is 100% mandatory!
-    val isSameAsLastVerified = (targetCode == lastVerified) && lastVerified.isNotBlank()
-    if (!isSameAsLastVerified && currentTyped.isNotBlank()) {
-      errorMessage = "অন্য কোনো আইডি ($targetCode) দিয়ে লগইন করতে হলে অবশ্যই পাসওয়ার্ড দিয়ে লগইন করতে হবে। একবার পাসওয়ার্ড দিয়ে সফলভাবে ঢুকলে পরবর্তীতে সেই আইডিতে ফিঙ্গারপ্রিন্ট সক্রিয় হবে।"
-      return
-    }
+    val isLastPassUser = (targetCode == lastPasswordLoggedId) || (targetCode == lastVerified && lastVerified.isNotBlank())
+    val isPassOk = isLastPassUser || sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
 
-    // Check if password has been verified for this specific ID on this device
-    val isPassOk = sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
     if (!isPassOk) {
-      errorMessage = "এই আইডির জন্য পাসওয়ার্ড পরিবর্তন করা হয়েছে অথবা নতুন লগইন। অনুগ্রহ করে পাসওয়ার্ড দিয়ে একবার লগইন করুন।"
+      errorMessage = "এই আইডির ($targetCode) জন্য একবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে ঢুকলে পরবর্তীতে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে সক্রিয় হবে।"
       return
     }
 
@@ -490,13 +487,13 @@ fun LoginScreen(
                 )
                 val currentTyped = usernameInput.trim().uppercase()
                 val lastVerified = lastLoggedRmCode.trim().uppercase()
-                val target = currentTyped.ifBlank { lastVerified }
-                val isSameAsLast = target.isNotBlank() && target == lastVerified
-                val isPassOk = isSameAsLast && (sharedPrefs.getBoolean("password_login_verified_$target", false) || (isPasswordVerified?.invoke(target) == true))
+                val lastPasswordLoggedId = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+                val target = currentTyped.ifBlank { lastPasswordLoggedId.ifBlank { lastVerified } }
+                val isLastPassUser = target.isNotBlank() && (target == lastPasswordLoggedId || target == lastVerified)
+                val isPassOk = target.isNotBlank() && (isLastPassUser || sharedPrefs.getBoolean("password_login_verified_$target", false) || (isPasswordVerified?.invoke(target) == true))
 
                 if (target.isNotBlank()) {
                   val statusMsg = when {
-                    !isSameAsLast && currentTyped.isNotBlank() -> "অন্য আইডিতে ($target) পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক"
                     isPassOk -> "✓ কুইক ফিঙ্গারপ্রিন্ট সক্রিয় ($target) - সরাসরি ঢুকুন"
                     else -> "পাসওয়ার্ড দিয়ে একবার লগইন করুন (এরপর ফিঙ্গারপ্রিন্ট চালু হবে)"
                   }
