@@ -254,13 +254,12 @@ fun ImportantDocumentsScreen(
       }
     }
 
-    // 2. Ultra-Compact Search Bar (height 36dp)
+    // 2. Compact Search Bar
     OutlinedTextField(
       value = searchQuery,
       onValueChange = { searchQuery = it },
       modifier = Modifier
         .fillMaxWidth()
-        .height(36.dp)
         .testTag("search_important_docs"),
       placeholder = { Text("Search title, circular or keywords...", fontSize = 11.sp) },
       leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(15.dp)) },

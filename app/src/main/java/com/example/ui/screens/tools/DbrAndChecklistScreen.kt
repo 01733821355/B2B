@@ -88,11 +88,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import android.content.Context
+import android.view.inputmethod.InputMethodManager
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -101,6 +111,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
@@ -1723,11 +1734,38 @@ fun DocumentChecklistSenderTab(
           }
           Spacer(modifier = Modifier.height(4.dp))
 
-          // 1. Inline Search Bar (Software keyboard opens immediately upon tap)
+          // Real-time Software Keyboard & Input Controls
+          val localView = LocalView.current
+          val keyboardController = LocalSoftwareKeyboardController.current
+          val searchFocusRequester = remember { FocusRequester() }
+          val searchInteractionSource = remember { MutableInteractionSource() }
           var inlineSearchActive by remember { mutableStateOf(false) }
-          val inlineFilteredCustomers = remember(customerSearchQuery, availableFiles) {
-            if (customerSearchQuery.isBlank()) emptyList()
-            else {
+
+          val triggerSoftKeyboard = remember {
+            {
+              try {
+                searchFocusRequester.requestFocus()
+                keyboardController?.show()
+                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                localView.requestFocus()
+                imm?.showSoftInput(localView, InputMethodManager.SHOW_FORCED)
+                imm?.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
+              } catch (_: Exception) {}
+            }
+          }
+
+          LaunchedEffect(searchInteractionSource) {
+            searchInteractionSource.interactions.collect { interaction ->
+              if (interaction is PressInteraction.Release) {
+                triggerSoftKeyboard()
+              }
+            }
+          }
+
+          val inlineFilteredCustomers = remember(customerSearchQuery, availableFiles, inlineSearchActive) {
+            if (customerSearchQuery.isBlank()) {
+              if (inlineSearchActive) availableFiles.take(15) else emptyList()
+            } else {
               val q = customerSearchQuery.trim()
               availableFiles.filter {
                 it.customerName.contains(q, ignoreCase = true) ||
@@ -1735,12 +1773,12 @@ fun DocumentChecklistSenderTab(
                 it.altMobile.contains(q) ||
                 it.productType.contains(q, ignoreCase = true) ||
                 it.ccNumber.contains(q, ignoreCase = true)
-              }.take(10)
+              }.take(15)
             }
           }
 
+          // 1. If a customer is currently selected, display clear summary badge
           if (customerName.isNotBlank() || customerMobile.isNotBlank()) {
-            // Selected Customer Card
             Surface(
               shape = RoundedCornerShape(8.dp),
               color = Color(0xFFEFF6FF),
@@ -1750,7 +1788,7 @@ fun DocumentChecklistSenderTab(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .padding(horizontal = 10.dp, vertical = 8.dp),
+                  .padding(horizontal = 10.dp, vertical = 6.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
@@ -1762,14 +1800,14 @@ fun DocumentChecklistSenderTab(
                     Icons.Default.Person,
                     contentDescription = null,
                     tint = EblNavyPrimary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                   )
-                  Spacer(modifier = Modifier.width(8.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
                   Column {
                     Text(
                       text = customerName.ifBlank { "Selected Customer" },
                       fontWeight = FontWeight.Bold,
-                      fontSize = 13.sp,
+                      fontSize = 12.sp,
                       color = EblNavyDark,
                       maxLines = 1,
                       overflow = TextOverflow.Ellipsis
@@ -1777,7 +1815,7 @@ fun DocumentChecklistSenderTab(
                     if (customerMobile.isNotBlank()) {
                       Text(
                         text = "📱 $customerMobile",
-                        fontSize = 11.sp,
+                        fontSize = 10.sp,
                         color = Color(0xFF059669),
                         fontWeight = FontWeight.Medium
                       )
@@ -1785,400 +1823,219 @@ fun DocumentChecklistSenderTab(
                   }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                  OutlinedButton(
-                    onClick = {
-                      customerSearchQuery = ""
-                      showCustomerPickerDialog = true
-                    },
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                    modifier = Modifier.height(30.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, EblNavyPrimary)
-                  ) {
-                    Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(12.dp), tint = EblNavyPrimary)
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Change", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
-                  }
-                  Spacer(modifier = Modifier.width(6.dp))
-                  IconButton(
+                  TextButton(
                     onClick = {
                       customerName = ""
                       customerMobile = ""
                       customerSearchQuery = ""
+                      inlineSearchActive = false
                     },
-                    modifier = Modifier.size(28.dp)
+                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                    modifier = Modifier.height(26.dp)
                   ) {
-                    Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Red, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Close, contentDescription = "Deselect", tint = Color.Red, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("Deselect", fontSize = 10.sp, color = Color.Red, fontWeight = FontWeight.Bold)
                   }
                 }
               }
             }
-          } else {
-            // Real Native Search Field directly on screen - software keyboard guaranteed to open on tap!
-            Column(modifier = Modifier.fillMaxWidth()) {
-              OutlinedTextField(
-                value = customerSearchQuery,
-                onValueChange = {
-                  customerSearchQuery = it
-                  inlineSearchActive = it.isNotBlank()
-                },
-                placeholder = {
-                  Text(
-                    text = if (availableFiles.isNotEmpty()) "Search customer (name, mobile, card)..." else "Search existing customer...",
-                    fontSize = 12.sp
-                  )
-                },
-                leadingIcon = {
-                  Icon(Icons.Default.Search, contentDescription = "Search", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
-                },
-                trailingIcon = {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (customerSearchQuery.isNotBlank()) {
-                      IconButton(
-                        onClick = {
-                          customerSearchQuery = ""
-                          inlineSearchActive = false
-                        },
-                        modifier = Modifier.size(24.dp)
-                      ) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(15.dp))
-                      }
-                    }
-                    if (availableFiles.isNotEmpty()) {
-                      TextButton(
-                        onClick = { showCustomerPickerDialog = true },
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
-                        modifier = Modifier.height(28.dp)
-                      ) {
-                        Text("All (${availableFiles.size})", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
-                      }
-                    }
-                  }
-                },
-                singleLine = true,
-                shape = RoundedCornerShape(8.dp),
-                keyboardOptions = KeyboardOptions(
-                  keyboardType = KeyboardType.Text,
-                  imeAction = ImeAction.Search
-                ),
-                colors = OutlinedTextFieldDefaults.colors(
-                  focusedBorderColor = EblNavyPrimary,
-                  unfocusedBorderColor = Color(0xFFCBD5E1),
-                  focusedContainerColor = Color.White,
-                  unfocusedContainerColor = Color.White
-                ),
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .testTag("checklist_inline_customer_search")
-              )
-
-              // Live Instant Suggestions Popup Card when typing into search
-              if (inlineSearchActive && customerSearchQuery.isNotBlank()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Card(
-                  shape = RoundedCornerShape(8.dp),
-                  colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF93C5FD)),
-                  elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                  modifier = Modifier.fillMaxWidth()
-                ) {
-                  Column(modifier = Modifier.padding(8.dp)) {
-                    Text(
-                      text = if (inlineFilteredCustomers.isEmpty()) "No customer matched '${customerSearchQuery}'" else "Matches found (tap to select):",
-                      fontSize = 11.sp,
-                      fontWeight = FontWeight.SemiBold,
-                      color = if (inlineFilteredCustomers.isEmpty()) Color.Gray else EblNavyPrimary,
-                      modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                    inlineFilteredCustomers.forEach { f ->
-                      Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color.White,
-                        border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFE2E8F0)),
-                        modifier = Modifier
-                          .fillMaxWidth()
-                          .padding(vertical = 2.dp)
-                          .clickable {
-                            customerName = f.customerName
-                            customerMobile = if (f.mobile.isNotBlank()) f.mobile else f.altMobile
-                            val prod = f.productType.lowercase()
-                            if (prod.contains("corporate")) {
-                              selectedPreset = "Corporate Card"
-                            } else if (prod.contains("enhance")) {
-                              selectedPreset = "Credit Card Limit Enhance"
-                            } else if (prod.contains("business")) {
-                              if ("New Credit Card (Business Person)" in presetOptions) {
-                                selectedPreset = "New Credit Card (Business Person)"
-                              }
-                            } else if (prod.contains("salaried")) {
-                              if ("New Credit Card (Salaried)" in presetOptions) {
-                                selectedPreset = "New Credit Card (Salaried)"
-                              }
-                            } else if (prod.contains("loan")) {
-                              if ("Personal / Auto / Home Loan" in presetOptions) {
-                                selectedPreset = "Personal / Auto / Home Loan"
-                              }
-                            }
-                            customerSearchQuery = ""
-                            inlineSearchActive = false
-                          }
-                      ) {
-                        Row(
-                          modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                          horizontalArrangement = Arrangement.SpaceBetween,
-                          verticalAlignment = Alignment.CenterVertically
-                        ) {
-                          Column(modifier = Modifier.weight(1f, fill = false)) {
-                            Text(f.customerName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(
-                              text = "${f.mobile.ifBlank { f.altMobile }} • ${f.productType}",
-                              fontSize = 10.sp,
-                              color = Color(0xFF64748B),
-                              maxLines = 1,
-                              overflow = TextOverflow.Ellipsis
-                            )
-                          }
-                          Icon(Icons.Default.CheckCircle, contentDescription = "Select", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            Spacer(modifier = Modifier.height(6.dp))
           }
 
-          // Full-featured Customer Picker Dialog with responsive software keyboard
-          if (showCustomerPickerDialog) {
-            val dialogFocusRequester = remember { FocusRequester() }
-            val keyboardController = LocalSoftwareKeyboardController.current
-
-            androidx.compose.runtime.LaunchedEffect(showCustomerPickerDialog) {
-              kotlinx.coroutines.delay(100)
-              try {
-                dialogFocusRequester.requestFocus()
-                keyboardController?.show()
-              } catch (_: Exception) {}
-            }
-
-            val filteredCustomerList = remember(customerSearchQuery, availableFiles) {
-              if (customerSearchQuery.isBlank()) {
-                availableFiles
-              } else {
-                val q = customerSearchQuery.trim()
-                availableFiles.filter {
-                  it.customerName.contains(q, ignoreCase = true) ||
-                  it.mobile.contains(q) ||
-                  it.altMobile.contains(q) ||
-                  it.productType.contains(q, ignoreCase = true) ||
-                  it.ccNumber.contains(q, ignoreCase = true)
-                }
-              }
-            }
-
-            AlertDialog(
-              properties = DialogProperties(decorFitsSystemWindows = true),
-              onDismissRequest = {
-                showCustomerPickerDialog = false
-                customerSearchQuery = ""
+          // 2. Search Bar - ALWAYS available with full soft keyboard support
+          Column(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+              value = customerSearchQuery,
+              onValueChange = {
+                customerSearchQuery = it
+                inlineSearchActive = true
               },
-              title = {
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.SpaceBetween,
-                  verticalAlignment = Alignment.CenterVertically
+              placeholder = {
+                Text(
+                  text = if (availableFiles.isNotEmpty()) "Search customer (name, phone, card)..." else "Search existing customer...",
+                  fontSize = 12.sp
+                )
+              },
+              leadingIcon = {
+                IconButton(
+                  onClick = { triggerSoftKeyboard() },
+                  modifier = Modifier.size(32.dp)
                 ) {
-                  Text(
-                    text = "Select Existing Customer",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = EblNavyDark
-                  )
+                  Icon(Icons.Default.Search, contentDescription = "Search", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
+                }
+              },
+              trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  if (customerSearchQuery.isNotBlank()) {
+                    IconButton(
+                      onClick = {
+                        customerSearchQuery = ""
+                      },
+                      modifier = Modifier.size(26.dp)
+                    ) {
+                      Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                    }
+                  }
+                  // Dedicated Keyboard Toggle Button (Guaranteed to pop open keyboard on any device/emulator)
                   IconButton(
-                    onClick = {
-                      showCustomerPickerDialog = false
-                      customerSearchQuery = ""
-                    },
-                    modifier = Modifier.size(28.dp)
+                    onClick = { triggerSoftKeyboard() },
+                    modifier = Modifier.size(30.dp).testTag("btn_toggle_soft_keyboard")
                   ) {
-                    Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                    Icon(
+                      Icons.Default.Keyboard,
+                      contentDescription = "Show Keyboard",
+                      tint = EblNavyPrimary,
+                      modifier = Modifier.size(18.dp)
+                    )
+                  }
+                  if (availableFiles.isNotEmpty()) {
+                    TextButton(
+                      onClick = {
+                        inlineSearchActive = !inlineSearchActive
+                        if (inlineSearchActive) {
+                          triggerSoftKeyboard()
+                        }
+                      },
+                      contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                      modifier = Modifier.height(28.dp)
+                    ) {
+                      Text(
+                        text = if (inlineSearchActive && customerSearchQuery.isBlank()) "Hide" else "All (${availableFiles.size})",
+                        fontSize = 11.sp,
+                        color = EblNavyPrimary,
+                        fontWeight = FontWeight.Bold
+                      )
+                    }
                   }
                 }
               },
-              text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                  // Direct Search Input Field with full Keyboard IME support
-                  OutlinedTextField(
-                    value = customerSearchQuery,
-                    onValueChange = { customerSearchQuery = it },
-                    placeholder = { Text("Search name, mobile or card number...", fontSize = 12.sp) },
-                    leadingIcon = {
-                      Icon(Icons.Default.Search, contentDescription = null, modifier = Modifier.size(18.dp), tint = EblNavyPrimary)
-                    },
-                    trailingIcon = {
-                      if (customerSearchQuery.isNotBlank()) {
-                        IconButton(onClick = { customerSearchQuery = "" }) {
-                          Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                        }
-                      }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                    keyboardOptions = KeyboardOptions(
-                      keyboardType = KeyboardType.Text,
-                      imeAction = ImeAction.Search
-                    ),
+              singleLine = true,
+              shape = RoundedCornerShape(8.dp),
+              keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Text,
+                imeAction = ImeAction.Search
+              ),
+              keyboardActions = KeyboardActions(
+                onSearch = {
+                  keyboardController?.hide()
+                }
+              ),
+              interactionSource = searchInteractionSource,
+              colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = EblNavyPrimary,
+                unfocusedBorderColor = Color(0xFFCBD5E1),
+                focusedContainerColor = Color.White,
+                unfocusedContainerColor = Color.White
+              ),
+              modifier = Modifier
+                .fillMaxWidth()
+                .focusRequester(searchFocusRequester)
+                .onFocusChanged { state ->
+                  if (state.isFocused) {
+                    triggerSoftKeyboard()
+                  }
+                }
+                .testTag("checklist_inline_customer_search")
+            )
+
+            // 3. Live Matching Customers Dropdown / Card
+            if (inlineSearchActive || customerSearchQuery.isNotBlank()) {
+              Spacer(modifier = Modifier.height(4.dp))
+              Card(
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF93C5FD)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Column(modifier = Modifier.padding(6.dp)) {
+                  Row(
                     modifier = Modifier
                       .fillMaxWidth()
-                      .focusRequester(dialogFocusRequester)
-                      .testTag("search_customer_picker_input"),
-                    colors = OutlinedTextFieldDefaults.colors(
-                      focusedBorderColor = EblNavyPrimary,
-                      unfocusedBorderColor = Color(0xFFCBD5E1)
+                      .padding(horizontal = 4.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text(
+                      text = when {
+                        inlineFilteredCustomers.isEmpty() -> "No matching customer found"
+                        customerSearchQuery.isNotBlank() -> "Matches (${inlineFilteredCustomers.size}) - Tap to auto-fill:"
+                        else -> "Saved Customers (${inlineFilteredCustomers.size}) - Tap to select:"
+                      },
+                      fontSize = 11.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = if (inlineFilteredCustomers.isEmpty()) Color.Gray else EblNavyPrimary
                     )
-                  )
-
-                  Spacer(modifier = Modifier.height(10.dp))
-
-                  Text(
-                    text = if (filteredCustomerList.isEmpty()) "0 matches found" else "${filteredCustomerList.size} customers available:",
-                    fontSize = 11.sp,
-                    color = Color.Gray,
-                    fontWeight = FontWeight.Medium
-                  )
-
-                  Spacer(modifier = Modifier.height(6.dp))
-
-                  if (availableFiles.isEmpty()) {
-                    Box(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                      contentAlignment = Alignment.Center
+                    IconButton(
+                      onClick = {
+                        inlineSearchActive = false
+                        customerSearchQuery = ""
+                      },
+                      modifier = Modifier.size(20.dp)
                     ) {
-                      Text(
-                        text = "No saved customers found. Enter name and mobile manually below.",
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                      )
+                      Icon(Icons.Default.Close, contentDescription = "Close Suggestions", tint = Color.Gray, modifier = Modifier.size(14.dp))
                     }
-                  } else if (filteredCustomerList.isEmpty()) {
-                    Box(
+                  }
+
+                  inlineFilteredCustomers.forEach { f ->
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = Color.White,
+                      border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFFE2E8F0)),
                       modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
-                      contentAlignment = Alignment.Center
-                    ) {
-                      Text(
-                        text = "No customer matches '$customerSearchQuery'",
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center
-                      )
-                    }
-                  } else {
-                    LazyColumn(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                      verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                      items(filteredCustomerList.take(40)) { f ->
-                        Card(
-                          shape = RoundedCornerShape(8.dp),
-                          colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                          modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                              customerName = f.customerName
-                              customerMobile = if (f.mobile.isNotBlank()) f.mobile else f.altMobile
-                              val prod = f.productType.lowercase()
-                              if (prod.contains("corporate")) {
-                                selectedPreset = "Corporate Card"
-                              } else if (prod.contains("enhance")) {
-                                selectedPreset = "Credit Card Limit Enhance"
-                              } else if (prod.contains("business")) {
-                                if ("New Credit Card (Business Person)" in presetOptions) {
-                                  selectedPreset = "New Credit Card (Business Person)"
-                                }
-                              } else if (prod.contains("salaried")) {
-                                if ("New Credit Card (Salaried)" in presetOptions) {
-                                  selectedPreset = "New Credit Card (Salaried)"
-                                }
-                              } else if (prod.contains("loan")) {
-                                if ("Personal / Auto / Home Loan" in presetOptions) {
-                                  selectedPreset = "Personal / Auto / Home Loan"
-                                }
-                              }
-                              showCustomerPickerDialog = false
-                              customerSearchQuery = ""
+                        .padding(vertical = 2.dp)
+                        .clickable {
+                          customerName = f.customerName
+                          customerMobile = if (f.mobile.isNotBlank()) f.mobile else f.altMobile
+                          val prod = f.productType.lowercase()
+                          if (prod.contains("corporate")) {
+                            selectedPreset = "Corporate Card"
+                          } else if (prod.contains("enhance")) {
+                            selectedPreset = "Credit Card Limit Enhance"
+                          } else if (prod.contains("business")) {
+                            if ("New Credit Card (Business Person)" in presetOptions) {
+                              selectedPreset = "New Credit Card (Business Person)"
                             }
-                        ) {
-                          Row(
-                            modifier = Modifier
-                              .fillMaxWidth()
-                              .padding(10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                          ) {
-                            Column(modifier = Modifier.weight(1f, fill = false)) {
-                              Text(
-                                text = f.customerName.ifBlank { "Unnamed Applicant" },
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.sp,
-                                color = EblNavyDark,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                              )
-                              Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(top = 2.dp)
-                              ) {
-                                Text(
-                                  text = f.mobile.ifBlank { f.altMobile.ifBlank { "No Mobile" } },
-                                  fontSize = 11.sp,
-                                  fontWeight = FontWeight.SemiBold,
-                                  color = Color(0xFF059669)
-                                )
-                                if (f.productType.isNotBlank()) {
-                                  Text(
-                                    text = " • ${f.productType}",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF64748B),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                  )
-                                }
-                              }
+                          } else if (prod.contains("salaried")) {
+                            if ("New Credit Card (Salaried)" in presetOptions) {
+                              selectedPreset = "New Credit Card (Salaried)"
                             }
-                            Icon(
-                              Icons.Default.CheckCircle,
-                              contentDescription = "Select",
-                              tint = EblNavyPrimary,
-                              modifier = Modifier.size(18.dp)
-                            )
+                          } else if (prod.contains("loan")) {
+                            if ("Personal / Auto / Home Loan" in presetOptions) {
+                              selectedPreset = "Personal / Auto / Home Loan"
+                            }
                           }
+                          customerSearchQuery = ""
+                          inlineSearchActive = false
+                          keyboardController?.hide()
                         }
+                    ) {
+                      Row(
+                        modifier = Modifier
+                          .fillMaxWidth()
+                          .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                      ) {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                          Text(f.customerName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                          Text(
+                            text = "${f.mobile.ifBlank { f.altMobile }} • ${f.productType}",
+                            fontSize = 10.sp,
+                            color = Color(0xFF64748B),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                          )
+                        }
+                        Icon(Icons.Default.CheckCircle, contentDescription = "Select", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
                       }
                     }
                   }
                 }
-              },
-              confirmButton = {},
-              dismissButton = {
-                TextButton(
-                  onClick = {
-                    showCustomerPickerDialog = false
-                    customerSearchQuery = ""
-                  }
-                ) {
-                  Text("Close")
-                }
               }
-            )
+            }
           }
           Spacer(modifier = Modifier.height(10.dp))
 
@@ -2261,7 +2118,10 @@ fun DocumentChecklistSenderTab(
             placeholder = { Text("e.g. Md. Kabir Hossain") },
             leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color.Gray) },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("input_checklist_customer_name"),
+            modifier = Modifier
+              .fillMaxWidth()
+              .onFocusChanged { if (it.isFocused) triggerSoftKeyboard() }
+              .testTag("input_checklist_customer_name"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
           )
 
@@ -2275,7 +2135,10 @@ fun DocumentChecklistSenderTab(
             leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF059669)) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("input_checklist_customer_mobile"),
+            modifier = Modifier
+              .fillMaxWidth()
+              .onFocusChanged { if (it.isFocused) triggerSoftKeyboard() }
+              .testTag("input_checklist_customer_mobile"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
           )
         }
