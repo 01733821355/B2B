@@ -1439,7 +1439,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ?: com.example.data.model.UserEntity(
           rmCode = inc.callerRmCode,
           name = inc.callerName,
-          role = inc.callerRole
+          role = inc.callerRole,
+          passwordHash = "",
+          salt = "",
+          mobile = "",
+          email = "",
+          officeAddress = "",
+          createdAt = System.currentTimeMillis()
         )
 
       callTimerJob?.cancel()
