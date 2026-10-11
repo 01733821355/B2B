@@ -29,6 +29,7 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -170,139 +171,82 @@ fun EblTopBar(
       }
     },
     actions = {
-      // Backend info & Google Sheet sync is ONLY visible to Mentor
-      if (user != null && user.role == "MENTOR") {
-        IconButton(
-          onClick = onSyncClicked,
-          modifier = Modifier.testTag("top_bar_sync_button")
-        ) {
-          if (pendingSyncCount > 0) {
-            BadgedBox(
-              badge = {
-                Badge(
-                  containerColor = Color(0xFFEAB308),
-                  contentColor = Color.Black
-                ) {
-                  Text(pendingSyncCount.toString(), fontSize = 9.sp)
-                }
-              }
-            ) {
-              Icon(
-                imageVector = Icons.Default.Sync,
-                contentDescription = "Google Sheets Sync",
-                tint = Color.White
-              )
-            }
-          } else {
-            Icon(
-              imageVector = Icons.Default.CloudDone,
-              contentDescription = "Google Sheets Synced",
-              tint = Color(0xFF4ADE80)
-            )
-          }
-        }
-      }
-
       if (user != null) {
-        // SMS Notifications Action Button
-        IconButton(
-          onClick = { showSmsDialog = true },
-          modifier = Modifier.testTag("top_bar_sms_button")
-        ) {
-          if (unreadSmsCount > 0 && user.role == "RM") {
-            BadgedBox(
-              badge = {
-                Badge(
-                  containerColor = Color(0xFFDC2626),
-                  contentColor = Color.White
-                ) {
-                  Text(unreadSmsCount.toString(), fontSize = 9.sp)
-                }
-              }
-            ) {
-              Icon(
-                imageVector = Icons.Default.Sms,
-                contentDescription = "SMS Inbox",
-                tint = Color.White
-              )
-            }
-          } else {
-            Icon(
-              imageVector = Icons.Default.Sms,
-              contentDescription = if (user.role == "RM") "SMS Inbox" else "RM SMS Logs",
-              tint = Color.White.copy(alpha = 0.9f)
-            )
-          }
-        }
+        val totalBadgeCount = (if (user.role == "RM") unreadSmsCount else 0) + pendingSyncCount
 
-        // Quick DBR & Checklist Tool Button
-        IconButton(
-          onClick = onOpenDbrChecklist,
-          modifier = Modifier.testTag("top_bar_dbr_button")
-        ) {
-          Icon(
-            imageVector = Icons.Default.Calculate,
-            contentDescription = "DBR & Checklist Tool",
-            tint = EblGold
-          )
-        }
-
-        // Quick Team Communication & Calling Button
-        IconButton(
-          onClick = onOpenCommunication,
-          modifier = Modifier.testTag("top_bar_communication_button")
-        ) {
-          Icon(
-            imageVector = Icons.Default.Call,
-            contentDescription = "Team Communication & Net Calling",
-            tint = Color(0xFF38BDF8)
-          )
-        }
-
-        // Quick Important Documents Repository Button
-        IconButton(
-          onClick = onOpenImportantDocuments,
-          modifier = Modifier.testTag("top_bar_important_docs_button")
-        ) {
-          Icon(
-            imageVector = Icons.Default.Description,
-            contentDescription = "Important Documents Repository",
-            tint = Color(0xFF67E8F9)
-          )
-        }
-
-        // Profile Menu
+        // Clean Profile Icon with optional notification badge
         Box {
           IconButton(
             onClick = { showMenu = true },
             modifier = Modifier.testTag("top_bar_profile_button")
           ) {
-            Icon(
-              imageVector = Icons.Default.AccountCircle,
-              contentDescription = "User Profile",
-              tint = Color.White
-            )
+            if (totalBadgeCount > 0) {
+              BadgedBox(
+                badge = {
+                  Badge(
+                    containerColor = Color(0xFFDC2626),
+                    contentColor = Color.White
+                  ) {
+                    Text(totalBadgeCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                  }
+                }
+              ) {
+                Icon(
+                  imageVector = Icons.Default.AccountCircle,
+                  contentDescription = "User Profile & Menu",
+                  tint = Color.White,
+                  modifier = Modifier.size(28.dp)
+                )
+              }
+            } else {
+              Icon(
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "User Profile & Menu",
+                tint = Color.White,
+                modifier = Modifier.size(28.dp)
+              )
+            }
           }
 
           DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
           ) {
+            // User identity header
             DropdownMenuItem(
               text = {
                 Column {
-                  Text(user.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                  Text("RM Code: ${user.rmCode} (${user.role})", fontSize = 11.sp, color = Color.Gray)
-                  Text(user.officeAddress, fontSize = 10.sp, color = Color.Gray)
+                  Text(user.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+                  Text("Code: ${user.rmCode} (${user.role})", fontSize = 11.sp, color = Color.Gray)
+                  if (user.officeAddress.isNotBlank()) {
+                    Text(user.officeAddress, fontSize = 10.sp, color = Color(0xFF64748B))
+                  }
                 }
               },
               onClick = {},
               enabled = false
             )
+
+            HorizontalDivider(color = Color(0xFFE2E8F0))
+
+            // 1. Team Communication & Net Calling
             DropdownMenuItem(
-              text = { Text("DBR & Checklist Tool", fontSize = 13.sp) },
+              text = { Text("Team Chat & Calling", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
               leadingIcon = {
-                Icon(Icons.Default.Calculate, contentDescription = "DBR Tool", tint = EblNavyPrimary)
+                Icon(Icons.Default.Call, contentDescription = "Communication", tint = Color(0xFF0284C7))
+              },
+              onClick = {
+                showMenu = false
+                onOpenCommunication()
+              },
+              modifier = Modifier.testTag("menu_communication_hub")
+            )
+
+            // 2. DBR & Checklist Tool
+            DropdownMenuItem(
+              text = { Text("DBR & Checklist Tool", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+              leadingIcon = {
+                Icon(Icons.Default.Calculate, contentDescription = "DBR Tool", tint = EblGold)
               },
               onClick = {
                 showMenu = false
@@ -310,8 +254,10 @@ fun EblTopBar(
               },
               modifier = Modifier.testTag("menu_dbr_checklist")
             )
+
+            // 3. Important Documents Repository
             DropdownMenuItem(
-              text = { Text("Important Documents", fontSize = 13.sp) },
+              text = { Text("Important Documents", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
               leadingIcon = {
                 Icon(Icons.Default.Description, contentDescription = "Important Documents", tint = EblNavyPrimary)
               },
@@ -321,10 +267,86 @@ fun EblTopBar(
               },
               modifier = Modifier.testTag("menu_important_documents")
             )
+
+            // 4. SMS Inbox / Notifications
+            DropdownMenuItem(
+              text = {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(if (user.role == "RM") "SMS Inbox" else "RM SMS Logs", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                  if (unreadSmsCount > 0 && user.role == "RM") {
+                    Surface(
+                      color = Color(0xFFDC2626),
+                      shape = RoundedCornerShape(10.dp)
+                    ) {
+                      Text(
+                        text = "$unreadSmsCount new",
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                      )
+                    }
+                  }
+                }
+              },
+              leadingIcon = {
+                Icon(Icons.Default.Sms, contentDescription = "SMS Notifications", tint = Color(0xFF10B981))
+              },
+              onClick = {
+                showMenu = false
+                showSmsDialog = true
+              },
+              modifier = Modifier.testTag("menu_sms_notifications")
+            )
+
+            // 5. Google Sheets Sync Console (Mentor Only)
+            if (user.role == "MENTOR") {
+              DropdownMenuItem(
+                text = {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text("Sheets Auto-Sync", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    if (pendingSyncCount > 0) {
+                      Surface(
+                        color = Color(0xFFEAB308),
+                        shape = RoundedCornerShape(10.dp)
+                      ) {
+                        Text(
+                          text = "$pendingSyncCount pending",
+                          color = Color.Black,
+                          fontSize = 10.sp,
+                          fontWeight = FontWeight.Bold,
+                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                      }
+                    }
+                  }
+                },
+                leadingIcon = {
+                  Icon(Icons.Default.Sync, contentDescription = "Google Sheets Sync", tint = Color(0xFF059669))
+                },
+                onClick = {
+                  showMenu = false
+                  onSyncClicked()
+                },
+                modifier = Modifier.testTag("menu_google_sheets_sync")
+              )
+            }
+
+            HorizontalDivider(color = Color(0xFFE2E8F0))
+
+            // 6. Change Password
             DropdownMenuItem(
               text = { Text("Change Password", fontSize = 13.sp) },
               leadingIcon = {
-                Icon(Icons.Default.LockReset, contentDescription = "Change Password")
+                Icon(Icons.Default.LockReset, contentDescription = "Change Password", tint = Color(0xFF64748B))
               },
               onClick = {
                 showMenu = false
@@ -332,8 +354,10 @@ fun EblTopBar(
               },
               modifier = Modifier.testTag("menu_change_password")
             )
+
+            // 7. Sign Out
             DropdownMenuItem(
-              text = { Text("Sign Out", color = Color(0xFFDC2626), fontSize = 13.sp) },
+              text = { Text("Sign Out", color = Color(0xFFDC2626), fontSize = 13.sp, fontWeight = FontWeight.Bold) },
               leadingIcon = {
                 Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = "Sign Out", tint = Color(0xFFDC2626))
               },

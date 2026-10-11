@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -81,6 +82,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.FileAttachmentEntity
@@ -152,39 +154,55 @@ fun ImportantDocumentsScreen(
     modifier = modifier
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
-      .padding(16.dp)
+      .padding(horizontal = 12.dp, vertical = 8.dp)
       .testTag("important_documents_screen")
   ) {
-    // Header Bar
+    // 1. Ultra-Compact Header Bar (No vertical stretching)
     Row(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(bottom = 4.dp),
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Row(verticalAlignment = Alignment.CenterVertically) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.weight(1f, fill = false)
+      ) {
         IconButton(
           onClick = onNavigateBack,
-          modifier = Modifier.testTag("btn_back_important_docs")
+          modifier = Modifier.size(32.dp).testTag("btn_back_important_docs")
         ) {
           Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = EblNavyDark)
         }
         Spacer(modifier = Modifier.width(4.dp))
-        Column {
+        Text(
+          text = "Documents",
+          fontSize = 16.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblNavyDark,
+          maxLines = 1,
+          softWrap = false
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = Color(0xFFEFF6FF)
+        ) {
           Text(
-            text = "Important Documents",
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            color = EblNavyDark
-          )
-          Text(
-            text = "Bank Policies, Forms & Guidelines Repository",
+            text = "${filteredDocs.size}",
             fontSize = 11.sp,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            fontWeight = FontWeight.Bold,
+            color = EblNavyPrimary,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
           )
         }
       }
 
-      Row(verticalAlignment = Alignment.CenterVertically) {
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+      ) {
         // Sync with Google Sheets button
         IconButton(
           onClick = {
@@ -195,19 +213,17 @@ fun ImportantDocumentsScreen(
               Toast.makeText(context, "গুগল শিট থেকে ডকুমেন্টস সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
             }
           },
-          modifier = Modifier.testTag("btn_sync_important_docs")
+          modifier = Modifier.size(32.dp).testTag("btn_sync_important_docs")
         ) {
           Icon(
             Icons.Default.Sync,
             contentDescription = "Sync from Sheets",
             tint = if (isSyncing) EblGold else EblNavyPrimary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(18.dp)
           )
         }
 
-        Spacer(modifier = Modifier.width(4.dp))
-
-        // Upload button for Admin & Mentor ONLY
+        // Upload button for Admin & Mentor ONLY - Fixed 30.dp height, no warp/stretching!
         if (isPrivileged) {
           Button(
             onClick = {
@@ -218,117 +234,86 @@ fun ImportantDocumentsScreen(
               containerColor = EblGold,
               contentColor = EblNavyDark
             ),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.testTag("btn_add_important_doc")
-          ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("+ Upload Doc", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-          }
-        } else {
-          // Read-only indicator badge for RM officers
-          Surface(
             shape = RoundedCornerShape(6.dp),
-            color = Color(0xFFEFF6FF),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+            modifier = Modifier
+              .height(30.dp)
+              .testTag("btn_add_important_doc")
           ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(13.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Verified Repository", fontSize = 10.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
-            }
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+              text = "Upload",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Bold,
+              maxLines = 1,
+              softWrap = false
+            )
           }
         }
       }
     }
 
-    Spacer(modifier = Modifier.height(12.dp))
-
-    // Search Bar
+    // 2. Ultra-Compact Search Bar (height 38dp)
     OutlinedTextField(
       value = searchQuery,
       onValueChange = { searchQuery = it },
       modifier = Modifier
         .fillMaxWidth()
+        .height(40.dp)
         .testTag("search_important_docs"),
-      placeholder = { Text("Search by document title, keywords or circular...", fontSize = 13.sp) },
-      leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary) },
+      placeholder = { Text("Search title, circular or keywords...", fontSize = 11.sp) },
+      leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(16.dp)) },
       trailingIcon = {
         if (searchQuery.isNotBlank()) {
-          IconButton(onClick = { searchQuery = "" }) {
-            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray)
+          IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
+            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(14.dp))
           }
         }
       },
       singleLine = true,
-      shape = RoundedCornerShape(10.dp),
+      shape = RoundedCornerShape(8.dp),
       colors = OutlinedTextFieldDefaults.colors(
         focusedBorderColor = EblNavyPrimary,
-        unfocusedBorderColor = Color.LightGray,
+        unfocusedBorderColor = Color(0xFFCBD5E1),
         focusedContainerColor = MaterialTheme.colorScheme.surface,
         unfocusedContainerColor = MaterialTheme.colorScheme.surface
       )
     )
 
-    Spacer(modifier = Modifier.height(10.dp))
+    Spacer(modifier = Modifier.height(4.dp))
 
-    // Category Filter Chips
-    FlowRow(
+    // 3. Compact Horizontal Category Filter Chips (height 26dp)
+    LazyRow(
       modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.spacedBy(6.dp),
-      verticalArrangement = Arrangement.spacedBy(6.dp)
+      horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-      categories.forEach { cat ->
+      items(categories) { cat ->
         val isSelected = selectedCategory == cat
         FilterChip(
           selected = isSelected,
           onClick = { selectedCategory = cat },
-          label = { Text(cat, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+          label = {
+            Text(
+              text = cat,
+              fontSize = 10.sp,
+              fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+              maxLines = 1,
+              softWrap = false
+            )
+          },
           colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = EblNavyDark,
             selectedLabelColor = Color.White
           ),
-          modifier = Modifier.testTag("filter_chip_${cat.replace(" ", "_")}")
+          modifier = Modifier
+            .height(26.dp)
+            .testTag("filter_chip_${cat.replace(" ", "_")}")
         )
       }
     }
 
-    Spacer(modifier = Modifier.height(12.dp))
-
-    // Documents Count & Privileges Banner
-    Row(
-      modifier = Modifier.fillMaxWidth(),
-      horizontalArrangement = Arrangement.SpaceBetween,
-      verticalAlignment = Alignment.CenterVertically
-    ) {
-      Text(
-        text = "Available Documents (${filteredDocs.size})",
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-        color = EblNavyDark
-      )
-
-      if (isPrivileged) {
-        Text(
-          text = "• Admin/Mentor Manage Mode",
-          fontSize = 11.sp,
-          color = Color(0xFF059669),
-          fontWeight = FontWeight.SemiBold
-        )
-      } else {
-        Text(
-          text = "• Download & View Mode",
-          fontSize = 11.sp,
-          color = Color(0xFF6B7280),
-          fontWeight = FontWeight.Medium
-        )
-      }
-    }
-
-    Spacer(modifier = Modifier.height(8.dp))
+    Spacer(modifier = Modifier.height(6.dp))
 
     // Document List
     if (filteredDocs.isEmpty()) {
@@ -653,67 +638,60 @@ fun ImportantDocCard(
 
       Spacer(modifier = Modifier.height(10.dp))
 
-      // Actions Row: Open is available to everyone; Download & Share ONLY for Admin & Mentor
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Button(
-          onClick = onOpen,
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-          modifier = Modifier.weight(1.2f).testTag("btn_open_${doc.docId}")
+      // Actions Row: Open is available to everyone; Download & Share for Admin & Mentor
+      if (isPrivileged) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("View / Open", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
-        }
+          Button(
+            onClick = onOpen,
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1.2f).height(36.dp).testTag("btn_open_${doc.docId}")
+          ) {
+            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("View / Open", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+          }
 
-        if (isPrivileged) {
           OutlinedButton(
             onClick = onDownload,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF059669)),
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669)),
             shape = RoundedCornerShape(8.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            modifier = Modifier.weight(1f).testTag("btn_download_${doc.docId}")
+            modifier = Modifier.weight(1f).height(36.dp).testTag("btn_download_${doc.docId}")
           ) {
             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF059669))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            Text("Download", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
 
           IconButton(
             onClick = onShare,
-            modifier = Modifier.size(36.dp).border(1.dp, Color.LightGray, CircleShape).testTag("btn_share_${doc.docId}")
+            modifier = Modifier.size(36.dp).border(1.dp, Color(0xFFCBD5E1), CircleShape).testTag("btn_share_${doc.docId}")
           ) {
             Icon(Icons.Default.Share, contentDescription = "Share", tint = EblNavyDark, modifier = Modifier.size(16.dp))
           }
-        } else {
-          // View-only indicator for non-admin/non-mentor users (downloading is strictly disabled)
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = Color(0xFFFEF3C7),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
-            modifier = Modifier.weight(1f)
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center
-            ) {
-              Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(13.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = "View Only",
-                fontSize = 11.sp,
-                color = Color(0xFF92400E),
-                fontWeight = FontWeight.Bold
-              )
-            }
-          }
+        }
+      } else {
+        // Single clean full-width action button for RM officers - no warped yellow card
+        Button(
+          onClick = onOpen,
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+          shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(38.dp)
+            .testTag("btn_open_${doc.docId}")
+        ) {
+          Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("View / Open Document", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
       }
     }

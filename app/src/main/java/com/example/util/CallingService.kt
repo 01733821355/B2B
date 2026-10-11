@@ -33,11 +33,7 @@ object CallingService {
           play()
         }
       }
-      // Also emit dial tone backup in case device is in vibrate/silent
-      playDialTone()
-    } catch (_: Exception) {
-      playDialTone()
-    }
+    } catch (_: Exception) {}
   }
 
   fun stopRingtone() {
@@ -48,13 +44,18 @@ object CallingService {
     stopTone()
   }
 
-  fun playDialTone() {
+  // Soft outgoing call dialing sound ("Calling...") for the person initiating the call
+  fun playOutgoingCallingTone() {
     try {
       if (toneGenerator == null) {
-        toneGenerator = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 80)
+        toneGenerator = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 35)
       }
-      toneGenerator?.startTone(ToneGenerator.TONE_SUP_RINGTONE, 3000)
+      toneGenerator?.startTone(ToneGenerator.TONE_PROP_PROMPT, 1000)
     } catch (_: Exception) {}
+  }
+
+  fun playDialTone() {
+    playOutgoingCallingTone()
   }
 
   fun playConnectedTone() {

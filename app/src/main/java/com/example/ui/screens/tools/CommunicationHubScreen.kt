@@ -296,41 +296,48 @@ fun CommunicationHubScreen(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Online Team Members Horizontal Strip
-        Text("Online Team Directory:", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+        Text("Online Team Directory (Tap colleague to call):", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
         Spacer(modifier = Modifier.height(4.dp))
-        LazyRow(
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          modifier = Modifier.fillMaxWidth()
-        ) {
-          items(allUsers) { u ->
-            Surface(
-              shape = RoundedCornerShape(12.dp),
-              color = Color.White.copy(alpha = 0.12f),
-              modifier = Modifier.clickable { viewModel.startCall(u) }
-            ) {
-              Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        val otherUsers = remember(allUsers, currentUser) {
+          allUsers.filter { !it.rmCode.trim().equals(currentUser?.rmCode?.trim() ?: "", ignoreCase = true) }
+        }
+        if (otherUsers.isEmpty()) {
+          Text("No other colleagues online right now", fontSize = 11.sp, color = Color.White.copy(alpha = 0.6f))
+        } else {
+          LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            items(otherUsers) { u ->
+              Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.clickable { viewModel.startCall(u) }
               ) {
-                Box(
-                  modifier = Modifier
-                    .size(8.dp)
-                    .background(Color(0xFF22C55E), CircleShape)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                  text = "${u.name.take(12)} (${u.rmCode})",
-                  color = Color.White,
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(
-                  Icons.Default.Call,
-                  contentDescription = "Call",
-                  tint = EblGold,
-                  modifier = Modifier.size(12.dp)
-                )
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                  Box(
+                    modifier = Modifier
+                      .size(8.dp)
+                      .background(Color(0xFF22C55E), CircleShape)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = "${u.name.take(12)} (${u.rmCode})",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Icon(
+                    Icons.Default.Call,
+                    contentDescription = "Call",
+                    tint = EblGold,
+                    modifier = Modifier.size(12.dp)
+                  )
+                }
               }
             }
           }
@@ -1392,6 +1399,141 @@ fun ActiveCallModal(
             .background(if (isSpeaker) Color(0xFF2563EB) else Color.White.copy(alpha = 0.2f), CircleShape)
         ) {
           Icon(Icons.Default.VolumeUp, contentDescription = "Speaker", tint = Color.White)
+        }
+      }
+    }
+  }
+}
+
+// -------------------------------------------------------------------------------------------------
+// INCOMING CALL MODAL (FULL SCREEN DIALOG FOR RECIPIENT RM / TEAM MEMBERS)
+// -------------------------------------------------------------------------------------------------
+@Composable
+fun IncomingCallModal(
+  callInfo: com.example.ui.viewmodel.IncomingCallInfo,
+  onAccept: () -> Unit,
+  onDecline: () -> Unit
+) {
+  Surface(
+    color = Color(0xFF0F172A),
+    modifier = Modifier.fillMaxSize()
+  ) {
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(24.dp),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.SpaceBetween
+    ) {
+      Spacer(modifier = Modifier.height(30.dp))
+
+      Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Glowing animated avatar / call icon
+        Box(
+          modifier = Modifier
+            .size(110.dp)
+            .border(3.dp, Color(0xFF22C55E), CircleShape)
+            .background(Color(0xFF1E293B), CircleShape),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(
+            imageVector = if (callInfo.isGroup) Icons.Default.Group else Icons.Default.PhoneInTalk,
+            contentDescription = null,
+            tint = Color(0xFF4ADE80),
+            modifier = Modifier.size(52.dp)
+          )
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+          text = if (callInfo.isGroup) "INCOMING GROUP CALL" else "INCOMING VOICE CALL",
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblGold,
+          letterSpacing = 1.sp
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+          text = if (callInfo.isGroup) callInfo.groupTitle.ifBlank { "Team Live Huddle" } else callInfo.callerName,
+          color = Color.White,
+          fontSize = 22.sp,
+          fontWeight = FontWeight.Bold,
+          textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+          text = if (callInfo.isGroup) "Started by: ${callInfo.callerName} (${callInfo.callerRole})" else "${callInfo.callerRole} • RM Code: ${callInfo.callerRmCode}",
+          color = Color.White.copy(alpha = 0.7f),
+          fontSize = 13.sp
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Surface(
+          shape = RoundedCornerShape(20.dp),
+          color = Color(0xFF1E293B),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Box(
+              modifier = Modifier
+                .size(8.dp)
+                .background(Color(0xFF22C55E), CircleShape)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "Eastern Bank PLC Net Calling Ringing...",
+              color = Color.White.copy(alpha = 0.85f),
+              fontSize = 11.sp
+            )
+          }
+        }
+      }
+
+      // Actions: Decline (Red) and Accept (Green)
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(bottom = 40.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // Decline Call Button
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          IconButton(
+            onClick = onDecline,
+            modifier = Modifier
+              .size(68.dp)
+              .background(Color(0xFFDC2626), CircleShape)
+              .testTag("btn_decline_incoming_call")
+          ) {
+            Icon(Icons.Default.CallEnd, contentDescription = "Decline Call", tint = Color.White, modifier = Modifier.size(32.dp))
+          }
+          Spacer(modifier = Modifier.height(8.dp))
+          Text("Decline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+
+        // Accept Call Button
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          IconButton(
+            onClick = onAccept,
+            modifier = Modifier
+              .size(68.dp)
+              .background(Color(0xFF16A34A), CircleShape)
+              .testTag("btn_accept_incoming_call")
+          ) {
+            Icon(Icons.Default.Call, contentDescription = "Accept Call", tint = Color.White, modifier = Modifier.size(32.dp))
+          }
+          Spacer(modifier = Modifier.height(8.dp))
+          Text(if (callInfo.isGroup) "Join Call" else "Accept", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
       }
     }
