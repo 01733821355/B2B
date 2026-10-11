@@ -254,20 +254,20 @@ fun ImportantDocumentsScreen(
       }
     }
 
-    // 2. Ultra-Compact Search Bar (height 38dp)
+    // 2. Ultra-Compact Search Bar (height 36dp)
     OutlinedTextField(
       value = searchQuery,
       onValueChange = { searchQuery = it },
       modifier = Modifier
         .fillMaxWidth()
-        .height(40.dp)
+        .height(36.dp)
         .testTag("search_important_docs"),
       placeholder = { Text("Search title, circular or keywords...", fontSize = 11.sp) },
-      leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(16.dp)) },
+      leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(15.dp)) },
       trailingIcon = {
         if (searchQuery.isNotBlank()) {
-          IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(14.dp))
+          IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(20.dp)) {
+            Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(13.dp))
           }
         }
       },
@@ -283,7 +283,7 @@ fun ImportantDocumentsScreen(
 
     Spacer(modifier = Modifier.height(4.dp))
 
-    // 3. Compact Horizontal Category Filter Chips (height 26dp)
+    // 3. Compact Horizontal Category Filter Chips (height 24dp)
     LazyRow(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -307,7 +307,7 @@ fun ImportantDocumentsScreen(
             selectedLabelColor = Color.White
           ),
           modifier = Modifier
-            .height(26.dp)
+            .height(24.dp)
             .testTag("filter_chip_${cat.replace(" ", "_")}")
         )
       }
@@ -315,7 +315,7 @@ fun ImportantDocumentsScreen(
 
     Spacer(modifier = Modifier.height(6.dp))
 
-    // Document List
+    // Document List - High visibility
     if (filteredDocs.isEmpty()) {
       Box(
         modifier = Modifier
@@ -348,7 +348,7 @@ fun ImportantDocumentsScreen(
         modifier = Modifier
           .fillMaxWidth()
           .weight(1f),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
         items(filteredDocs, key = { it.docId }) { doc ->
           ImportantDocCard(
@@ -507,191 +507,128 @@ fun ImportantDocCard(
     }
   }
 
-  Card(
+  Surface(
+    shape = RoundedCornerShape(8.dp),
+    color = MaterialTheme.colorScheme.surface,
+    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+    shadowElevation = 1.dp,
     modifier = Modifier
       .fillMaxWidth()
-      .testTag("important_doc_${doc.docId}"),
-    shape = RoundedCornerShape(12.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      .clickable { onOpen() }
+      .testTag("important_doc_${doc.docId}")
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.Top
-      ) {
-        Row(
-          modifier = Modifier.weight(1f),
-          verticalAlignment = Alignment.Top
-        ) {
-          // File Icon Container
-          Surface(
-            shape = RoundedCornerShape(8.dp),
-            color = if (isPdf) Color(0xFFFEE2E2) else Color(0xFFE0F2FE),
-            modifier = Modifier.size(42.dp)
-          ) {
-            Box(contentAlignment = Alignment.Center) {
-              Icon(
-                imageVector = if (isPdf) Icons.Default.Description else Icons.Default.Image,
-                contentDescription = null,
-                tint = if (isPdf) Color(0xFFDC2626) else Color(0xFF0284C7),
-                modifier = Modifier.size(24.dp)
-              )
-            }
-          }
-
-          Spacer(modifier = Modifier.width(10.dp))
-
-          Column(modifier = Modifier.weight(1f)) {
-            // Custom Name / Title
-            Text(
-              text = doc.title,
-              fontSize = 15.sp,
-              fontWeight = FontWeight.Bold,
-              color = EblNavyDark
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            // Category badge & File size
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-              Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = Color(0xFFF1F5F9)
-              ) {
-                Text(
-                  text = doc.category,
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = EblNavyPrimary,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-              }
-
-              Text(
-                text = "${if (isPdf) "PDF" else "IMAGE"} • $formattedSize",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-              )
-            }
-          }
-        }
-
-        // Action Buttons for Edit/Delete (Privileged only)
-        if (isPrivileged) {
-          Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-              onClick = onEdit,
-              modifier = Modifier.size(32.dp).testTag("btn_edit_${doc.docId}")
-            ) {
-              Icon(Icons.Default.Edit, contentDescription = "Edit Document", tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
-            }
-            IconButton(
-              onClick = onDelete,
-              modifier = Modifier.size(32.dp).testTag("btn_delete_${doc.docId}")
-            ) {
-              Icon(Icons.Default.Delete, contentDescription = "Delete Document", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
-            }
-          }
-        }
-      }
-
-      // Optional Description
-      if (doc.description.isNotBlank()) {
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-          text = doc.description,
-          fontSize = 12.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-          lineHeight = 16.sp
-        )
-      }
-
-      Spacer(modifier = Modifier.height(10.dp))
-
-      // Footer Meta: Uploader and Timestamp
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .padding(horizontal = 10.dp, vertical = 8.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      // File Icon Box (compact 34dp)
       Surface(
         shape = RoundedCornerShape(6.dp),
-        color = Color(0xFFF8FAFC),
-        modifier = Modifier.fillMaxWidth()
+        color = if (isPdf) Color(0xFFFEE2E2) else Color(0xFFE0F2FE),
+        modifier = Modifier.size(34.dp)
       ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(
-            text = "Saved by: ${doc.uploaderName} (${doc.uploaderRole})",
-            fontSize = 10.sp,
-            color = Color(0xFF475569),
-            fontWeight = FontWeight.Medium
-          )
-          Text(
-            text = DateUtils.formatDateTime(doc.updatedAt),
-            fontSize = 10.sp,
-            color = Color(0xFF64748B)
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = if (isPdf) Icons.Default.Description else Icons.Default.Image,
+            contentDescription = null,
+            tint = if (isPdf) Color(0xFFDC2626) else Color(0xFF0284C7),
+            modifier = Modifier.size(20.dp)
           )
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.width(10.dp))
 
-      // Actions Row: Open is available to everyone; Download & Share for Admin & Mentor
-      if (isPrivileged) {
+      // Document Info (Title & Metadata)
+      Column(
+        modifier = Modifier.weight(1f, fill = true)
+      ) {
+        Text(
+          text = doc.title,
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblNavyDark,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(2.dp))
         Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
-          verticalAlignment = Alignment.CenterVertically
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-          Button(
-            onClick = onOpen,
-            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            modifier = Modifier.weight(1.2f).height(36.dp).testTag("btn_open_${doc.docId}")
+          Surface(
+            shape = RoundedCornerShape(3.dp),
+            color = Color(0xFFF1F5F9)
           ) {
-            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("View / Open", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            Text(
+              text = doc.category,
+              fontSize = 9.sp,
+              fontWeight = FontWeight.SemiBold,
+              color = EblNavyPrimary,
+              modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+              maxLines = 1
+            )
           }
+          Text(
+            text = "• ${if (isPdf) "PDF" else "IMG"} • $formattedSize • ${DateUtils.formatDateTime(doc.updatedAt)}",
+            fontSize = 10.sp,
+            color = Color(0xFF64748B),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+        if (doc.description.isNotBlank()) {
+          Text(
+            text = doc.description,
+            fontSize = 10.sp,
+            color = Color.Gray,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
+      }
 
-          OutlinedButton(
+      Spacer(modifier = Modifier.width(6.dp))
+
+      // Direct Action Icons on Right
+      Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+      ) {
+        IconButton(
+          onClick = onOpen,
+          modifier = Modifier.size(30.dp).testTag("btn_open_${doc.docId}")
+        ) {
+          Icon(Icons.Default.OpenInNew, contentDescription = "View", tint = EblNavyPrimary, modifier = Modifier.size(16.dp))
+        }
+
+        if (isPrivileged) {
+          IconButton(
             onClick = onDownload,
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF059669)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669)),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            modifier = Modifier.weight(1f).height(36.dp).testTag("btn_download_${doc.docId}")
+            modifier = Modifier.size(30.dp).testTag("btn_download_${doc.docId}")
           ) {
-            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF059669))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Download", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            Icon(Icons.Default.Download, contentDescription = "Download", tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
           }
-
           IconButton(
             onClick = onShare,
-            modifier = Modifier.size(36.dp).border(1.dp, Color(0xFFCBD5E1), CircleShape).testTag("btn_share_${doc.docId}")
+            modifier = Modifier.size(30.dp).testTag("btn_share_${doc.docId}")
           ) {
-            Icon(Icons.Default.Share, contentDescription = "Share", tint = EblNavyDark, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.Share, contentDescription = "Share", tint = Color(0xFF64748B), modifier = Modifier.size(15.dp))
           }
-        }
-      } else {
-        // Single clean full-width action button for RM officers - no warped yellow card
-        Button(
-          onClick = onOpen,
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-          modifier = Modifier
-            .fillMaxWidth()
-            .height(38.dp)
-            .testTag("btn_open_${doc.docId}")
-        ) {
-          Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text("View / Open Document", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+          IconButton(
+            onClick = onEdit,
+            modifier = Modifier.size(28.dp).testTag("btn_edit_${doc.docId}")
+          ) {
+            Icon(Icons.Default.Edit, contentDescription = "Edit", tint = EblGold, modifier = Modifier.size(14.dp))
+          }
+          IconButton(
+            onClick = onDelete,
+            modifier = Modifier.size(28.dp).testTag("btn_delete_${doc.docId}")
+          ) {
+            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFDC2626), modifier = Modifier.size(14.dp))
+          }
         }
       }
     }

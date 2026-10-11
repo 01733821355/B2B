@@ -392,11 +392,45 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
               val now = com.example.util.DateUtils.currentDhakaMillis()
               val ageMs = now - latest.timestamp
               val isSentByMe = latest.senderRmCode.trim().equals(user.rmCode.trim(), ignoreCase = true)
-              // Only react to fresh calls sent by another user within last 45 seconds
-              if (ageMs in 0..45000 && !isSentByMe) {
+
+              // If sent by me, or if I am already in an active/calling call, NEVER ring myself as an incoming call
+              if (isSentByMe || _callState.value !is CallUiState.Idle) {
+                // Check if target user accepted our outgoing call
+                if (latest.messageType == "CALL_ACCEPTED") {
+                  val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
+                  val current = _callState.value
+                  if (isForMe && current is CallUiState.Calling && current.targetUser.rmCode.trim().equals(latest.senderRmCode.trim(), ignoreCase = true)) {
+                    com.example.util.CallingService.stopRingtone()
+                    com.example.util.CallingService.playConnectedTone()
+                    callTimerJob?.cancel()
+                    callTimerJob = launch {
+                      var duration = 0
+                      while (true) {
+                        _callState.value = CallUiState.Connected(current.targetUser, duration, isMuted = false, isSpeakerOn = false)
+                        kotlinx.coroutines.delay(1000)
+                        duration++
+                      }
+                    }
+                  }
+                } else if (latest.messageType == "CALL_DECLINED") {
+                  val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
+                  val current = _callState.value
+                  if (isForMe && current is CallUiState.Calling && current.targetUser.rmCode.trim().equals(latest.senderRmCode.trim(), ignoreCase = true)) {
+                    com.example.util.CallingService.stopRingtone()
+                    com.example.util.CallingService.playEndCallTone()
+                    callTimerJob?.cancel()
+                    _callState.value = CallUiState.Idle
+                    _uiMessage.emit("${current.targetUser.name} declined the call.")
+                  }
+                }
+                return@collect
+              }
+
+              // Fresh incoming call from another colleague within last 45 seconds
+              if (ageMs in 0..45000) {
                 val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
                 if (latest.messageType == "INCOMING_CALL" && isForMe) {
-                  if (_callState.value is CallUiState.Idle && _incomingCall.value == null) {
+                  if (_incomingCall.value == null) {
                     _incomingCall.value = IncomingCallInfo(
                       callerName = latest.senderName,
                       callerRmCode = latest.senderRmCode,
@@ -407,7 +441,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     com.example.util.CallingService.playRingtone(getApplication())
                   }
                 } else if (latest.messageType == "INCOMING_GROUP_CALL") {
-                  if (_callState.value is CallUiState.Idle && _incomingCall.value == null) {
+                  if (_incomingCall.value == null) {
                     val title = latest.messageText.substringAfter("Active Group Call: '").substringBefore("'").ifBlank { "Team Live Huddle" }
                     _incomingCall.value = IncomingCallInfo(
                       callerName = latest.senderName,
@@ -418,29 +452,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                       callId = latest.id
                     )
                     com.example.util.CallingService.playRingtone(getApplication())
-                  }
-                } else if (latest.messageType == "CALL_ACCEPTED" && isForMe) {
-                  val current = _callState.value
-                  if (current is CallUiState.Calling && current.targetUser.rmCode == latest.senderRmCode) {
-                    com.example.util.CallingService.stopRingtone()
-                    com.example.util.CallingService.playConnectedTone()
-                    callTimerJob?.cancel()
-                    callTimerJob = launch {
-                      var duration = 0
-                      while (true) {
-                        _callState.value = CallUiState.Connected(current.targetUser, duration, isMuted = false, isSpeakerOn = false)
-                        delay(1000)
-                        duration++
-                      }
-                    }
-                  }
-                } else if (latest.messageType == "CALL_DECLINED" && latest.recipientRmCode == user.rmCode) {
-                  val current = _callState.value
-                  if (current is CallUiState.Calling && current.targetUser.rmCode == latest.senderRmCode) {
-                    com.example.util.CallingService.stopRingtone()
-                    com.example.util.CallingService.playEndCallTone()
-                    _callState.value = CallUiState.Idle
-                    _uiMessage.emit("${latest.senderName} declined the call.")
                   }
                 }
               }
@@ -1264,13 +1275,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId)
       res.onSuccess {
-        try {
-          com.example.util.NotificationHelper.sendIncomingSmsNotification(
-            getApplication(),
-            currentUser.value?.name ?: "EBL Hub",
-            text
-          )
-        } catch (_: Exception) {}
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1343,35 +1347,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       return
     }
     callTimerJob?.cancel()
+    _incomingCall.value = null // Caller must NEVER have incoming call set
     _callState.value = CallUiState.Calling(targetUser)
 
-    // IMPORTANT: Caller hears gentle outgoing dial tone ("Tuut... tuut..."), NOT the incoming phone ringtone!
+    // Caller hears gentle soft outgoing calling tone
     com.example.util.CallingService.playOutgoingCallingTone()
 
     // Dispatch INCOMING_CALL to target RM so their device rings!
     sendChatMessage(
       text = "📞 Direct Call from ${myUser?.name ?: "Officer"} (${myUser?.rmCode ?: ""})",
-      recipientRmCode = targetUser.rmCode,
+      recipientRmCode = targetUser.rmCode.trim(),
       messageType = "INCOMING_CALL"
     )
 
-    // Pulse outgoing dialing tone for caller while waiting for recipient
+    // Pulse outgoing dialing tone for caller while waiting for recipient to accept
     callTimerJob = viewModelScope.launch {
-      for (i in 1..4) {
+      for (i in 1..8) {
         kotlinx.coroutines.delay(2500)
         if (_callState.value !is CallUiState.Calling) return@launch
         com.example.util.CallingService.playOutgoingCallingTone()
       }
-      // If still in Calling after 10s and no response (e.g. single-device solo testing fallback):
+      // If no response after 20s
       if (_callState.value is CallUiState.Calling) {
-        com.example.util.CallingService.stopRingtone()
-        com.example.util.CallingService.playConnectedTone()
-        var duration = 0
-        while (true) {
-          _callState.value = CallUiState.Connected(targetUser, duration, isMuted = false, isSpeakerOn = false)
-          kotlinx.coroutines.delay(1000)
-          duration++
-        }
+        com.example.util.CallingService.stopTone()
+        _callState.value = CallUiState.Idle
+        _uiMessage.emit("${targetUser.name} (${targetUser.rmCode}) did not answer.")
       }
     }
   }
@@ -1383,7 +1383,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val participants = if (myUser != null) listOf(myUser) + allActiveUsers.filter { it.rmCode != myUser.rmCode } else allActiveUsers
     val callTitle = title.ifBlank { "Team Live Huddle" }
 
-    // Host connects immediately to room
+    _incomingCall.value = null // Host connects directly and never receives incoming call popup
     com.example.util.CallingService.playConnectedTone()
     callTimerJob = viewModelScope.launch {
       var duration = 0
@@ -1400,7 +1400,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
 
-    // Broadcast INCOMING_GROUP_CALL to everyone in the team!
+    // Broadcast INCOMING_GROUP_CALL to all other colleagues in the team!
     sendChatMessage(
       text = "📞 Active Group Call: '$callTitle' started by ${myUser?.name ?: "Team"}. Tap to join!",
       recipientRmCode = null,
