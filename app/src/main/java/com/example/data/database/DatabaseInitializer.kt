@@ -112,6 +112,99 @@ object DatabaseInitializer {
       database.importantDocumentDao().insertDocuments(sampleDocs)
     }
 
+    // Seed initial active customer files with serial numbers (1, 2, 3...) if table is empty
+    if (database.customerFileDao().getAllActiveFiles().isEmpty()) {
+      val now = DateUtils.currentDhakaMillis()
+      val sampleFiles = listOf(
+        com.example.data.model.CustomerFileEntity(
+          fileId = "CUST-001",
+          customerName = "Md. Kabir Hossain",
+          companyName = "Apex Footwear Ltd.",
+          officeAddress = "Gulshan-1, Dhaka",
+          mobile = "01711223344",
+          altMobile = "01811223344",
+          email = "kabir.hossain@example.com",
+          productType = "Credit Card",
+          applicationStatus = "Pending",
+          assignedRmCode = "Admin0",
+          serialNumber = "1",
+          createdAt = now - 86400000L * 2,
+          updatedAt = now - 86400000L * 2,
+          createdBy = "SYSTEM",
+          updatedBy = "SYSTEM"
+        ),
+        com.example.data.model.CustomerFileEntity(
+          fileId = "CUST-002",
+          customerName = "Tanvir Ahmed Chowdhury",
+          companyName = "Square Pharmaceuticals",
+          officeAddress = "Uttara Sector 3, Dhaka",
+          mobile = "01819556677",
+          altMobile = "01919556677",
+          email = "tanvir.ahmed@example.com",
+          productType = "Corporate Card",
+          applicationStatus = "Pending",
+          assignedRmCode = "Admin0",
+          serialNumber = "2",
+          createdAt = now - 86400000L * 1,
+          updatedAt = now - 86400000L * 1,
+          createdBy = "SYSTEM",
+          updatedBy = "SYSTEM"
+        ),
+        com.example.data.model.CustomerFileEntity(
+          fileId = "CUST-003",
+          customerName = "Nusrat Jahan",
+          companyName = "Grameenphone Ltd.",
+          officeAddress = "Bashundhara R/A, Dhaka",
+          mobile = "01912345678",
+          altMobile = "",
+          email = "nusrat.jahan@example.com",
+          productType = "Personal / Auto / Home Loan",
+          applicationStatus = "Pending",
+          assignedRmCode = "Admin0",
+          serialNumber = "3",
+          createdAt = now - 43200000L,
+          updatedAt = now - 43200000L,
+          createdBy = "SYSTEM",
+          updatedBy = "SYSTEM"
+        ),
+        com.example.data.model.CustomerFileEntity(
+          fileId = "CUST-004",
+          customerName = "Mohammad Rafiqul Islam",
+          companyName = "Beximco Ltd.",
+          officeAddress = "Dhanmondi 27, Dhaka",
+          mobile = "01712987654",
+          altMobile = "01612987654",
+          email = "rafiq.islam@example.com",
+          productType = "Credit Card Limit Enhance",
+          applicationStatus = "Pending",
+          assignedRmCode = "Admin0",
+          serialNumber = "4",
+          createdAt = now - 21600000L,
+          updatedAt = now - 21600000L,
+          createdBy = "SYSTEM",
+          updatedBy = "SYSTEM"
+        ),
+        com.example.data.model.CustomerFileEntity(
+          fileId = "CUST-005",
+          customerName = "Farhana Yasmin",
+          companyName = "Brac IT Services",
+          officeAddress = "Mohakhali, Dhaka",
+          mobile = "01611889900",
+          altMobile = "",
+          email = "farhana.yasmin@example.com",
+          productType = "New Credit Card (Salaried)",
+          applicationStatus = "Pending",
+          assignedRmCode = "Admin0",
+          serialNumber = "5",
+          createdAt = now - 10800000L,
+          updatedAt = now - 10800000L,
+          createdBy = "SYSTEM",
+          updatedBy = "SYSTEM"
+        )
+      )
+      database.customerFileDao().insertFiles(sampleFiles)
+    }
+
     val existingUsers = database.userDao().getAllUsers()
     if (existingUsers.isNotEmpty()) {
       return@withContext
