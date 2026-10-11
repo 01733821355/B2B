@@ -2766,6 +2766,12 @@ fun DocumentChecklistSenderTab(
                   } else {
                     Toast.makeText(context, "SMS sent to $customerMobile successfully!", Toast.LENGTH_LONG).show()
                   }
+                  // Notify all users & record notification when SMS dispatched
+                  viewModel?.notifySmsDispatchedToAll(
+                    customerName = customerName.ifBlank { "Valued Customer" },
+                    customerMobile = customerMobile,
+                    messageText = formattedMessage
+                  )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
                 shape = RoundedCornerShape(8.dp),

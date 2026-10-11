@@ -109,8 +109,6 @@ fun CommunicationHubScreen(
 
   var messageInput by remember { mutableStateOf("") }
   var showCreateEventDialog by remember { mutableStateOf(false) }
-  var showStartCallDialog by remember { mutableStateOf(false) }
-  var showStartGroupCallDialog by remember { mutableStateOf(false) }
 
   var activeResponseEvent by remember { mutableStateOf<TeamEventEntity?>(null) }
   var activeViewEventSubmissions by remember { mutableStateOf<TeamEventEntity?>(null) }
@@ -122,16 +120,6 @@ fun CommunicationHubScreen(
     if (messages.isNotEmpty()) {
       listState.animateScrollToItem(messages.size - 1)
     }
-  }
-
-  // Active Call Overlay (for single call or group call)
-  if (callState !is CallUiState.Idle) {
-    ActiveCallModal(
-      callState = callState,
-      onToggleMute = { viewModel.toggleMute() },
-      onToggleSpeaker = { viewModel.toggleSpeaker() },
-      onEndCall = { viewModel.endCall() }
-    )
   }
 
   // Dialog: Create Delivery / Team Event
@@ -198,29 +186,6 @@ fun CommunicationHubScreen(
     )
   }
 
-  // Dialog: Choose user to Call
-  if (showStartCallDialog) {
-    SelectUserToCallDialog(
-      users = allUsers.filter { it.rmCode != currentUser?.rmCode },
-      onDismiss = { showStartCallDialog = false },
-      onSelectUser = { target ->
-        showStartCallDialog = false
-        viewModel.startCall(target)
-      }
-    )
-  }
-
-  // Dialog: Start Group Voice Call
-  if (showStartGroupCallDialog) {
-    StartGroupCallDialog(
-      onDismiss = { showStartGroupCallDialog = false },
-      onStart = { groupTitle ->
-        showStartGroupCallDialog = false
-        viewModel.startGroupCall(groupTitle)
-      }
-    )
-  }
-
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -245,7 +210,7 @@ fun CommunicationHubScreen(
         ) {
           Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
             Text(
-              text = "Team Communication & Net Calling",
+              text = "Team Communication Hub",
               fontSize = 16.sp,
               fontWeight = FontWeight.Bold,
               color = Color.White,
@@ -253,7 +218,7 @@ fun CommunicationHubScreen(
               overflow = TextOverflow.Ellipsis
             )
             Text(
-              text = "লাইভ মেসেজ, নেট ভয়েস কলিং এবং টিম ইভেন্ট",
+              text = "লাইভ মেসেজিং ও টিম ইভেন্ট প্ল্যাটফর্ম",
               fontSize = 11.sp,
               color = EblGold,
               maxLines = 1,
@@ -261,42 +226,25 @@ fun CommunicationHubScreen(
             )
           }
 
-          Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            // Group Call Button
+          if (currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR") {
             Button(
-              onClick = { showStartGroupCallDialog = true },
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-              shape = RoundedCornerShape(20.dp),
-              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-              modifier = Modifier.testTag("btn_group_call")
-            ) {
-              Icon(Icons.Default.Group, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("গ্রুপ কল", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
-
-            // Direct Call Button
-            Button(
-              onClick = { showStartCallDialog = true },
+              onClick = { showCreateEventDialog = true },
               colors = ButtonDefaults.buttonColors(containerColor = EblGold),
               shape = RoundedCornerShape(20.dp),
-              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-              modifier = Modifier.testTag("btn_direct_call")
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier.testTag("btn_top_create_event")
             ) {
-              Icon(Icons.Default.Call, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(15.dp))
+              Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("কল করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+              Text("+ নতুন ইভেন্ট", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
             }
           }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Online Team Members Horizontal Strip
-        Text("Online Team Directory (Tap colleague to call):", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
+        // Active Team Members Horizontal Strip
+        Text("Active Team Members (${allUsers.size} members):", fontSize = 10.sp, color = Color.White.copy(alpha = 0.7f))
         Spacer(modifier = Modifier.height(4.dp))
         val otherUsers = remember(allUsers, currentUser) {
           allUsers.filter { !it.rmCode.trim().equals(currentUser?.rmCode?.trim() ?: "", ignoreCase = true) }
@@ -311,8 +259,7 @@ fun CommunicationHubScreen(
             items(otherUsers) { u ->
               Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = Color.White.copy(alpha = 0.12f),
-                modifier = Modifier.clickable { viewModel.startCall(u) }
+                color = Color.White.copy(alpha = 0.12f)
               ) {
                 Row(
                   verticalAlignment = Alignment.CenterVertically,
@@ -331,11 +278,11 @@ fun CommunicationHubScreen(
                     fontWeight = FontWeight.Medium
                   )
                   Spacer(modifier = Modifier.width(4.dp))
-                  Icon(
-                    Icons.Default.Call,
-                    contentDescription = "Call",
-                    tint = EblGold,
-                    modifier = Modifier.size(12.dp)
+                  Text(
+                    text = u.role,
+                    color = EblGold,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold
                   )
                 }
               }
@@ -375,15 +322,17 @@ fun CommunicationHubScreen(
           )
         }
 
-        OutlinedButton(
-          onClick = { showCreateEventDialog = true },
-          shape = RoundedCornerShape(16.dp),
-          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-          modifier = Modifier.testTag("btn_create_event")
-        ) {
-          Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("+ নতুন ইভেন্ট", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+        if (currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR") {
+          OutlinedButton(
+            onClick = { showCreateEventDialog = true },
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+            modifier = Modifier.testTag("btn_create_event")
+          ) {
+            Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("+ নতুন ইভেন্ট", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
         }
       }
     }
@@ -426,40 +375,19 @@ fun CommunicationHubScreen(
             isCreator = isMine,
             currentUser = currentUser,
             onOpenSubmit = { targetEvt -> activeResponseEvent = targetEvt },
-            onViewSubmissions = { targetEvt -> activeViewEventSubmissions = targetEvt }
+            onViewSubmissions = { targetEvt -> activeViewEventSubmissions = targetEvt },
+            onDeleteEvent = { eventIdToDelete ->
+              viewModel.deleteTeamEvent(eventIdToDelete)
+            }
           )
         } else if (msg.messageType == "CALL_LOG") {
-          // Call Log Pill
-          Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
-          ) {
-            Surface(
-              shape = RoundedCornerShape(16.dp),
-              color = Color(0xFFF1F5F9),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1))
-            ) {
-              Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-              ) {
-                Icon(Icons.Default.PhoneInTalk, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(msg.messageText, fontSize = 11.sp, color = Color.DarkGray)
-              }
-            }
-          }
+          // Skip or display as info log
         } else {
           // Standard Message Bubble
           ChatBubbleItem(
             message = msg,
             isMine = isMine,
-            onCallSender = {
-              val target = allUsers.find { it.rmCode.equals(msg.senderRmCode, ignoreCase = true) }
-              if (target != null) {
-                viewModel.startCall(target)
-              }
-            },
+            onCallSender = {},
             onDelete = {
               viewModel.deleteChatMessage(msg.id)
             }
@@ -554,15 +482,6 @@ fun ChatBubbleItem(
             fontWeight = FontWeight.Bold,
             color = Color.DarkGray
           )
-          Spacer(modifier = Modifier.width(6.dp))
-          Icon(
-            imageVector = Icons.Default.Call,
-            contentDescription = "Quick Call",
-            tint = Color(0xFF0284C7),
-            modifier = Modifier
-              .size(14.dp)
-              .clickable { onCallSender() }
-          )
         }
         Spacer(modifier = Modifier.height(2.dp))
       }
@@ -620,13 +539,43 @@ fun EventCardItem(
   isCreator: Boolean,
   currentUser: UserEntity?,
   onOpenSubmit: (TeamEventEntity) -> Unit,
-  onViewSubmissions: (TeamEventEntity) -> Unit
+  onViewSubmissions: (TeamEventEntity) -> Unit,
+  onDeleteEvent: (String) -> Unit = {}
 ) {
   val title = event?.title ?: fallbackMessage.messageText.lines().firstOrNull() ?: "Team Event"
   val targetDate = event?.targetDate ?: "As announced"
   val desc = event?.description ?: fallbackMessage.messageText
   val creatorName = event?.creatorName ?: fallbackMessage.senderName
   val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR" || isCreator
+  val canDeleteEvent = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR" || isCreator
+  var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+
+  if (showDeleteConfirmDialog && event != null) {
+    AlertDialog(
+      onDismissRequest = { showDeleteConfirmDialog = false },
+      icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFDC2626)) },
+      title = { Text("ইভেন্ট মুছে ফেলবেন?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("আপনি কি নিশ্চিত যে '${event.title}' ইভেন্টটি মুছে ফেলতে চান? এটি অ্যাপ এবং গুগল শিট (Google Sheet) উভয় থেকেই সম্পূর্ণ মুছে যাবে।")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showDeleteConfirmDialog = false
+            onDeleteEvent(event.eventId)
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+        ) {
+          Text("হ্যাঁ, ডিলিট করুন")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showDeleteConfirmDialog = false }) {
+          Text("বাতিল")
+        }
+      }
+    )
+  }
 
   Card(
     modifier = Modifier
@@ -659,18 +608,34 @@ fun EventCardItem(
           )
         }
 
-        if (targetDate.isNotBlank()) {
-          Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = Color(0xFFDCFCE7)
-          ) {
-            Text(
-              text = "Target: $targetDate",
-              fontSize = 10.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color(0xFF15803D),
-              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          if (targetDate.isNotBlank()) {
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFDCFCE7)
+            ) {
+              Text(
+                text = "Target: $targetDate",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF15803D),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          }
+          if (canDeleteEvent && event != null) {
+            Spacer(modifier = Modifier.width(6.dp))
+            IconButton(
+              onClick = { showDeleteConfirmDialog = true },
+              modifier = Modifier.size(24.dp).testTag("btn_delete_event_${event.eventId}")
+            ) {
+              Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Delete Event",
+                tint = Color(0xFFDC2626),
+                modifier = Modifier.size(16.dp)
+              )
+            }
           }
         }
       }
@@ -1154,388 +1119,3 @@ fun ViewSubmissionsDialog(
   )
 }
 
-// Dialog to select user for 1-on-1 Voice Call
-@Composable
-fun SelectUserToCallDialog(
-  users: List<UserEntity>,
-  onDismiss: () -> Unit,
-  onSelectUser: (UserEntity) -> Unit
-) {
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = { Text("ইন্টারনেট ভয়েস কল করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-    text = {
-      LazyColumn(
-        modifier = Modifier
-          .fillMaxWidth()
-          .height(280.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-      ) {
-        items(users) { u ->
-          Card(
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-            modifier = Modifier
-              .fillMaxWidth()
-              .clickable { onSelectUser(u) }
-          ) {
-            Row(
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-              horizontalArrangement = Arrangement.SpaceBetween,
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Column {
-                Text(u.name, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Text("${u.role}: ${u.rmCode} | ${u.officeAddress.take(20)}", fontSize = 10.sp, color = Color.Gray)
-              }
-              Icon(Icons.Default.Call, contentDescription = "Call", tint = Color(0xFF10B981))
-            }
-          }
-        }
-      }
-    },
-    confirmButton = {},
-    dismissButton = {
-      TextButton(onClick = onDismiss) { Text("বাতিল") }
-    }
-  )
-}
-
-// Dialog to start group call
-@Composable
-fun StartGroupCallDialog(
-  onDismiss: () -> Unit,
-  onStart: (String) -> Unit
-) {
-  var callTitle by remember { mutableStateOf("EBL Team Morning Sync") }
-
-  AlertDialog(
-    onDismissRequest = onDismiss,
-    title = { Text("গ্রুপ ভয়েস কল শুরু করুন", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
-    text = {
-      Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("টিমের যেকোনো সদস্য এই গ্রুপ কলে সরাসরি অংশ নিতে পারবে।", fontSize = 11.sp, color = Color.Gray)
-        OutlinedTextField(
-          value = callTitle,
-          onValueChange = { callTitle = it },
-          label = { Text("Group Call Title / বিষয়") },
-          modifier = Modifier.fillMaxWidth()
-        )
-      }
-    },
-    confirmButton = {
-      Button(
-        onClick = { onStart(callTitle.trim()) },
-        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981))
-      ) {
-        Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(16.dp))
-        Spacer(modifier = Modifier.width(4.dp))
-        Text("গ্রুপ কল চালু করুন")
-      }
-    },
-    dismissButton = {
-      TextButton(onClick = onDismiss) { Text("বাতিল") }
-    }
-  )
-}
-
-// Active Full Screen / Overlay Call Screen
-@Composable
-fun ActiveCallModal(
-  callState: CallUiState,
-  onToggleMute: () -> Unit,
-  onToggleSpeaker: () -> Unit,
-  onEndCall: () -> Unit
-) {
-  Surface(
-    color = Color(0xFF0F172A),
-    modifier = Modifier.fillMaxSize()
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(24.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.SpaceBetween
-    ) {
-      Spacer(modifier = Modifier.height(20.dp))
-
-      when (callState) {
-        is CallUiState.Calling -> {
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-              modifier = Modifier
-                .size(110.dp)
-                .background(Brush.radialGradient(listOf(Color(0xFF38BDF8), Color(0xFF0284C7))), CircleShape),
-              contentAlignment = Alignment.Center
-            ) {
-              Text(
-                text = callState.targetUser.name.take(2).uppercase(),
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold
-              )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(callState.targetUser.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("${callState.targetUser.role}: ${callState.targetUser.rmCode}", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(12.dp))
-            Text("Calling via EBL Internet Network...", color = EblGold, fontSize = 13.sp)
-          }
-        }
-
-        is CallUiState.Connected -> {
-          val min = callState.durationSeconds / 60
-          val sec = callState.durationSeconds % 60
-          val timeStr = String.format("%02d:%02d", min, sec)
-
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-              modifier = Modifier
-                .size(110.dp)
-                .border(3.dp, Color(0xFF22C55E), CircleShape)
-                .background(Color(0xFF1E293B), CircleShape),
-              contentAlignment = Alignment.Center
-            ) {
-              Text(
-                text = callState.targetUser.name.take(2).uppercase(),
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold
-              )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(callState.targetUser.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("${callState.targetUser.role}: ${callState.targetUser.rmCode}", color = Color.White.copy(alpha = 0.7f), fontSize = 13.sp)
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Connected - HD Audio ($timeStr)", color = Color(0xFF4ADE80), fontSize = 14.sp, fontWeight = FontWeight.Bold)
-          }
-        }
-
-        is CallUiState.GroupCall -> {
-          val min = callState.durationSeconds / 60
-          val sec = callState.durationSeconds % 60
-          val timeStr = String.format("%02d:%02d", min, sec)
-
-          Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(callState.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            Text("Live Voice Room • $timeStr", color = Color(0xFF4ADE80), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Participant Grid
-            LazyRow(
-              horizontalArrangement = Arrangement.spacedBy(14.dp),
-              modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-              items(callState.participants) { p ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  Box(
-                    modifier = Modifier
-                      .size(68.dp)
-                      .border(2.dp, Color(0xFF38BDF8), CircleShape)
-                      .background(Color(0xFF334155), CircleShape),
-                    contentAlignment = Alignment.Center
-                  ) {
-                    Text(p.name.take(1).uppercase(), color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                  }
-                  Spacer(modifier = Modifier.height(6.dp))
-                  Text(p.name.take(8), color = Color.White, fontSize = 11.sp)
-                  Text("Speaking...", color = Color(0xFF22C55E), fontSize = 9.sp)
-                }
-              }
-            }
-          }
-        }
-        else -> {}
-      }
-
-      // Call Control Buttons (Mute, Speaker, End)
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(bottom = 32.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        val isMuted = when (callState) {
-          is CallUiState.Connected -> callState.isMuted
-          is CallUiState.GroupCall -> callState.isMuted
-          else -> false
-        }
-        val isSpeaker = when (callState) {
-          is CallUiState.Connected -> callState.isSpeakerOn
-          is CallUiState.GroupCall -> callState.isSpeakerOn
-          else -> false
-        }
-
-        // Mute Button
-        IconButton(
-          onClick = onToggleMute,
-          modifier = Modifier
-            .size(56.dp)
-            .background(if (isMuted) Color(0xFFDC2626) else Color.White.copy(alpha = 0.2f), CircleShape)
-        ) {
-          Icon(if (isMuted) Icons.Default.MicOff else Icons.Default.Mic, contentDescription = "Mute", tint = Color.White)
-        }
-
-        // End Call Button
-        IconButton(
-          onClick = onEndCall,
-          modifier = Modifier
-            .size(68.dp)
-            .background(Color(0xFFEF4444), CircleShape)
-            .testTag("btn_end_call")
-        ) {
-          Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White, modifier = Modifier.size(32.dp))
-        }
-
-        // Speaker Button
-        IconButton(
-          onClick = onToggleSpeaker,
-          modifier = Modifier
-            .size(56.dp)
-            .background(if (isSpeaker) Color(0xFF2563EB) else Color.White.copy(alpha = 0.2f), CircleShape)
-        ) {
-          Icon(Icons.Default.VolumeUp, contentDescription = "Speaker", tint = Color.White)
-        }
-      }
-    }
-  }
-}
-
-// -------------------------------------------------------------------------------------------------
-// INCOMING CALL MODAL (FULL SCREEN DIALOG FOR RECIPIENT RM / TEAM MEMBERS)
-// -------------------------------------------------------------------------------------------------
-@Composable
-fun IncomingCallModal(
-  callInfo: com.example.ui.viewmodel.IncomingCallInfo,
-  onAccept: () -> Unit,
-  onDecline: () -> Unit
-) {
-  Surface(
-    color = Color(0xFF0F172A),
-    modifier = Modifier.fillMaxSize()
-  ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .padding(24.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.SpaceBetween
-    ) {
-      Spacer(modifier = Modifier.height(30.dp))
-
-      Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Glowing animated avatar / call icon
-        Box(
-          modifier = Modifier
-            .size(110.dp)
-            .border(3.dp, Color(0xFF22C55E), CircleShape)
-            .background(Color(0xFF1E293B), CircleShape),
-          contentAlignment = Alignment.Center
-        ) {
-          Icon(
-            imageVector = if (callInfo.isGroup) Icons.Default.Group else Icons.Default.PhoneInTalk,
-            contentDescription = null,
-            tint = Color(0xFF4ADE80),
-            modifier = Modifier.size(52.dp)
-          )
-        }
-
-        Spacer(modifier = Modifier.height(20.dp))
-
-        Text(
-          text = if (callInfo.isGroup) "INCOMING GROUP CALL" else "INCOMING VOICE CALL",
-          fontSize = 13.sp,
-          fontWeight = FontWeight.Bold,
-          color = EblGold,
-          letterSpacing = 1.sp
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-          text = if (callInfo.isGroup) callInfo.groupTitle.ifBlank { "Team Live Huddle" } else callInfo.callerName,
-          color = Color.White,
-          fontSize = 22.sp,
-          fontWeight = FontWeight.Bold,
-          textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-          text = if (callInfo.isGroup) "Started by: ${callInfo.callerName} (${callInfo.callerRole})" else "${callInfo.callerRole} • RM Code: ${callInfo.callerRmCode}",
-          color = Color.White.copy(alpha = 0.7f),
-          fontSize = 13.sp
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Surface(
-          shape = RoundedCornerShape(20.dp),
-          color = Color(0xFF1E293B),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF334155))
-        ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Box(
-              modifier = Modifier
-                .size(8.dp)
-                .background(Color(0xFF22C55E), CircleShape)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = "Eastern Bank PLC Net Calling Ringing...",
-              color = Color.White.copy(alpha = 0.85f),
-              fontSize = 11.sp
-            )
-          }
-        }
-      }
-
-      // Actions: Decline (Red) and Accept (Green)
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(bottom = 40.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        // Decline Call Button
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          IconButton(
-            onClick = onDecline,
-            modifier = Modifier
-              .size(68.dp)
-              .background(Color(0xFFDC2626), CircleShape)
-              .testTag("btn_decline_incoming_call")
-          ) {
-            Icon(Icons.Default.CallEnd, contentDescription = "Decline Call", tint = Color.White, modifier = Modifier.size(32.dp))
-          }
-          Spacer(modifier = Modifier.height(8.dp))
-          Text("Decline", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        }
-
-        // Accept Call Button
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          IconButton(
-            onClick = onAccept,
-            modifier = Modifier
-              .size(68.dp)
-              .background(Color(0xFF16A34A), CircleShape)
-              .testTag("btn_accept_incoming_call")
-          ) {
-            Icon(Icons.Default.Call, contentDescription = "Accept Call", tint = Color.White, modifier = Modifier.size(32.dp))
-          }
-          Spacer(modifier = Modifier.height(8.dp))
-          Text(if (callInfo.isGroup) "Join Call" else "Accept", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-        }
-      }
-    }
-  }
-}

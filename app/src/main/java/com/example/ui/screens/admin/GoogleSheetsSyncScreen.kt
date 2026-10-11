@@ -300,6 +300,46 @@ function doPost(e) {
       }
     }
 
+    // Handle Team Event Deletions (Immediately removes Event rows from Google Sheets)
+    if (data.action === 'DELETE_EVENT' || (data.deletedEventIds && data.deletedEventIds.length > 0)) {
+      var toDeleteEvts = data.deletedEventIds || [data.eventId].filter(Boolean);
+      var curEvts = eventSheet.getDataRange().getValues();
+      for (var de = curEvts.length - 1; de >= 1; de--) {
+        var evIdVal = String(curEvts[de][0] || '').trim();
+        for (var m = 0; m < toDeleteEvts.length; m++) {
+          var targetEv = String(toDeleteEvts[m] || '').trim();
+          if (targetEv && evIdVal === targetEv) {
+            eventSheet.deleteRow(de + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_EVENT') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Event from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle SMS Notifications Deletion (Immediately removes SMS rows from Google Sheets)
+    if (data.action === 'DELETE_SMS' || (data.deletedSmsIds && data.deletedSmsIds.length > 0)) {
+      var toDeleteSms = data.deletedSmsIds || [data.smsId].filter(Boolean);
+      var curSms = smsSheet.getDataRange().getValues();
+      for (var ds = curSms.length - 1; ds >= 1; ds--) {
+        var smsIdVal = String(curSms[ds][0] || '').trim();
+        for (var n = 0; n < toDeleteSms.length; n++) {
+          var targetSms = String(toDeleteSms[n] || '').trim();
+          if (targetSms && smsIdVal === targetSms) {
+            smsSheet.deleteRow(ds + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_SMS') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted SMS from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     // Handle Direct RM Password Update
     if (data.action === 'UPDATE_RM_PASSWORD') {
       var targetRmCode = String(data.rmCode || '').trim().toUpperCase();

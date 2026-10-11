@@ -381,85 +381,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
       }
     }
-
-    // Real-Time Incoming Call & Voice Dispatch Monitor
-    viewModelScope.launch {
-      currentUser.collect { user ->
-        if (user != null) {
-          launch {
-            eblRepository.getVisibleMessagesFlow(user.rmCode).collect { messages ->
-              val latest = messages.lastOrNull() ?: return@collect
-              val now = com.example.util.DateUtils.currentDhakaMillis()
-              val ageMs = now - latest.timestamp
-              val isSentByMe = latest.senderRmCode.trim().equals(user.rmCode.trim(), ignoreCase = true)
-
-              // If sent by me, or if I am already in an active/calling call, NEVER ring myself as an incoming call
-              if (isSentByMe || _callState.value !is CallUiState.Idle) {
-                // Check if target user accepted our outgoing call
-                if (latest.messageType == "CALL_ACCEPTED") {
-                  val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
-                  val current = _callState.value
-                  if (isForMe && current is CallUiState.Calling && current.targetUser.rmCode.trim().equals(latest.senderRmCode.trim(), ignoreCase = true)) {
-                    com.example.util.CallingService.stopRingtone()
-                    com.example.util.CallingService.playConnectedTone()
-                    callTimerJob?.cancel()
-                    callTimerJob = launch {
-                      var duration = 0
-                      while (true) {
-                        _callState.value = CallUiState.Connected(current.targetUser, duration, isMuted = false, isSpeakerOn = false)
-                        kotlinx.coroutines.delay(1000)
-                        duration++
-                      }
-                    }
-                  }
-                } else if (latest.messageType == "CALL_DECLINED") {
-                  val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
-                  val current = _callState.value
-                  if (isForMe && current is CallUiState.Calling && current.targetUser.rmCode.trim().equals(latest.senderRmCode.trim(), ignoreCase = true)) {
-                    com.example.util.CallingService.stopRingtone()
-                    com.example.util.CallingService.playEndCallTone()
-                    callTimerJob?.cancel()
-                    _callState.value = CallUiState.Idle
-                    _uiMessage.emit("${current.targetUser.name} declined the call.")
-                  }
-                }
-                return@collect
-              }
-
-              // Fresh incoming call from another colleague within last 45 seconds
-              if (ageMs in 0..45000) {
-                val isForMe = latest.recipientRmCode?.trim()?.equals(user.rmCode.trim(), ignoreCase = true) == true
-                if (latest.messageType == "INCOMING_CALL" && isForMe) {
-                  if (_incomingCall.value == null) {
-                    _incomingCall.value = IncomingCallInfo(
-                      callerName = latest.senderName,
-                      callerRmCode = latest.senderRmCode,
-                      callerRole = latest.senderRole,
-                      isGroup = false,
-                      callId = latest.id
-                    )
-                    com.example.util.CallingService.playRingtone(getApplication())
-                  }
-                } else if (latest.messageType == "INCOMING_GROUP_CALL") {
-                  if (_incomingCall.value == null) {
-                    val title = latest.messageText.substringAfter("Active Group Call: '").substringBefore("'").ifBlank { "Team Live Huddle" }
-                    _incomingCall.value = IncomingCallInfo(
-                      callerName = latest.senderName,
-                      callerRmCode = latest.senderRmCode,
-                      callerRole = latest.senderRole,
-                      isGroup = true,
-                      groupTitle = title,
-                      callId = latest.id
-                    )
-                    com.example.util.CallingService.playRingtone(getApplication())
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
   }
 
   private fun computeStats(files: List<CustomerFileEntity>): KpiStats {
@@ -1339,181 +1260,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  // Internet Calling
-  fun startCall(targetUser: com.example.data.model.UserEntity) {
-    val myUser = currentUser.value
-    if (myUser != null && targetUser.rmCode.trim().equals(myUser.rmCode.trim(), ignoreCase = true)) {
-      // Cannot call oneself
-      return
-    }
-    callTimerJob?.cancel()
-    _incomingCall.value = null // Caller must NEVER have incoming call set
-    _callState.value = CallUiState.Calling(targetUser)
-
-    // Caller hears gentle soft outgoing calling tone
-    com.example.util.CallingService.playOutgoingCallingTone()
-
-    // Dispatch INCOMING_CALL to target RM so their device rings!
-    sendChatMessage(
-      text = "📞 Direct Call from ${myUser?.name ?: "Officer"} (${myUser?.rmCode ?: ""})",
-      recipientRmCode = targetUser.rmCode.trim(),
-      messageType = "INCOMING_CALL"
-    )
-
-    // Pulse outgoing dialing tone for caller while waiting for recipient to accept
-    callTimerJob = viewModelScope.launch {
-      for (i in 1..8) {
-        kotlinx.coroutines.delay(2500)
-        if (_callState.value !is CallUiState.Calling) return@launch
-        com.example.util.CallingService.playOutgoingCallingTone()
-      }
-      // If no response after 20s
-      if (_callState.value is CallUiState.Calling) {
-        com.example.util.CallingService.stopTone()
-        _callState.value = CallUiState.Idle
-        _uiMessage.emit("${targetUser.name} (${targetUser.rmCode}) did not answer.")
+  fun deleteTeamEvent(
+    eventId: String,
+    onResult: ((Boolean, String?) -> Unit)? = null
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteTeamEvent(eventId)
+      res.onSuccess {
+        _uiMessage.emit("✓ Event deleted and removed from Google Sheets!")
+        onResult?.invoke(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit(err.message ?: "Failed to delete event.")
+        onResult?.invoke(false, err.message)
       }
     }
   }
 
-  fun startGroupCall(title: String) {
-    callTimerJob?.cancel()
-    val myUser = currentUser.value
-    val allActiveUsers = allRms.value.take(4)
-    val participants = if (myUser != null) listOf(myUser) + allActiveUsers.filter { it.rmCode != myUser.rmCode } else allActiveUsers
-    val callTitle = title.ifBlank { "Team Live Huddle" }
-
-    _incomingCall.value = null // Host connects directly and never receives incoming call popup
-    com.example.util.CallingService.playConnectedTone()
-    callTimerJob = viewModelScope.launch {
-      var duration = 0
-      while (true) {
-        _callState.value = CallUiState.GroupCall(
-          title = callTitle,
-          participants = participants,
-          durationSeconds = duration,
-          isMuted = false,
-          isSpeakerOn = true
-        )
-        kotlinx.coroutines.delay(1000)
-        duration++
-      }
-    }
-
-    // Broadcast INCOMING_GROUP_CALL to all other colleagues in the team!
-    sendChatMessage(
-      text = "📞 Active Group Call: '$callTitle' started by ${myUser?.name ?: "Team"}. Tap to join!",
-      recipientRmCode = null,
-      messageType = "INCOMING_GROUP_CALL"
-    )
-  }
-
-  fun acceptIncomingCall() {
-    val inc = _incomingCall.value ?: return
-    com.example.util.CallingService.stopRingtone()
-    com.example.util.CallingService.playConnectedTone()
-    _incomingCall.value = null
-
-    if (inc.isGroup) {
-      val myUser = currentUser.value
-      val allActiveUsers = allRms.value.take(4)
-      val participants = if (myUser != null) listOf(myUser) + allActiveUsers.filter { it.rmCode != myUser.rmCode } else allActiveUsers
-
-      callTimerJob?.cancel()
-      callTimerJob = viewModelScope.launch {
-        var duration = 0
-        while (true) {
-          _callState.value = CallUiState.GroupCall(
-            title = inc.groupTitle.ifBlank { "Team Live Huddle" },
-            participants = participants,
-            durationSeconds = duration,
-            isMuted = false,
-            isSpeakerOn = true
-          )
-          kotlinx.coroutines.delay(1000)
-          duration++
-        }
-      }
-    } else {
-      val callerUser = allRms.value.find { it.rmCode == inc.callerRmCode }
-        ?: com.example.data.model.UserEntity(
-          rmCode = inc.callerRmCode,
-          name = inc.callerName,
-          role = inc.callerRole,
-          passwordHash = "",
-          salt = "",
-          mobile = "",
-          email = "",
-          officeAddress = "",
-          createdAt = System.currentTimeMillis()
-        )
-
-      callTimerJob?.cancel()
-      callTimerJob = viewModelScope.launch {
-        var duration = 0
-        while (true) {
-          _callState.value = CallUiState.Connected(callerUser, duration, isMuted = false, isSpeakerOn = false)
-          kotlinx.coroutines.delay(1000)
-          duration++
-        }
-      }
-
-      sendChatMessage(
-        text = "✓ Call connected with ${currentUser.value?.name ?: "Officer"}",
-        recipientRmCode = inc.callerRmCode,
-        messageType = "CALL_ACCEPTED"
-      )
+  fun notifySmsDispatchedToAll(customerName: String, customerMobile: String, messageText: String) {
+    viewModelScope.launch {
+      eblRepository.notifySmsDispatchedToAll(customerName, customerMobile, messageText)
     }
   }
 
-  fun declineIncomingCall() {
-    val inc = _incomingCall.value
-    com.example.util.CallingService.stopRingtone()
-    com.example.util.CallingService.playEndCallTone()
-    if (inc != null && !inc.isGroup) {
-      sendChatMessage(
-        text = "❌ Call declined by ${currentUser.value?.name ?: "Officer"}",
-        recipientRmCode = inc.callerRmCode,
-        messageType = "CALL_DECLINED"
-      )
-    }
-    _incomingCall.value = null
-  }
-
-  fun toggleMute() {
-    val current = _callState.value
-    if (current is CallUiState.Connected) {
-      _callState.value = current.copy(isMuted = !current.isMuted)
-    } else if (current is CallUiState.GroupCall) {
-      _callState.value = current.copy(isMuted = !current.isMuted)
-    }
-  }
-
-  fun toggleSpeaker() {
-    val current = _callState.value
-    if (current is CallUiState.Connected) {
-      _callState.value = current.copy(isSpeakerOn = !current.isSpeakerOn)
-    } else if (current is CallUiState.GroupCall) {
-      _callState.value = current.copy(isSpeakerOn = !current.isSpeakerOn)
-    }
-  }
-
+  // Calling features have been removed per user instruction
+  fun startCall(targetUser: com.example.data.model.UserEntity) {}
+  fun startGroupCall(title: String) {}
+  fun acceptIncomingCall() {}
+  fun declineIncomingCall() {}
+  fun toggleMute() {}
+  fun toggleSpeaker() {}
   fun endCall() {
-    callTimerJob?.cancel()
-    callTimerJob = null
-    com.example.util.CallingService.stopRingtone()
-    com.example.util.CallingService.playEndCallTone()
-    val current = _callState.value
-    if (current is CallUiState.Connected) {
-      val min = current.durationSeconds / 60
-      val sec = current.durationSeconds % 60
-      val timeStr = String.format("%02d:%02d", min, sec)
-      sendChatMessage(
-        text = "📞 Voice Call with ${current.targetUser.name} (${current.targetUser.rmCode}) ended. Duration: $timeStr",
-        recipientRmCode = current.targetUser.rmCode,
-        messageType = "CALL_LOG"
-      )
-    }
     _callState.value = CallUiState.Idle
   }
 }
@@ -1529,18 +1305,4 @@ data class IncomingCallInfo(
 
 sealed class CallUiState {
   object Idle : CallUiState()
-  data class Calling(val targetUser: com.example.data.model.UserEntity) : CallUiState()
-  data class Connected(
-    val targetUser: com.example.data.model.UserEntity,
-    val durationSeconds: Int = 0,
-    val isMuted: Boolean = false,
-    val isSpeakerOn: Boolean = false
-  ) : CallUiState()
-  data class GroupCall(
-    val title: String,
-    val participants: List<com.example.data.model.UserEntity>,
-    val durationSeconds: Int = 0,
-    val isMuted: Boolean = false,
-    val isSpeakerOn: Boolean = false
-  ) : CallUiState()
 }

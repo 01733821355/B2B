@@ -67,6 +67,12 @@ interface CommunicationDao {
   @Query("DELETE FROM team_events WHERE eventId = :eventId")
   suspend fun deleteEvent(eventId: String)
 
+  @Query("DELETE FROM chat_messages WHERE eventId = :eventId")
+  suspend fun deleteMessagesByEventId(eventId: String)
+
+  @Query("DELETE FROM event_responses WHERE eventId = :eventId")
+  suspend fun deleteResponsesForEvent(eventId: String)
+
   @Query("DELETE FROM event_responses WHERE responseId = :responseId")
   suspend fun deleteResponse(responseId: String)
 }
