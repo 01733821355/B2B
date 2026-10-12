@@ -88,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.FileAttachmentEntity
 import com.example.data.model.ImportantDocumentEntity
 import com.example.data.model.UserEntity
+import com.example.ui.common.AttachmentViewerDialog
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -354,19 +355,7 @@ fun ImportantDocumentsScreen(
             doc = doc,
             isPrivileged = isPrivileged,
             onOpen = {
-              val attachmentEntity = FileAttachmentEntity(
-                attachmentId = doc.docId,
-                fileId = "IMPORTANT_DOC",
-                category = doc.category,
-                fileName = doc.fileName,
-                fileType = doc.fileType,
-                fileSizeBytes = doc.fileSizeBytes,
-                fileUri = doc.fileUri,
-                storagePath = doc.storagePath,
-                uploadedBy = doc.uploadedBy,
-                uploadedAt = doc.createdAt
-              )
-              AttachmentHelper.viewAttachment(context, attachmentEntity)
+              previewDocument = doc
             },
             onDownload = {
               if (!isPrivileged) {
@@ -483,6 +472,33 @@ fun ImportantDocumentsScreen(
           Text("Cancel")
         }
       }
+    )
+  }
+
+  // Universal In-App Document Preview Dialog (Allows all users to preview, view, and zoom PDFs and pictures on mobile)
+  if (previewDocument != null) {
+    val pDoc = previewDocument!!
+    val attachmentEntity = FileAttachmentEntity(
+      attachmentId = pDoc.docId,
+      fileId = "IMPORTANT_DOC",
+      category = pDoc.category,
+      fileName = pDoc.fileName,
+      fileType = pDoc.fileType,
+      fileSizeBytes = pDoc.fileSizeBytes,
+      fileUri = pDoc.fileUri,
+      storagePath = pDoc.storagePath,
+      uploadedBy = pDoc.uploadedBy,
+      uploadedAt = pDoc.createdAt
+    )
+    AttachmentViewerDialog(
+      attachment = attachmentEntity,
+      onDismiss = { previewDocument = null },
+      onDelete = if (isPrivileged) {
+        {
+          documentToDelete = pDoc
+          previewDocument = null
+        }
+      } else null
     )
   }
 }

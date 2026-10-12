@@ -32,178 +32,99 @@ object DatabaseInitializer {
     // Ensure old non-auth audit logs are purged so only login/logout logs are kept
     database.auditLogDao().purgeNonAuthLogs()
 
-    // Seed default important banking documents if not yet present
-    if (database.importantDocumentDao().getAllActiveDocuments().isEmpty()) {
-      val now = DateUtils.currentDhakaMillis()
-      val sampleDocs = listOf(
-        com.example.data.model.ImportantDocumentEntity(
-          docId = "DOC_CIRCULAR_2026_01",
-          title = "EBL Retail Lending & Credit Card Policy 2026",
-          category = "Policies & Circulars",
-          description = "Official operational circular containing eligibility criteria, minimum salary threshold, and credit assessment rules.",
-          fileName = "EBL_Retail_Credit_Policy_2026.pdf",
-          fileType = "application/pdf",
-          fileSizeBytes = 284000L,
-          fileUri = "",
-          storagePath = "",
-          uploadedBy = "Admin0",
-          uploaderName = "System Administrator",
-          uploaderRole = "ADMIN",
-          createdAt = now - 86400000L * 5,
-          updatedAt = now - 86400000L * 5,
-          isDeleted = false,
-          isSynced = true
-        ),
-        com.example.data.model.ImportantDocumentEntity(
-          docId = "DOC_CPV_SOP_02",
-          title = "Customer Physical Verification (CPV) Guidelines",
-          category = "CPV & Compliance",
-          description = "Step-by-step Standard Operating Procedure (SOP) for residential and office verification by sales field agents.",
-          fileName = "CPV_Verification_Guidelines_v2.pdf",
-          fileType = "application/pdf",
-          fileSizeBytes = 192000L,
-          fileUri = "",
-          storagePath = "",
-          uploadedBy = "12345",
-          uploaderName = "Senior Operations Mentor",
-          uploaderRole = "MENTOR",
-          createdAt = now - 86400000L * 3,
-          updatedAt = now - 86400000L * 3,
-          isDeleted = false,
-          isSynced = true
-        ),
-        com.example.data.model.ImportantDocumentEntity(
-          docId = "DOC_SALARY_CERT_03",
-          title = "Standard Salary Certificate & Pay Slip Format",
-          category = "Forms & Formats",
-          description = "Standard corporate salary certificate and HR declaration template required for salaried professionals.",
-          fileName = "Standard_Salary_Certificate_Format.pdf",
-          fileType = "application/pdf",
-          fileSizeBytes = 145000L,
-          fileUri = "",
-          storagePath = "",
-          uploadedBy = "Admin0",
-          uploaderName = "System Administrator",
-          uploaderRole = "ADMIN",
-          createdAt = now - 86400000L * 2,
-          updatedAt = now - 86400000L * 2,
-          isDeleted = false,
-          isSynced = true
-        ),
-        com.example.data.model.ImportantDocumentEntity(
-          docId = "DOC_RATES_CHART_04",
-          title = "Schedule of Charges & Product Rates Chart 2026",
-          category = "Product Guidelines",
-          description = "Updated interest rates, annual fees, card issuance charges, and reward points structure for all EBL cards.",
-          fileName = "Schedule_of_Charges_Rates_2026.pdf",
-          fileType = "application/pdf",
-          fileSizeBytes = 312000L,
-          fileUri = "",
-          storagePath = "",
-          uploadedBy = "12345",
-          uploaderName = "Senior Operations Mentor",
-          uploaderRole = "MENTOR",
-          createdAt = now - 86400000L,
-          updatedAt = now - 86400000L,
-          isDeleted = false,
-          isSynced = true
+    // Seed default important banking documents ONCE on initial setup only if never initialized before
+    val docsSeededSetting = database.appSettingDao().getSetting("important_docs_initialized")
+    if (docsSeededSetting == null) {
+      if (database.importantDocumentDao().getAllActiveDocuments().isEmpty()) {
+        val now = DateUtils.currentDhakaMillis()
+        val sampleDocs = listOf(
+          com.example.data.model.ImportantDocumentEntity(
+            docId = "DOC_CIRCULAR_2026_01",
+            title = "EBL Retail Lending & Credit Card Policy 2026",
+            category = "Policies & Circulars",
+            description = "Official operational circular containing eligibility criteria, minimum salary threshold, and credit assessment rules.",
+            fileName = "EBL_Retail_Credit_Policy_2026.pdf",
+            fileType = "application/pdf",
+            fileSizeBytes = 284000L,
+            fileUri = "",
+            storagePath = "",
+            uploadedBy = "Admin0",
+            uploaderName = "System Administrator",
+            uploaderRole = "ADMIN",
+            createdAt = now - 86400000L * 5,
+            updatedAt = now - 86400000L * 5,
+            isDeleted = false,
+            isSynced = true
+          ),
+          com.example.data.model.ImportantDocumentEntity(
+            docId = "DOC_CPV_SOP_02",
+            title = "Customer Physical Verification (CPV) Guidelines",
+            category = "CPV & Compliance",
+            description = "Step-by-step Standard Operating Procedure (SOP) for residential and office verification by sales field agents.",
+            fileName = "CPV_Verification_Guidelines_v2.pdf",
+            fileType = "application/pdf",
+            fileSizeBytes = 192000L,
+            fileUri = "",
+            storagePath = "",
+            uploadedBy = "12345",
+            uploaderName = "Senior Operations Mentor",
+            uploaderRole = "MENTOR",
+            createdAt = now - 86400000L * 3,
+            updatedAt = now - 86400000L * 3,
+            isDeleted = false,
+            isSynced = true
+          ),
+          com.example.data.model.ImportantDocumentEntity(
+            docId = "DOC_SALARY_CERT_03",
+            title = "Standard Salary Certificate & Pay Slip Format",
+            category = "Forms & Formats",
+            description = "Standard corporate salary certificate and HR declaration template required for salaried professionals.",
+            fileName = "Standard_Salary_Certificate_Format.pdf",
+            fileType = "application/pdf",
+            fileSizeBytes = 145000L,
+            fileUri = "",
+            storagePath = "",
+            uploadedBy = "Admin0",
+            uploaderName = "System Administrator",
+            uploaderRole = "ADMIN",
+            createdAt = now - 86400000L * 2,
+            updatedAt = now - 86400000L * 2,
+            isDeleted = false,
+            isSynced = true
+          ),
+          com.example.data.model.ImportantDocumentEntity(
+            docId = "DOC_RATES_CHART_04",
+            title = "Schedule of Charges & Product Rates Chart 2026",
+            category = "Product Guidelines",
+            description = "Updated interest rates, annual fees, card issuance charges, and reward points structure for all EBL cards.",
+            fileName = "Schedule_of_Charges_Rates_2026.pdf",
+            fileType = "application/pdf",
+            fileSizeBytes = 312000L,
+            fileUri = "",
+            storagePath = "",
+            uploadedBy = "12345",
+            uploaderName = "Senior Operations Mentor",
+            uploaderRole = "MENTOR",
+            createdAt = now - 86400000L,
+            updatedAt = now - 86400000L,
+            isDeleted = false,
+            isSynced = true
+          )
+        )
+        database.importantDocumentDao().insertDocuments(sampleDocs)
+      }
+      database.appSettingDao().insertOrUpdateSetting(
+        com.example.data.model.AppSettingEntity(
+          settingKey = "important_docs_initialized",
+          settingValue = "true",
+          updatedBy = "SYSTEM",
+          updatedAt = DateUtils.currentDhakaMillis()
         )
       )
-      database.importantDocumentDao().insertDocuments(sampleDocs)
     }
 
-    // Seed initial active customer files with serial numbers (1, 2, 3...) if table is empty
-    if (database.customerFileDao().getAllActiveFiles().isEmpty()) {
-      val now = DateUtils.currentDhakaMillis()
-      val sampleFiles = listOf(
-        com.example.data.model.CustomerFileEntity(
-          fileId = "CUST-001",
-          customerName = "Md. Kabir Hossain",
-          companyName = "Apex Footwear Ltd.",
-          officeAddress = "Gulshan-1, Dhaka",
-          mobile = "01711223344",
-          altMobile = "01811223344",
-          email = "kabir.hossain@example.com",
-          productType = "Credit Card",
-          applicationStatus = "Pending",
-          assignedRmCode = "Admin0",
-          serialNumber = "1",
-          createdAt = now - 86400000L * 2,
-          updatedAt = now - 86400000L * 2,
-          createdBy = "SYSTEM",
-          updatedBy = "SYSTEM"
-        ),
-        com.example.data.model.CustomerFileEntity(
-          fileId = "CUST-002",
-          customerName = "Tanvir Ahmed Chowdhury",
-          companyName = "Square Pharmaceuticals",
-          officeAddress = "Uttara Sector 3, Dhaka",
-          mobile = "01819556677",
-          altMobile = "01919556677",
-          email = "tanvir.ahmed@example.com",
-          productType = "Corporate Card",
-          applicationStatus = "Pending",
-          assignedRmCode = "Admin0",
-          serialNumber = "2",
-          createdAt = now - 86400000L * 1,
-          updatedAt = now - 86400000L * 1,
-          createdBy = "SYSTEM",
-          updatedBy = "SYSTEM"
-        ),
-        com.example.data.model.CustomerFileEntity(
-          fileId = "CUST-003",
-          customerName = "Nusrat Jahan",
-          companyName = "Grameenphone Ltd.",
-          officeAddress = "Bashundhara R/A, Dhaka",
-          mobile = "01912345678",
-          altMobile = "",
-          email = "nusrat.jahan@example.com",
-          productType = "Personal / Auto / Home Loan",
-          applicationStatus = "Pending",
-          assignedRmCode = "Admin0",
-          serialNumber = "3",
-          createdAt = now - 43200000L,
-          updatedAt = now - 43200000L,
-          createdBy = "SYSTEM",
-          updatedBy = "SYSTEM"
-        ),
-        com.example.data.model.CustomerFileEntity(
-          fileId = "CUST-004",
-          customerName = "Mohammad Rafiqul Islam",
-          companyName = "Beximco Ltd.",
-          officeAddress = "Dhanmondi 27, Dhaka",
-          mobile = "01712987654",
-          altMobile = "01612987654",
-          email = "rafiq.islam@example.com",
-          productType = "Credit Card Limit Enhance",
-          applicationStatus = "Pending",
-          assignedRmCode = "Admin0",
-          serialNumber = "4",
-          createdAt = now - 21600000L,
-          updatedAt = now - 21600000L,
-          createdBy = "SYSTEM",
-          updatedBy = "SYSTEM"
-        ),
-        com.example.data.model.CustomerFileEntity(
-          fileId = "CUST-005",
-          customerName = "Farhana Yasmin",
-          companyName = "Brac IT Services",
-          officeAddress = "Mohakhali, Dhaka",
-          mobile = "01611889900",
-          altMobile = "",
-          email = "farhana.yasmin@example.com",
-          productType = "New Credit Card (Salaried)",
-          applicationStatus = "Pending",
-          assignedRmCode = "Admin0",
-          serialNumber = "5",
-          createdAt = now - 10800000L,
-          updatedAt = now - 10800000L,
-          createdBy = "SYSTEM",
-          updatedBy = "SYSTEM"
-        )
-      )
-      database.customerFileDao().insertFiles(sampleFiles)
-    }
+    // User requirement: Do not keep any demo customer information (purge CUST-001..CUST-005 and SYSTEM files)
+    database.customerFileDao().purgeDemoCustomerFiles()
 
     val existingUsers = database.userDao().getAllUsers()
     if (existingUsers.isNotEmpty()) {

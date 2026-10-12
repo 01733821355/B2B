@@ -308,7 +308,7 @@ function doPost(e) {
         var evIdVal = String(curEvts[de][0] || '').trim();
         for (var m = 0; m < toDeleteEvts.length; m++) {
           var targetEv = String(toDeleteEvts[m] || '').trim();
-          if (targetEv && evIdVal === targetEv) {
+          if (targetEv && evIdVal.toLowerCase() === targetEv.toLowerCase()) {
             eventSheet.deleteRow(de + 1);
             break;
           }
@@ -319,20 +319,22 @@ function doPost(e) {
       for (var dr = curResps.length - 1; dr >= 1; dr--) {
         var rEvId = String(curResps[dr][1] || '').trim();
         for (var rm = 0; rm < toDeleteEvts.length; rm++) {
-          if (String(toDeleteEvts[rm] || '').trim() === rEvId) {
+          var targetEvR = String(toDeleteEvts[rm] || '').trim();
+          if (targetEvR && rEvId.toLowerCase() === targetEvR.toLowerCase()) {
             respSheet.deleteRow(dr + 1);
             break;
           }
         }
       }
-      // Also purge announcement messages from chat sheet
+      // Also purge announcement messages from chat sheet (Column 7 is Event ID, column 5 is Text, column 0 is ID)
       var curChats = chatSheet.getDataRange().getValues();
       for (var dc = curChats.length - 1; dc >= 1; dc--) {
-        var cEvId = String(curChats[dc][8] || '').trim();
+        var cMid = String(curChats[dc][0] || '').trim();
         var cTxt = String(curChats[dc][5] || '').trim();
+        var cEvId = String(curChats[dc][7] || '').trim();
         for (var cm = 0; cm < toDeleteEvts.length; cm++) {
-          var evTarget = String(toDeleteEvts[cm] || '').trim();
-          if (evTarget && (cEvId === evTarget || cTxt.indexOf(evTarget) >= 0)) {
+          var evTarget = String(toDeleteEvts[cm] || '').trim().toLowerCase();
+          if (evTarget && (cEvId.toLowerCase() === evTarget || cTxt.toLowerCase().indexOf(evTarget) >= 0 || cMid.toLowerCase().indexOf(evTarget) >= 0 || evTarget === ('event_' + cEvId).toLowerCase())) {
             chatSheet.deleteRow(dc + 1);
             break;
           }
@@ -340,6 +342,86 @@ function doPost(e) {
       }
       if (data.action === 'DELETE_EVENT') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Event from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Chat Message Deletions (Immediately removes Chat rows from Google Sheets)
+    if (data.action === 'DELETE_CHAT' || (data.deletedChatIds && data.deletedChatIds.length > 0)) {
+      var toDeleteChats = data.deletedChatIds || [data.chatId].filter(Boolean);
+      var curChatsD = chatSheet.getDataRange().getValues();
+      for (var dcd = curChatsD.length - 1; dcd >= 1; dcd--) {
+        var chatIdVal = String(curChatsD[dcd][0] || '').trim();
+        var chatEvId = String(curChatsD[dcd][7] || '').trim();
+        for (var mc = 0; mc < toDeleteChats.length; mc++) {
+          var targetChat = String(toDeleteChats[mc] || '').trim();
+          if (targetChat && (chatIdVal.toLowerCase() === targetChat.toLowerCase() || (chatEvId && chatEvId.toLowerCase() === targetChat.toLowerCase()) || targetChat.toLowerCase() === ('event_' + chatEvId).toLowerCase())) {
+            chatSheet.deleteRow(dcd + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_CHAT') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Chat message from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Important Document Deletions (Immediately removes Document rows from Google Sheets)
+    if (data.action === 'DELETE_DOC' || (data.deletedDocIds && data.deletedDocIds.length > 0)) {
+      var toDeleteDocs = data.deletedDocIds || [data.docId].filter(Boolean);
+      var curDocsD = docSheet.getDataRange().getValues();
+      for (var ddd = curDocsD.length - 1; ddd >= 1; ddd--) {
+        var docIdVal = String(curDocsD[ddd][0] || '').trim();
+        for (var md = 0; md < toDeleteDocs.length; md++) {
+          var targetDoc = String(toDeleteDocs[md] || '').trim();
+          if (targetDoc && docIdVal.toLowerCase() === targetDoc.toLowerCase()) {
+            docSheet.deleteRow(ddd + 1);
+            break;
+          }
+        }
+      }
+      if (data.action === 'DELETE_DOC') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Document from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Important Document Upsert (Immediately syncs new/updated document to Google Sheets)
+    if (data.action === 'UPSERT_DOC' && data.document) {
+      var docU = data.document;
+      var didU = String(docU.docId || '').trim();
+      if (didU) {
+        var curDocsU = docSheet.getDataRange().getValues();
+        var foundDocRow = 0;
+        for (var du = 1; du < curDocsU.length; du++) {
+          if (String(curDocsU[du][0] || '').trim().toLowerCase() === didU.toLowerCase()) {
+            foundDocRow = du + 1;
+            break;
+          }
+        }
+        var docRowU = [
+          didU,
+          docU.title || '',
+          docU.category || 'Policies & Circulars',
+          docU.description || '',
+          docU.fileName || '',
+          docU.fileType || 'application/pdf',
+          docU.fileSizeBytes || 1024,
+          docU.fileUri || '',
+          docU.storagePath || '',
+          docU.uploadedBy || '',
+          docU.uploaderName || '',
+          docU.uploaderRole || '',
+          docU.createdAt || '',
+          docU.updatedAt || ''
+        ];
+        if (foundDocRow > 0) {
+          docSheet.getRange(foundDocRow, 1, 1, docRowU.length).setValues([docRowU]);
+        } else {
+          docSheet.appendRow(docRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Upserted Document to sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -352,7 +434,7 @@ function doPost(e) {
         var smsIdVal = String(curSms[ds][0] || '').trim();
         for (var n = 0; n < toDeleteSms.length; n++) {
           var targetSms = String(toDeleteSms[n] || '').trim();
-          if (targetSms && smsIdVal === targetSms) {
+          if (targetSms && smsIdVal.toLowerCase() === targetSms.toLowerCase()) {
             smsSheet.deleteRow(ds + 1);
             break;
           }

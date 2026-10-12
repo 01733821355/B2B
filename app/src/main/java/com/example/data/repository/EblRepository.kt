@@ -656,6 +656,85 @@ class EblRepository(
     } catch (_: Exception) {}
   }
 
+  suspend fun syncDocumentDeletionToGoogleSheets(docId: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "DELETE_DOC")
+        put("docId", docId)
+        put("deletedDocIds", org.json.JSONArray().apply { put(docId) })
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncDocumentUpsertToGoogleSheets(doc: com.example.data.model.ImportantDocumentEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val docJson = org.json.JSONObject().apply {
+        put("docId", doc.docId)
+        put("title", doc.title)
+        put("category", doc.category)
+        put("description", doc.description)
+        put("fileName", doc.fileName)
+        put("fileType", doc.fileType)
+        put("fileSizeBytes", doc.fileSizeBytes)
+        put("fileUri", doc.fileUri)
+        put("storagePath", doc.storagePath)
+        put("uploadedBy", doc.uploadedBy)
+        put("uploaderName", doc.uploaderName)
+        put("uploaderRole", doc.uploaderRole)
+        put("createdAt", DateUtils.formatDateTime(doc.createdAt))
+        put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_DOC")
+        put("document", docJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncChatDeletionToGoogleSheets(chatId: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "DELETE_CHAT")
+        put("chatId", chatId)
+        put("deletedChatIds", org.json.JSONArray().apply { put(chatId) })
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
   suspend fun softDeleteCustomerFile(fileId: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -1719,6 +1798,20 @@ class EblRepository(
           deletedSmsIds.put(it)
         }
 
+        // Gather all deleted Important Document IDs so Google Sheets deletes them from Important_Documents sheet
+        val delDocsSetting = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
+        val deletedDocIds = org.json.JSONArray()
+        delDocsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+          deletedDocIds.put(it)
+        }
+
+        // Gather all deleted Chat IDs so Google Sheets deletes them from Chat_And_Calls sheet
+        val delChatsSetting = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
+        val deletedChatIds = org.json.JSONArray()
+        delChatsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+          deletedChatIds.put(it)
+        }
+
         // Gather all Important Documents so they are synced to Google Sheets for all RMs to view!
         val allImportantDocs = database.importantDocumentDao().getAllActiveDocuments()
         val docsArray = org.json.JSONArray()
@@ -1805,6 +1898,8 @@ class EblRepository(
           put("deletedRmCodes", deletedRmCodes)
           put("deletedEventIds", deletedEventIds)
           put("deletedSmsIds", deletedSmsIds)
+          put("deletedDocIds", deletedDocIds)
+          put("deletedChatIds", deletedChatIds)
           put("rms", rmsArray)
           put("settings", settingsArray)
           put("auditLogs", auditLogsArray)
@@ -2156,22 +2251,29 @@ class EblRepository(
   private suspend fun processSheetDocuments(sheetDocsJson: JSONArray): Int {
     var count = 0
     val now = DateUtils.currentDhakaMillis()
+    val delDocsSetting = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
+    val deletedDocIds = delDocsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+
     for (i in 0 until sheetDocsJson.length()) {
       val obj = sheetDocsJson.optJSONObject(i) ?: continue
       val docId = obj.optString("docId").trim()
-      if (docId.isBlank()) continue
+      if (docId.isBlank() || docId.uppercase() in deletedDocIds) continue
+
+      val existingDoc = database.importantDocumentDao().getDocumentById(docId)
+      if (existingDoc != null && existingDoc.isDeleted) continue
+
       val title = obj.optString("title", "Document").trim()
       val category = obj.optString("category", "Policies & Circulars").trim()
       val description = obj.optString("description", "").trim()
       val fileName = obj.optString("fileName", "$title.pdf").trim()
       val fileType = obj.optString("fileType", "application/pdf").trim()
       val fileSizeBytes = obj.optLong("fileSizeBytes", 1024L)
-      val fileUri = obj.optString("fileUri", "").trim()
-      val storagePath = obj.optString("storagePath", "").trim()
+      val fileUri = obj.optString("fileUri", "").trim().ifBlank { existingDoc?.fileUri ?: "" }
+      val storagePath = obj.optString("storagePath", "").trim().ifBlank { existingDoc?.storagePath ?: "" }
       val uploadedBy = obj.optString("uploadedBy", "ADMIN").trim()
       val uploaderName = obj.optString("uploaderName", "Bank Official").trim()
       val uploaderRole = obj.optString("uploaderRole", "ADMIN").trim()
-      val createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now
+      val createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: (existingDoc?.createdAt ?: now)
       val updatedAt = DateUtils.parseDateTime(obj.optString("updatedAt")) ?: now
 
       val entity = com.example.data.model.ImportantDocumentEntity(
@@ -2716,10 +2818,11 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.communicationDao().deleteMessage(id)
     val currentDelChats = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
-    val updatedDelChats = (currentDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + id).distinct().joinToString(",")
+    val updatedDelChats = (currentDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + id + id.uppercase() + id.lowercase()).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_chat_ids", updatedDelChats, currentUser?.rmCode ?: "SYSTEM", now)
     )
+    syncChatDeletionToGoogleSheets(id)
     CoroutineScope(Dispatchers.IO).launch {
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
@@ -2831,6 +2934,7 @@ class EblRepository(
     database.communicationDao().deleteMessagesByEventId(eventId)
     relatedMsgIds.forEach { mId ->
       database.communicationDao().deleteMessage(mId)
+      syncChatDeletionToGoogleSheets(mId)
     }
 
     // Store in persistent deleted_event_ids setting so it never gets restored
@@ -2925,6 +3029,19 @@ class EblRepository(
       )
     )
 
+    // Remove from deleted_doc_ids if previously deleted
+    val currentDelDocs = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
+    if (currentDelDocs.isNotBlank()) {
+      val remaining = currentDelDocs.split(",").map { it.trim() }.filter {
+        it.isNotBlank() && !it.equals(targetDocId, ignoreCase = true)
+      }.joinToString(",")
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("deleted_doc_ids", remaining, currentUser.rmCode, now)
+      )
+    }
+
+    // Direct synchronization of Document upsert to Google Sheets
+    syncDocumentUpsertToGoogleSheets(entity)
     CoroutineScope(Dispatchers.IO).launch {
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
@@ -2944,6 +3061,13 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.importantDocumentDao().softDeleteDocument(docId, now)
 
+    // Store in persistent deleted_doc_ids setting so it never gets restored from sheet
+    val currentDel = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
+    val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + docId + docId.uppercase() + docId.lowercase()).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_doc_ids", updatedDel, currentUser.rmCode, now)
+    )
+
     database.auditLogDao().insertLog(
       AuditLogEntity(
         logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
@@ -2956,6 +3080,8 @@ class EblRepository(
       )
     )
 
+    // Synchronize Document deletion directly to Google Sheets
+    syncDocumentDeletionToGoogleSheets(docId)
     CoroutineScope(Dispatchers.IO).launch {
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
