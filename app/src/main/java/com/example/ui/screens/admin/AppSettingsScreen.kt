@@ -312,12 +312,21 @@ fun AppSettingsScreen(
           Button(
             onClick = {
               val cleanVal = checklistPresetInput.trim()
-              viewModel.updateSetting(selectedPresetKey, cleanVal)
+              if (selectedPresetKey == "CHECKLIST_HEADER_TEMPLATE") {
+                viewModel.updateSetting("Checklist Header", cleanVal)
+                viewModel.updateSetting("CHECKLIST_HEADER_TEMPLATE", cleanVal)
+              } else if (selectedPresetKey == "CHECKLIST_REGARDS_TEMPLATE") {
+                viewModel.updateSetting("Checklist Footer", cleanVal)
+                viewModel.updateSetting("CHECKLIST_REGARDS_TEMPLATE", cleanVal)
+              } else {
+                viewModel.savePresetRow(currentPresetObj.second, cleanVal)
+                viewModel.updateSetting(selectedPresetKey, cleanVal)
+              }
               // If PENDING_DOCS_LIST was updated, keep pendingDocsInput in sync
               if (selectedPresetKey == "PENDING_DOCS_LIST") {
                 pendingDocsInput = cleanVal
               }
-              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced as a row in Universal Settings tab!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced as row in Universal Settings!", Toast.LENGTH_SHORT).show()
             },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
             modifier = Modifier.testTag("btn_save_checklist_preset")
@@ -366,19 +375,22 @@ fun AppSettingsScreen(
         confirmButton = {
           Button(
             onClick = {
+              val presetTitle = newCategoryTitleInput.trim()
               val key = if (newCategoryKeyInput.isNotBlank()) {
                 newCategoryKeyInput.trim().uppercase()
               } else {
-                "CHECKLIST_CUSTOM_" + newCategoryTitleInput.trim().replace("\\s+".toRegex(), "_").uppercase()
+                "CHECKLIST_CUSTOM_" + presetTitle.replace("\\s+".toRegex(), "_").uppercase()
               }
-              if (key.isNotBlank() && newCategoryItemsInput.isNotBlank()) {
-                viewModel.updateSetting(key, newCategoryItemsInput.trim())
+              if (presetTitle.isNotBlank() && newCategoryItemsInput.isNotBlank()) {
+                val itemsStr = newCategoryItemsInput.trim()
+                viewModel.savePresetRow(presetTitle, itemsStr)
+                viewModel.updateSetting(key, itemsStr)
                 selectedPresetKey = key
                 showAddNewCategoryDialog = false
                 newCategoryKeyInput = ""
                 newCategoryTitleInput = ""
                 newCategoryItemsInput = ""
-                Toast.makeText(context, "New category added and loaded into Universal Settings tab!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "New preset '$presetTitle' added as row in Universal Settings!", Toast.LENGTH_SHORT).show()
               }
             },
             colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)

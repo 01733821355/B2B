@@ -42,7 +42,10 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhoneInTalk
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VolumeUp
+import com.example.util.PdfReportGenerator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -106,6 +109,7 @@ fun CommunicationHubScreen(
   val messages by viewModel.teamHubMessages.collectAsState()
   val events by viewModel.teamEvents.collectAsState()
   val callState by viewModel.callState.collectAsState()
+  val appCustomName by viewModel.appCustomName.collectAsState()
 
   var messageInput by remember { mutableStateOf("") }
   var showCreateEventDialog by remember { mutableStateOf(false) }
@@ -164,6 +168,8 @@ fun CommunicationHubScreen(
     ViewSubmissionsDialog(
       event = evt,
       responses = eventResponsesList,
+      currentUser = currentUser,
+      customAppName = appCustomName,
       onDismiss = { activeViewEventSubmissions = null },
       onCopySummary = {
         val summaryText = buildString {
@@ -182,6 +188,23 @@ fun CommunicationHubScreen(
         }
         clipboardManager.setText(AnnotatedString(summaryText))
         Toast.makeText(context, "✓ ইভেন্ট ও কাস্টমার তালিকা ক্লিপবোর্ডে কপি হয়েছে!", Toast.LENGTH_SHORT).show()
+      },
+      onDownloadPdf = {
+        if (currentUser != null) {
+          try {
+            val pdfFile = PdfReportGenerator.generateEventResultPdfReport(
+              context = context,
+              event = evt,
+              responses = eventResponsesList,
+              currentUser = currentUser!!,
+              customAppName = appCustomName
+            )
+            PdfReportGenerator.shareOrViewPdf(context, pdfFile)
+            Toast.makeText(context, "✓ Event result PDF report generated & opened!", Toast.LENGTH_SHORT).show()
+          } catch (e: Exception) {
+            Toast.makeText(context, "Failed to generate PDF: ${e.message}", Toast.LENGTH_SHORT).show()
+          }
+        }
       }
     )
   }
@@ -367,19 +390,21 @@ fun CommunicationHubScreen(
       items(messages, key = { it.id }) { msg ->
         val isMine = msg.senderRmCode.equals(currentUser?.rmCode, ignoreCase = true)
 
-        if (msg.messageType == "EVENT" && msg.eventId != null) {
-          val evt = events.find { it.eventId == msg.eventId }
-          EventCardItem(
-            event = evt,
-            fallbackMessage = msg,
-            isCreator = isMine,
-            currentUser = currentUser,
-            onOpenSubmit = { targetEvt -> activeResponseEvent = targetEvt },
-            onViewSubmissions = { targetEvt -> activeViewEventSubmissions = targetEvt },
-            onDeleteEvent = { eventIdToDelete ->
-              viewModel.deleteTeamEvent(eventIdToDelete)
-            }
-          )
+        if (msg.messageType == "EVENT") {
+          val evt = if (msg.eventId != null) events.find { it.eventId.equals(msg.eventId, ignoreCase = true) } else null
+          if (evt != null) {
+            EventCardItem(
+              event = evt,
+              fallbackMessage = msg,
+              isCreator = isMine,
+              currentUser = currentUser,
+              onOpenSubmit = { targetEvt -> activeResponseEvent = targetEvt },
+              onViewSubmissions = { targetEvt -> activeViewEventSubmissions = targetEvt },
+              onDeleteEvent = { eventIdToDelete ->
+                viewModel.deleteTeamEvent(eventIdToDelete)
+              }
+            )
+          }
         } else if (msg.messageType == "CALL_LOG") {
           // Skip or display as info log
         } else {
@@ -998,9 +1023,39 @@ fun SubmitDeliveryResponseDialog(
 fun ViewSubmissionsDialog(
   event: TeamEventEntity,
   responses: List<EventResponseEntity>,
+  currentUser: UserEntity?,
+  customAppName: String = "",
   onDismiss: () -> Unit,
-  onCopySummary: () -> Unit
+  onCopySummary: () -> Unit,
+  onDownloadPdf: () -> Unit
 ) {
+  var searchQuery by remember { mutableStateOf("") }
+  val totalFiles = remember(responses) { responses.sumOf { it.filesCount } }
+
+  // Calculate total customers
+  val totalCustomers = remember(responses) {
+    responses.sumOf { r ->
+      if (r.customerEntriesJson.isNotBlank()) {
+        try {
+          org.json.JSONArray(r.customerEntriesJson).length()
+        } catch (_: Exception) { 0 }
+      } else 0
+    }
+  }
+
+  val filteredResponses = remember(responses, searchQuery) {
+    if (searchQuery.isBlank()) responses else {
+      val q = searchQuery.trim().lowercase()
+      responses.filter { r ->
+        r.rmName.lowercase().contains(q) ||
+        r.rmCode.lowercase().contains(q) ||
+        r.location.lowercase().contains(q) ||
+        r.customerEntriesJson.lowercase().contains(q) ||
+        r.remarks.lowercase().contains(q)
+      }
+    }
+  }
+
   AlertDialog(
     onDismissRequest = onDismiss,
     title = {
@@ -1009,37 +1064,116 @@ fun ViewSubmissionsDialog(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        Column {
-          Text("RM Submissions: ${event.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-          Text("Total: ${responses.size} RMs | ${responses.sumOf { it.filesCount }} Files", fontSize = 11.sp, color = Color(0xFF059669), fontWeight = FontWeight.Bold)
+        Column(modifier = Modifier.weight(1f)) {
+          Text(
+            text = "Event Results: ${event.title}",
+            fontWeight = FontWeight.Bold,
+            fontSize = 15.sp,
+            color = EblNavyDark
+          )
+          Text(
+            text = "Target Date: ${event.targetDate.ifBlank { "Not set" }} • Created by ${event.creatorName}",
+            fontSize = 10.sp,
+            color = Color.Gray
+          )
         }
-        IconButton(onClick = onCopySummary) {
-          Icon(Icons.Default.ContentCopy, contentDescription = "Copy Summary", tint = EblNavyPrimary)
+
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          OutlinedButton(
+            onClick = onDownloadPdf,
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            modifier = Modifier.testTag("btn_download_event_pdf")
+          ) {
+            Icon(Icons.Default.PictureAsPdf, contentDescription = "Download PDF", tint = Color(0xFFDC2626), modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+          }
+          Spacer(modifier = Modifier.width(4.dp))
+          IconButton(onClick = onCopySummary) {
+            Icon(Icons.Default.ContentCopy, contentDescription = "Copy Summary", tint = EblNavyPrimary)
+          }
         }
       }
     },
     text = {
       Column(modifier = Modifier.fillMaxWidth()) {
-        Text("ইভেন্ট: ${event.title}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+        // 1. KPI Statistics Overview Cards
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFEFF6FF),
+            modifier = Modifier.weight(1f)
+          ) {
+            Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+              Text("Submissions", fontSize = 9.sp, color = Color(0xFF1E40AF), fontWeight = FontWeight.Medium)
+              Text("${responses.size} RMs", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A))
+            }
+          }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFDCFCE7),
+            modifier = Modifier.weight(1f)
+          ) {
+            Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+              Text("Total Files", fontSize = 9.sp, color = Color(0xFF166534), fontWeight = FontWeight.Medium)
+              Text("$totalFiles Files", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF14532D))
+            }
+          }
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFFEF3C7),
+            modifier = Modifier.weight(1f)
+          ) {
+            Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+              Text("Customers", fontSize = 9.sp, color = Color(0xFF92400E), fontWeight = FontWeight.Medium)
+              Text("$totalCustomers Listed", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF78350F))
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // 2. Search Field
+        OutlinedTextField(
+          value = searchQuery,
+          onValueChange = { searchQuery = it },
+          placeholder = { Text("Filter by RM name, code, customer, location...", fontSize = 11.sp) },
+          leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(16.dp)) },
+          singleLine = true,
+          shape = RoundedCornerShape(8.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("input_filter_event_submissions")
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (responses.isEmpty()) {
+        // 3. Submissions Stream
+        if (filteredResponses.isEmpty()) {
           Box(
             modifier = Modifier
               .fillMaxWidth()
-              .padding(20.dp),
+              .height(200.dp),
             contentAlignment = Alignment.Center
           ) {
-            Text("এখনও কোনো RM রেসপন্স সাবমিট করেনি।", color = Color.Gray, fontSize = 12.sp)
+            Text(
+              text = if (responses.isEmpty()) "এখনও কোনো RM রেসপন্স সাবমিট করেনি।" else "কোনো রেসপন্স ফিল্টারে মিল পাওয়া যায়নি।",
+              color = Color.Gray,
+              fontSize = 12.sp
+            )
           }
         } else {
           LazyColumn(
             modifier = Modifier
               .fillMaxWidth()
-              .height(340.dp),
+              .height(300.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            items(responses, key = { it.responseId }) { r ->
+            items(filteredResponses, key = { it.responseId }) { r ->
               val customers = remember(r.customerEntriesJson) {
                 if (r.customerEntriesJson.isNotBlank()) {
                   try {
@@ -1055,34 +1189,55 @@ fun ViewSubmissionsDialog(
               }
 
               Card(
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("event_submission_item_${r.responseId}")
               ) {
                 Column(modifier = Modifier.padding(10.dp)) {
                   Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                   ) {
-                    Text("${r.rmName} (${r.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = EblNavyDark)
+                    Column {
+                      Text("${r.rmName} (${r.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = EblNavyDark)
+                      Text("Submitted: ${DateUtils.formatDateTime(r.submittedAt)}", fontSize = 9.sp, color = Color.Gray)
+                    }
                     Surface(
                       color = Color(0xFFDCFCE7),
                       shape = RoundedCornerShape(6.dp)
                     ) {
-                      Text("${r.filesCount} Files", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                      Text(
+                        "${r.filesCount} Files",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF15803D),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                      )
                     }
                   }
-                  if (r.requestedDate.isNotBlank()) {
-                    Text("তারিখ: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
-                  }
-                  if (r.location.isNotBlank()) {
-                    Text("লোকেশন: ${r.location}", fontSize = 11.sp, color = Color.DarkGray)
+
+                  if (r.requestedDate.isNotBlank() || r.location.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                      modifier = Modifier.fillMaxWidth(),
+                      horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                      if (r.requestedDate.isNotBlank()) {
+                        Text("📅 তারিখ: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
+                      }
+                      if (r.location.isNotBlank()) {
+                        Text("📍 লোকেশন: ${r.location}", fontSize = 11.sp, color = Color.DarkGray)
+                      }
+                    }
                   }
 
                   // Multiple Customers Section
                   if (customers.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Surface(
                       shape = RoundedCornerShape(6.dp),
                       color = Color(0xFFEFF6FF),
@@ -1098,7 +1253,7 @@ fun ViewSubmissionsDialog(
                   }
 
                   if (r.remarks.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text("নোট: ${r.remarks}", fontSize = 11.sp, color = Color(0xFF0369A1))
                   }
                 }
@@ -1109,8 +1264,15 @@ fun ViewSubmissionsDialog(
       }
     },
     confirmButton = {
-      Button(onClick = onCopySummary, colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)) {
-        Text("কপি করুন")
+      Button(
+        onClick = onDownloadPdf,
+        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.testTag("btn_modal_download_pdf")
+      ) {
+        Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(15.dp))
+        Spacer(modifier = Modifier.width(4.dp))
+        Text("PDF রিপোর্ট ডাউনলোড", fontSize = 12.sp)
       }
     },
     dismissButton = {

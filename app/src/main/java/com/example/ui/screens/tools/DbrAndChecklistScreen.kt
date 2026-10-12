@@ -2645,8 +2645,9 @@ fun DocumentChecklistSenderTab(
                   org.json.JSONArray(singleChecklistItems.map { it.title }).toString()
                 } else ""
 
-                // Save active preset items string
+                // Save active preset items string as row in Universal Settings
                 val activeItemsStr = singleChecklistItems.map { it.title }.joinToString("\n")
+                viewModel?.savePresetRow(selectedPreset, activeItemsStr)
                 val activePresetKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").uppercase()
                 viewModel?.updateSetting(activePresetKey, activeItemsStr)
 
@@ -2882,6 +2883,7 @@ fun DocumentChecklistSenderTab(
               if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
                 val cleanKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
                 val updatedStr = singleChecklistItems.map { it.title }.joinToString("\n")
+                viewModel?.savePresetRow(selectedPreset, updatedStr)
                 viewModel?.updateSetting(cleanKey, updatedStr)
                 viewModel?.triggerGoogleSheetsSync()
               }
@@ -3006,6 +3008,7 @@ fun DocumentChecklistSenderTab(
               viewModel?.updateSetting("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedCustom).toString())
 
               val presetKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+              viewModel?.savePresetRow(cleanName, itemsList.joinToString("\n"))
               viewModel?.updateSetting(presetKey, itemsList.joinToString("\n"))
 
               // Switch to this new preset immediately

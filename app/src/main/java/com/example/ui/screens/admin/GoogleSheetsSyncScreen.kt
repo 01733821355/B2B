@@ -314,6 +314,30 @@ function doPost(e) {
           }
         }
       }
+      // Also purge from event responses sheet
+      var curResps = respSheet.getDataRange().getValues();
+      for (var dr = curResps.length - 1; dr >= 1; dr--) {
+        var rEvId = String(curResps[dr][1] || '').trim();
+        for (var rm = 0; rm < toDeleteEvts.length; rm++) {
+          if (String(toDeleteEvts[rm] || '').trim() === rEvId) {
+            respSheet.deleteRow(dr + 1);
+            break;
+          }
+        }
+      }
+      // Also purge announcement messages from chat sheet
+      var curChats = chatSheet.getDataRange().getValues();
+      for (var dc = curChats.length - 1; dc >= 1; dc--) {
+        var cEvId = String(curChats[dc][8] || '').trim();
+        var cTxt = String(curChats[dc][5] || '').trim();
+        for (var cm = 0; cm < toDeleteEvts.length; cm++) {
+          var evTarget = String(toDeleteEvts[cm] || '').trim();
+          if (evTarget && (cEvId === evTarget || cTxt.indexOf(evTarget) >= 0)) {
+            chatSheet.deleteRow(dc + 1);
+            break;
+          }
+        }
+      }
       if (data.action === 'DELETE_EVENT') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Event from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -474,29 +498,25 @@ function doPost(e) {
       });
     }
 
-    // Upsert Universal Settings
+    // Upsert Universal Settings (1 row per preset/setting, updates in place without duplicates)
     if (data.settings && data.settings.length > 0) {
       var setExistingData = settingsSheet.getDataRange().getValues();
       var setMap = {};
       for (var s = 1; s < setExistingData.length; s++) {
-        var sKey = String(setExistingData[s][0] || '').trim();
+        var sKey = String(setExistingData[s][0] || '').trim().toLowerCase();
         if (sKey) setMap[sKey] = s + 1;
       }
       data.settings.forEach(function(st) {
         var key = String(st.settingKey || '').trim();
         if (!key) return;
+        var lookupKey = key.toLowerCase();
         var row = [key, st.settingValue || '', st.description || '', st.updatedBy || 'App', st.updatedAt || ''];
-        if (setMap[key]) {
-          var setRowIndex = setMap[key];
-          var existingSetRow = setExistingData[setRowIndex - 1];
-          if (String(existingSetRow[3] || '') === 'Manual_Sheet_Edit') {
-            // Keep manual sheet edit safe
-          } else {
-            settingsSheet.getRange(setRowIndex, 1, 1, row.length).setValues([row]);
-          }
+        if (setMap[lookupKey]) {
+          var setRowIndex = setMap[lookupKey];
+          settingsSheet.getRange(setRowIndex, 1, 1, row.length).setValues([row]);
         } else {
           settingsSheet.appendRow(row);
-          setMap[key] = settingsSheet.getLastRow();
+          setMap[lookupKey] = settingsSheet.getLastRow();
         }
       });
     }

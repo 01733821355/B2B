@@ -10,6 +10,8 @@ import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import androidx.core.content.FileProvider
 import com.example.data.model.CustomerFileEntity
+import com.example.data.model.EventResponseEntity
+import com.example.data.model.TeamEventEntity
 import com.example.data.model.UserEntity
 import java.io.File
 import java.io.FileOutputStream
@@ -200,6 +202,204 @@ object PdfReportGenerator {
   }
 
   /**
+   * Generates a formal, printable PDF Event Result & Performance Report for Admin and Mentor
+   */
+  fun generateEventResultPdfReport(
+    context: Context,
+    event: TeamEventEntity,
+    responses: List<EventResponseEntity>,
+    currentUser: UserEntity,
+    customAppName: String
+  ): File {
+    val document = PdfDocument()
+    val pageWidth = 595 // Standard A4 points (72 dpi)
+    val pageHeight = 842
+    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
+    val page = document.startPage(pageInfo)
+    val canvas: Canvas = page.canvas
+
+    val textPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 9f
+      color = Color.DKGRAY
+    }
+
+    val headerPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 15f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(10, 25, 47)
+    }
+
+    val subHeaderPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 11f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(30, 58, 138)
+    }
+
+    val tableHeaderPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 8.5f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.WHITE
+    }
+
+    val bgHeaderPaint = Paint().apply {
+      color = Color.rgb(10, 25, 47)
+    }
+
+    val alternateRowPaint = Paint().apply {
+      color = Color.rgb(245, 247, 250)
+    }
+
+    val borderPaint = Paint().apply {
+      color = Color.LTGRAY
+      strokeWidth = 0.5f
+      style = Paint.Style.STROKE
+    }
+
+    var y = 35f
+
+    // 1. Header Banner
+    canvas.drawText(customAppName.ifBlank { "RM File Management Suite" }, 30f, y, headerPaint)
+    y += 18f
+    canvas.drawText("EVENT RESULT & SUBMISSIONS REPORT", 30f, y, subHeaderPaint)
+    y += 14f
+
+    val reportTime = DateUtils.formatDateTime(DateUtils.currentDhakaMillis())
+    canvas.drawText("Report Generated: $reportTime (Dhaka Time)", 30f, y, textPaint)
+    canvas.drawText("Authorized Officer: ${currentUser.name} (${currentUser.role} - ${currentUser.rmCode})", 300f, y, textPaint)
+    y += 14f
+
+    // Divider line
+    canvas.drawLine(30f, y, pageWidth - 30f, y, borderPaint)
+    y += 14f
+
+    // 2. Event Overview Card Box
+    val cardPaint = Paint().apply {
+      color = Color.rgb(238, 242, 255)
+      style = Paint.Style.FILL
+    }
+    canvas.drawRoundRect(30f, y, pageWidth - 30f, y + 62f, 6f, 6f, cardPaint)
+    canvas.drawRoundRect(30f, y, pageWidth - 30f, y + 62f, 6f, 6f, borderPaint)
+
+    val labelPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 9.5f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(30, 58, 138)
+    }
+    val valuePaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 9f
+      color = Color.rgb(30, 41, 59)
+    }
+
+    canvas.drawText("Event Title: ${event.title}", 40f, y + 16f, labelPaint)
+    canvas.drawText("Event ID: ${event.eventId}", 40f, y + 32f, valuePaint)
+    canvas.drawText("Target Date: ${event.targetDate.ifBlank { "N/A" }}", 40f, y + 48f, valuePaint)
+
+    val totalFiles = responses.sumOf { it.filesCount }
+    canvas.drawText("Created By: ${event.creatorName} (${event.creatorRmCode})", 280f, y + 16f, valuePaint)
+    canvas.drawText("Total Submitting RMs: ${responses.size}", 280f, y + 32f, labelPaint)
+    canvas.drawText("Total Achieved Files: $totalFiles Files", 280f, y + 48f, labelPaint)
+    y += 76f
+
+    // 3. Submissions Table Header
+    canvas.drawRect(30f, y, pageWidth - 30f, y + 22f, bgHeaderPaint)
+    canvas.drawText("#", 35f, y + 14f, tableHeaderPaint)
+    canvas.drawText("RM Name (Code)", 55f, y + 14f, tableHeaderPaint)
+    canvas.drawText("Files", 175f, y + 14f, tableHeaderPaint)
+    canvas.drawText("Target Date", 215f, y + 14f, tableHeaderPaint)
+    canvas.drawText("Location", 285f, y + 14f, tableHeaderPaint)
+    canvas.drawText("Customers (Name & Phone)", 370f, y + 14f, tableHeaderPaint)
+    canvas.drawText("Remarks", 495f, y + 14f, tableHeaderPaint)
+    y += 22f
+
+    // 4. Data Rows
+    if (responses.isEmpty()) {
+      canvas.drawText("No RM submissions received yet for this event.", 40f, y + 20f, textPaint)
+      y += 35f
+    } else {
+      responses.forEachIndexed { index, resp ->
+        if (y > pageHeight - 70f) return@forEachIndexed
+
+        if (index % 2 == 1) {
+          canvas.drawRect(30f, y, pageWidth - 30f, y + 26f, alternateRowPaint)
+        }
+        canvas.drawRect(30f, y, pageWidth - 30f, y + 26f, borderPaint)
+
+        // Parse customer details preview
+        var custSummary = ""
+        if (resp.customerEntriesJson.isNotBlank()) {
+          try {
+            val arr = org.json.JSONArray(resp.customerEntriesJson)
+            val names = mutableListOf<String>()
+            for (ci in 0 until arr.length()) {
+              val co = arr.getJSONObject(ci)
+              val n = co.optString("name")
+              val m = co.optString("mobile")
+              names.add(if (m.isNotBlank()) "$n ($m)" else n)
+            }
+            custSummary = names.take(2).joinToString(", ")
+            if (names.size > 2) custSummary += " +${names.size - 2}"
+          } catch (_: Exception) {}
+        }
+        if (custSummary.isBlank()) custSummary = "-"
+
+        canvas.drawText("${index + 1}", 35f, y + 16f, textPaint)
+        val rmDisplay = "${resp.rmName.take(18)} (${resp.rmCode})"
+        canvas.drawText(rmDisplay.take(22), 55f, y + 16f, textPaint)
+        canvas.drawText("${resp.filesCount}", 180f, y + 16f, textPaint)
+        canvas.drawText(resp.requestedDate.take(12).ifBlank { "-" }, 215f, y + 16f, textPaint)
+        canvas.drawText(resp.location.take(14).ifBlank { "-" }, 285f, y + 16f, textPaint)
+        canvas.drawText(custSummary.take(22), 370f, y + 16f, textPaint)
+        canvas.drawText(resp.remarks.take(16).ifBlank { "-" }, 495f, y + 16f, textPaint)
+
+        y += 26f
+      }
+    }
+
+    // 5. Performance Summary Box at Bottom
+    y += 12f
+    if (y < pageHeight - 80f) {
+      canvas.drawLine(30f, y, pageWidth - 30f, y, borderPaint)
+      y += 16f
+      val boldSummary = Paint().apply {
+        isAntiAlias = true
+        textSize = 9.5f
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        color = Color.rgb(10, 25, 47)
+      }
+      canvas.drawText("Summary Statistics:  Participating RMs: ${responses.size}  •  Total Files Achieved: $totalFiles Files", 35f, y, boldSummary)
+      y += 14f
+      canvas.drawText("Status: ${event.status}  •  Event Description: ${event.description.take(70)}", 35f, y, textPaint)
+    }
+
+    // Footer Security Notice
+    y = pageHeight - 30f
+    val footerPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 7.5f
+      color = Color.GRAY
+    }
+    canvas.drawText("CONFIDENTIAL DOCUMENT — STRICTLY FOR INTERNAL BANKING USE — NOT FOR PUBLIC DISSEMINATION", 30f, y, footerPaint)
+    canvas.drawText("Page 1 of 1", pageWidth - 80f, y, footerPaint)
+
+    document.finishPage(page)
+
+    // Save PDF to cache directory
+    val reportsDir = File(context.cacheDir, "reports").apply { mkdirs() }
+    val reportFile = File(reportsDir, "Event_Report_${event.eventId}_${System.currentTimeMillis()}.pdf")
+    FileOutputStream(reportFile).use { out ->
+      document.writeTo(out)
+    }
+    document.close()
+    return reportFile
+  }
+
+  /**
    * Opens or shares the generated PDF file via system Android intents
    */
   fun shareOrViewPdf(context: Context, pdfFile: File) {
@@ -213,12 +413,51 @@ object PdfReportGenerator {
       Uri.fromFile(pdfFile)
     }
 
+    // Also copy to Downloads so user has a permanent offline copy on device
+    savePdfToDownloads(context, pdfFile, pdfFile.name)
+
     val intent = Intent(Intent.ACTION_SEND).apply {
       type = "application/pdf"
       putExtra(Intent.EXTRA_STREAM, uri)
-      putExtra(Intent.EXTRA_SUBJECT, "Performance Summary Report (PDF)")
+      putExtra(Intent.EXTRA_SUBJECT, "Performance / Event Summary Report (PDF)")
       addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    context.startActivity(Intent.createChooser(intent, "Open or Share PDF Report"))
+    context.startActivity(Intent.createChooser(intent, "Open or Share PDF Report").apply {
+      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    })
+  }
+
+  /**
+   * Saves a permanent copy of the PDF into device Downloads storage
+   */
+  fun savePdfToDownloads(context: Context, pdfFile: File, displayName: String): Uri? {
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        val values = android.content.ContentValues().apply {
+          put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+          put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+          put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        if (uri != null) {
+          resolver.openOutputStream(uri)?.use { out ->
+            pdfFile.inputStream().use { input ->
+              input.copyTo(out)
+            }
+          }
+          return uri
+        }
+      } else {
+        @Suppress("DEPRECATION")
+        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        downloadsDir.mkdirs()
+        val destFile = File(downloadsDir, displayName)
+        pdfFile.copyTo(destFile, overwrite = true)
+        return Uri.fromFile(destFile)
+      }
+    } catch (_: Exception) {}
+    return null
   }
 }

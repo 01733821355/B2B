@@ -43,6 +43,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RestoreFromTrash
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -82,6 +89,8 @@ fun MentorDashboardScreen(
   val allRms by viewModel.allRms.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
+  val allFiles by viewModel.allFiles.collectAsState()
+  val context = LocalContext.current
 
   var showDeletedRecordsDialog by remember { mutableStateOf(false) }
   var showEditAppNameDialog by remember { mutableStateOf(false) }
@@ -212,6 +221,37 @@ fun MentorDashboardScreen(
               Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color(0xFF67E8F9))
               Spacer(modifier = Modifier.width(4.dp))
               Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            val deletedCount = allFiles.count { it.isDeleted }
+            Button(
+              onClick = { showDeletedRecordsDialog = true },
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+              modifier = Modifier.weight(1.1f).testTag("mentor_btn_quick_recover_deleted")
+            ) {
+              Icon(Icons.Default.RestoreFromTrash, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Recover Deleted ($deletedCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            }
+
+            OutlinedButton(
+              onClick = { onNavigate(Screen.CommunicationHub) },
+              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+              modifier = Modifier.weight(1f).testTag("mentor_btn_events_hub")
+            ) {
+              Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF38BDF8))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Events & Reports", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
           }
 
@@ -662,8 +702,7 @@ fun MentorDashboardScreen(
           ) {
             Button(
               onClick = {
-                viewModel.showDeletedFilesOnly.value = true
-                onNavigate(Screen.GlobalDatabase)
+                showDeletedRecordsDialog = true
               },
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
               shape = RoundedCornerShape(8.dp),
@@ -797,5 +836,276 @@ fun MentorDashboardScreen(
         }
       }
     )
+  }
+
+  // Mentor Deleted Records Recovery Dialog
+  if (showDeletedRecordsDialog) {
+    var searchQuery by remember { mutableStateOf("") }
+    val deletedFiles = remember(allFiles) { allFiles.filter { it.isDeleted } }
+    val filteredDeleted = remember(deletedFiles, searchQuery) {
+      if (searchQuery.isBlank()) deletedFiles else {
+        val q = searchQuery.trim().lowercase()
+        deletedFiles.filter {
+          it.customerName.lowercase().contains(q) ||
+          it.fileId.lowercase().contains(q) ||
+          it.mobile.lowercase().contains(q) ||
+          it.assignedRmCode.lowercase().contains(q) ||
+          it.companyName.lowercase().contains(q)
+        }
+      }
+    }
+
+    androidx.compose.ui.window.Dialog(
+      onDismissRequest = { showDeletedRecordsDialog = false },
+      properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+      Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp,
+        modifier = Modifier
+          .fillMaxWidth(0.95f)
+          .fillMaxHeight(0.88f)
+          .testTag("mentor_deleted_records_dialog")
+      ) {
+        Column(
+          modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+        ) {
+          // Dialog Header
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Box(
+                modifier = Modifier
+                  .background(Color(0xFF7C3AED).copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                  .padding(8.dp)
+              ) {
+                Icon(
+                  Icons.Default.RestoreFromTrash,
+                  contentDescription = null,
+                  tint = Color(0xFF7C3AED),
+                  modifier = Modifier.size(22.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Text(
+                  text = "Deleted Records Recovery",
+                  fontSize = 16.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark
+                )
+                Text(
+                  text = "ডিলিট করা এন্ট্রি পুনরুদ্ধার ও শিটে রিলোড (${deletedFiles.size} records)",
+                  fontSize = 11.sp,
+                  color = Color.Gray
+                )
+              }
+            }
+
+            if (deletedFiles.isNotEmpty()) {
+              OutlinedButton(
+                onClick = {
+                  deletedFiles.forEach { file ->
+                    viewModel.restoreFile(file.fileId)
+                  }
+                  Toast.makeText(context, "✓ ${deletedFiles.size} টি এন্ট্রি সফলভাবে পুনরুদ্ধার হয়েছে!", Toast.LENGTH_SHORT).show()
+                },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                modifier = Modifier.testTag("btn_recover_all_entries")
+              ) {
+                Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF059669))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Recover All", fontSize = 11.sp, color = Color(0xFF059669), fontWeight = FontWeight.Bold)
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Search Field
+          OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Search by customer, phone, RM code...", fontSize = 12.sp) },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(18.dp)) },
+            singleLine = true,
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("input_search_deleted_records")
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+          HorizontalDivider(color = Color(0xFFE2E8F0))
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // List of Deleted Entries
+          if (filteredDeleted.isEmpty()) {
+            Box(
+              modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+              contentAlignment = Alignment.Center
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                  Icons.Default.CheckCircle,
+                  contentDescription = null,
+                  modifier = Modifier.size(48.dp),
+                  tint = Color(0xFF10B981)
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                  text = if (deletedFiles.isEmpty()) "কোনো ডিলিট করা এন্ট্রি নেই" else "কোনো মিল খুঁজে পাওয়া যায়নি",
+                  fontWeight = FontWeight.Bold,
+                  fontSize = 14.sp,
+                  color = EblNavyDark
+                )
+                Text(
+                  text = if (deletedFiles.isEmpty()) "সব ফাইল বর্তমানে সক্রিয় রয়েছে।" else "ভিন্ন কোনো নাম বা ফোন নম্বর দিয়ে চেষ্টা করুন।",
+                  fontSize = 11.sp,
+                  color = Color.Gray
+                )
+              }
+            }
+          } else {
+            LazyColumn(
+              modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              items(filteredDeleted, key = { it.fileId }) { file ->
+                Card(
+                  shape = RoundedCornerShape(10.dp),
+                  colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("deleted_file_item_${file.fileId}")
+                ) {
+                  Row(
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                      Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                          text = file.customerName,
+                          fontWeight = FontWeight.Bold,
+                          fontSize = 14.sp,
+                          color = EblNavyDark
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                          color = Color(0xFFFEE2E2),
+                          shape = RoundedCornerShape(4.dp)
+                        ) {
+                          Text(
+                            text = "DELETED",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFDC2626),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                          )
+                        }
+                      }
+
+                      Spacer(modifier = Modifier.height(2.dp))
+                      Text(
+                        text = "File ID: ${file.fileId} ${if (file.ccNumber.isNotBlank()) "• CC: ${file.ccNumber}" else ""} • ${file.productType}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF475569)
+                      )
+
+                      if (file.companyName.isNotBlank()) {
+                        Text(
+                          text = "Company: ${file.companyName}",
+                          fontSize = 11.sp,
+                          color = Color.Gray
+                        )
+                      }
+
+                      Text(
+                        text = "Mobile: ${file.mobile} • Assigned RM: ${file.assignedRmCode}",
+                        fontSize = 11.sp,
+                        color = Color(0xFF334155)
+                      )
+
+                      Text(
+                        text = "Deleted by: ${file.updatedBy} • ${DateUtils.formatDateTime(file.updatedAt)}",
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                      )
+                    }
+
+                    Spacer(modifier = Modifier.width(10.dp))
+
+                    // Individual Recover Button
+                    Button(
+                      onClick = {
+                        viewModel.restoreFile(file.fileId)
+                        Toast.makeText(
+                          context,
+                          "✓ '${file.customerName}' পুনরুদ্ধার হয়েছে ও শিটে লোড হয়েছে!",
+                          Toast.LENGTH_SHORT
+                        ).show()
+                      },
+                      colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                      shape = RoundedCornerShape(8.dp),
+                      contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                      modifier = Modifier.testTag("btn_recover_file_${file.fileId}")
+                    ) {
+                      Icon(
+                        Icons.Default.Restore,
+                        contentDescription = "Recover",
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                      )
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Text(
+                        text = "Recover",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+          HorizontalDivider(color = Color(0xFFE2E8F0))
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // Bottom Close Action
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End
+          ) {
+            Button(
+              onClick = { showDeletedRecordsDialog = false },
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_close_deleted_dialog")
+            ) {
+              Text("Close (বন্ধ করুন)")
+            }
+          }
+        }
+      }
+    }
   }
 }

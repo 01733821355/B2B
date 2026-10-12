@@ -159,6 +159,8 @@ class EblRepository(
   suspend fun deleteSms(id: Long) = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
     val now = DateUtils.currentDhakaMillis()
+    val allSms = database.smsNotificationDao().getAllSms()
+    val targetSms = allSms.find { it.id == id }
     database.smsNotificationDao().deleteSms(id)
 
     // Store in persistent deleted_sms_ids setting
@@ -167,6 +169,16 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
     )
+
+    // Track signature so it never regenerates on Google Sheets sync
+    if (targetSms != null && !targetSms.fileId.isNullOrBlank()) {
+      val currentSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
+      val sig = "${targetSms.fileId}_${targetSms.recipientRmCode}_${targetSms.actionType}"
+      val updatedSigs = (currentSigs.split(",").filter { it.isNotBlank() } + sig).distinct().joinToString(",")
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("deleted_sms_signatures", updatedSigs, currentUser?.rmCode ?: "SYSTEM", now)
+      )
+    }
 
     // Synchronize SMS deletion directly to Google Sheets
     syncSmsDeletionToGoogleSheets(id.toString())
@@ -208,11 +220,47 @@ class EblRepository(
   }
 
   suspend fun clearSmsForRm(rmCode: String) = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    val allSms = database.smsNotificationDao().getAllSms().filter { it.recipientRmCode.equals(rmCode, ignoreCase = true) }
+    val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
+    val newDelIds = allSms.map { it.id.toString() }
+    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + newDelIds).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
+    )
+
+    val currentSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
+    val newSigs = allSms.filter { !it.fileId.isNullOrBlank() }.map { "${it.fileId}_${it.recipientRmCode}_${it.actionType}" }
+    val updatedSigs = (currentSigs.split(",").filter { it.isNotBlank() } + newSigs).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_sms_signatures", updatedSigs, currentUser?.rmCode ?: "SYSTEM", now)
+    )
+
     database.smsNotificationDao().clearSmsForRm(rmCode)
+    applicationScope.launch { triggerGoogleSheetsSync() }
   }
 
   suspend fun clearAllSms() = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    val allSms = database.smsNotificationDao().getAllSms()
+    val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
+    val newDelIds = allSms.map { it.id.toString() }
+    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + newDelIds).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
+    )
+
+    val currentSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
+    val newSigs = allSms.filter { !it.fileId.isNullOrBlank() }.map { "${it.fileId}_${it.recipientRmCode}_${it.actionType}" }
+    val updatedSigs = (currentSigs.split(",").filter { it.isNotBlank() } + newSigs).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_sms_signatures", updatedSigs, currentUser?.rmCode ?: "SYSTEM", now)
+    )
+
     database.smsNotificationDao().clearAllSms()
+    applicationScope.launch { triggerGoogleSheetsSync() }
   }
 
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?> {
@@ -696,6 +744,14 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().restoreFile(fileId, currentUser.rmCode, now)
 
+    // Remove from persistent deleted_file_ids setting so it pushes back to active sheet!
+    val currentDel = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue ?: ""
+    val toRemove = setOf(fileId, file?.ccNumber ?: "").filter { it.isNotBlank() }
+    val updatedDel = currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() && it !in toRemove }.joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_file_ids", updatedDel, currentUser.rmCode, now)
+    )
+
     if (file != null && (currentUser.role == "MENTOR" || currentUser.role == "ADMIN") && file.assignedRmCode != currentUser.rmCode) {
       val targetRmUser = database.userDao().getUser(file.assignedRmCode)
       val rmMobile = targetRmUser?.mobile ?: ""
@@ -1098,8 +1154,16 @@ class EblRepository(
       return@withContext Result.failure(Exception("Only Admin / Mentor can configure universal checklist templates."))
     }
     val now = DateUtils.currentDhakaMillis()
+    // 1st column: "Checklist Header", 2nd column: header text
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("Checklist Header", headerTemplate, currentUser.rmCode, now)
+    )
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("CHECKLIST_HEADER_TEMPLATE", headerTemplate, currentUser.rmCode, now)
+    )
+    // 1st column: "Checklist Footer", 2nd column: footer text
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("Checklist Footer", regardsTemplate, currentUser.rmCode, now)
     )
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("CHECKLIST_REGARDS_TEMPLATE", regardsTemplate, currentUser.rmCode, now)
@@ -1112,6 +1176,36 @@ class EblRepository(
     if (enhancementDocsJson.isNotBlank()) {
       database.appSettingDao().insertOrUpdateSetting(
         AppSettingEntity("CHECKLIST_ENHANCE_DOCS", enhancementDocsJson, currentUser.rmCode, now)
+      )
+    }
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  suspend fun savePresetRow(presetName: String, itemsText: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin / Mentor can configure presets."))
+    }
+    val cleanName = presetName.trim()
+    if (cleanName.isBlank()) return@withContext Result.failure(Exception("Preset name cannot be blank."))
+    val now = DateUtils.currentDhakaMillis()
+
+    // 1st column: cleanName (e.g. Preset Name), 2nd column: itemsText
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(cleanName, itemsText.trim(), currentUser.rmCode, now)
+    )
+    val legacyKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(legacyKey, itemsText.trim(), currentUser.rmCode, now)
+    )
+    val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
+    val customList = existingCustom.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    if (cleanName !in customList) {
+      val updatedList = (customList + cleanName).distinct().joinToString(",")
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedList, currentUser.rmCode, now)
       )
     }
     applicationScope.launch { triggerGoogleSheetsSync() }
@@ -1485,13 +1579,51 @@ class EblRepository(
         }
 
         val settingsArray = org.json.JSONArray()
+        val hasHdrKey = allSettings.any { it.settingKey == "Checklist Header" }
+        val hasFtrKey = allSettings.any { it.settingKey == "Checklist Footer" }
+
         for (s in allSettings) {
+          // Filter internal sync states and redundant duplicate legacy keys
+          if (s.settingKey.startsWith("deleted_") || s.settingKey.startsWith("RM_PASS_UPDATED_AT_")) continue
+          if (s.settingKey == "CHECKLIST_HEADER_TEMPLATE" && hasHdrKey) continue
+          if (s.settingKey == "CHECKLIST_REGARDS_TEMPLATE" && hasFtrKey) continue
+          // If a clean preset name exists, omit the uppercase underscore legacy alias
+          if (s.settingKey.startsWith("CHECKLIST_PRESET_")) {
+            val friendly = s.settingKey.removePrefix("CHECKLIST_PRESET_").replace("_", " ")
+            if (allSettings.any { it.settingKey.equals(friendly, ignoreCase = true) }) continue
+          }
+
           settingsArray.put(JSONObject().apply {
             put("settingKey", s.settingKey)
             put("settingValue", s.settingValue)
             put("description", "Universal Setting - Auto-synced across all mobile apps")
             put("updatedBy", s.updatedBy)
             put("updatedAt", DateUtils.formatDateTime(s.updatedAt))
+          })
+        }
+
+        // Guarantee Checklist Header row exists
+        if (!hasHdrKey) {
+          val hdr = allSettings.find { it.settingKey == "CHECKLIST_HEADER_TEMPLATE" }?.settingValue
+            ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
+          settingsArray.put(JSONObject().apply {
+            put("settingKey", "Checklist Header")
+            put("settingValue", hdr)
+            put("description", "Universal Checklist Header Greeting")
+            put("updatedBy", "App")
+            put("updatedAt", DateUtils.formatDateTime(DateUtils.currentDhakaMillis()))
+          })
+        }
+        // Guarantee Checklist Footer row exists
+        if (!hasFtrKey) {
+          val ftr = allSettings.find { it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" }?.settingValue
+            ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
+          settingsArray.put(JSONObject().apply {
+            put("settingKey", "Checklist Footer")
+            put("settingValue", ftr)
+            put("description", "Universal Checklist Footer / Regards")
+            put("updatedBy", "App")
+            put("updatedAt", DateUtils.formatDateTime(DateUtils.currentDhakaMillis()))
           })
         }
 
@@ -1981,6 +2113,40 @@ class EblRepository(
             updatedAt = now
           )
         )
+
+        // Keep Checklist Header & Footer synchronized between friendly and legacy keys
+        if (key.equals("Checklist Header", true)) {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("CHECKLIST_HEADER_TEMPLATE", value, "GoogleSheets_Universal", now)
+          )
+        } else if (key.equals("CHECKLIST_HEADER_TEMPLATE", true)) {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("Checklist Header", value, "GoogleSheets_Universal", now)
+          )
+        } else if (key.equals("Checklist Footer", true)) {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("CHECKLIST_REGARDS_TEMPLATE", value, "GoogleSheets_Universal", now)
+          )
+        } else if (key.equals("CHECKLIST_REGARDS_TEMPLATE", true)) {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("Checklist Footer", value, "GoogleSheets_Universal", now)
+          )
+        } else if (!key.startsWith("CHECKLIST_") && !key.startsWith("deleted_") && !key.startsWith("app_") &&
+                   !key.startsWith("PRODUCT_") && !key.startsWith("WEEK_") && !key.startsWith("REPORTING_") && !key.startsWith("PENDING_")) {
+          // It's a custom preset row from Google Sheets!
+          val legacyKey = "CHECKLIST_PRESET_" + key.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity(legacyKey, value, "GoogleSheets_Universal", now)
+          )
+          val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
+          val customList = existingCustom.split(",").map { it.trim() }.filter { it.isNotBlank() }
+          if (key !in customList) {
+            val updatedList = (customList + key).distinct().joinToString(",")
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedList, "GoogleSheets_Universal", now)
+            )
+          }
+        }
         updatedCount++
       }
     }
@@ -2035,10 +2201,18 @@ class EblRepository(
   private suspend fun processSheetChatMessages(sheetChatJson: JSONArray): Int {
     var count = 0
     val now = DateUtils.currentDhakaMillis()
+    val delEventsSetting = database.appSettingDao().getSetting("deleted_event_ids")?.settingValue ?: ""
+    val deletedEventIds = delEventsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+    val delChatsSetting = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
+    val deletedChatIds = delChatsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+
     for (i in 0 until sheetChatJson.length()) {
       val obj = sheetChatJson.optJSONObject(i) ?: continue
       val id = obj.optString("id").trim()
-      if (id.isBlank()) continue
+      if (id.isBlank() || id in deletedChatIds || id.uppercase() in deletedChatIds) continue
+      val eventId = obj.optString("eventId").trim().ifBlank { null }
+      if (eventId != null && (eventId in deletedEventIds || eventId.uppercase() in deletedEventIds || "EVENT_$eventId" in deletedChatIds || "EVENT_${eventId.uppercase()}" in deletedChatIds)) continue
+
       val senderRmCode = obj.optString("senderRmCode").trim()
       val senderName = obj.optString("senderName", "Officer").trim()
       val senderRole = obj.optString("senderRole", "RM").trim()
@@ -2046,7 +2220,8 @@ class EblRepository(
       val messageText = obj.optString("messageText").trim()
       val timestamp = DateUtils.parseDateTime(obj.optString("timestamp")) ?: now
       val messageType = obj.optString("messageType", "TEXT").trim()
-      val eventId = obj.optString("eventId").trim().ifBlank { null }
+
+      if (messageType == "EVENT" && deletedEventIds.any { dEvt -> messageText.contains(dEvt, ignoreCase = true) }) continue
 
       val entity = com.example.data.model.ChatMessageEntity(
         id = id,
@@ -2069,12 +2244,12 @@ class EblRepository(
     var count = 0
     val now = DateUtils.currentDhakaMillis()
     val delEventsSetting = database.appSettingDao().getSetting("deleted_event_ids")?.settingValue ?: ""
-    val deletedEventIds = delEventsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+    val deletedEventIds = delEventsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
 
     for (i in 0 until sheetEventsJson.length()) {
       val obj = sheetEventsJson.optJSONObject(i) ?: continue
       val eventId = obj.optString("eventId").trim()
-      if (eventId.isBlank() || eventId in deletedEventIds) continue
+      if (eventId.isBlank() || eventId.uppercase() in deletedEventIds) continue
       val title = obj.optString("title").trim()
       val description = obj.optString("description").trim()
       val creatorRmCode = obj.optString("creatorRmCode").trim()
@@ -2104,11 +2279,15 @@ class EblRepository(
   private suspend fun processSheetEventResponses(sheetResponsesJson: JSONArray): Int {
     var count = 0
     val now = DateUtils.currentDhakaMillis()
+    val delEventsSetting = database.appSettingDao().getSetting("deleted_event_ids")?.settingValue ?: ""
+    val deletedEventIds = delEventsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+
     for (i in 0 until sheetResponsesJson.length()) {
       val obj = sheetResponsesJson.optJSONObject(i) ?: continue
       val respId = obj.optString("responseId").trim()
       if (respId.isBlank()) continue
       val eventId = obj.optString("eventId").trim()
+      if (eventId.isBlank() || eventId.uppercase() in deletedEventIds) continue
       val rmCode = obj.optString("rmCode").trim()
       val rmName = obj.optString("rmName").trim()
       val filesCount = obj.optInt("filesCount", 1)
@@ -2215,16 +2394,20 @@ class EblRepository(
         val remarksVal = if (obj.has("remarks")) obj.optString("remarks", existing.remarks) else existing.remarks
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", existing.serialNumber))
 
-        val hasStatusChanged = existing.applicationStatus != appStatus
-        val hasActiveChanged = existing.activeStatus != activeStatus
-        val hasRemarksChanged = existing.remarks != remarksVal || existing.cpvRemarks != cpvRemarks
-        val hasDocsChanged = existing.pendingDocuments != pendingDocs
-        val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber != ccNumber
-        val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.equals(rmCode, ignoreCase = true)
-        val hasSlChanged = sheetSl.isNotBlank() && existing.serialNumber != sheetSl
-        val hasDetailsChanged = existing.customerName != custName || existing.companyName != compName ||
-                                existing.mobile != mob || existing.email != em || existing.officeAddress != offAddr ||
-                                existing.productType != prodType || existing.cpvStatus != cpvStatus
+        val hasStatusChanged = !existing.applicationStatus.trim().equals(appStatus.trim(), ignoreCase = true)
+        val isBothActive = (existing.activeStatus.equals("Y", true) || existing.activeStatus.equals("ACTIVE", true)) &&
+                           (activeStatus.equals("Y", true) || activeStatus.equals("ACTIVE", true))
+        val isBothInactive = (existing.activeStatus.equals("N", true) || existing.activeStatus.equals("INACTIVE", true)) &&
+                             (activeStatus.equals("N", true) || activeStatus.equals("INACTIVE", true))
+        val hasActiveChanged = !isBothActive && !isBothInactive && !existing.activeStatus.trim().equals(activeStatus.trim(), ignoreCase = true)
+        val hasRemarksChanged = existing.remarks.trim() != remarksVal.trim() || existing.cpvRemarks.trim() != cpvRemarks.trim()
+        val hasDocsChanged = existing.pendingDocuments.trim() != pendingDocs.trim()
+        val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber.trim() != ccNumber.trim()
+        val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.trim().equals(rmCode.trim(), ignoreCase = true)
+        val hasSlChanged = sheetSl.isNotBlank() && existing.serialNumber.trim() != sheetSl.trim()
+        val hasDetailsChanged = existing.customerName.trim() != custName.trim() || existing.companyName.trim() != compName.trim() ||
+                                existing.mobile.trim() != mob.trim() || existing.email.trim() != em.trim() || existing.officeAddress.trim() != offAddr.trim() ||
+                                existing.productType.trim() != prodType.trim() || existing.cpvStatus.trim() != cpvStatus.trim()
 
         if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged) {
           val updated = existing.copy(
@@ -2250,8 +2433,8 @@ class EblRepository(
           database.customerFileDao().updateFile(updated)
           updatedCount++
 
-          // Send SMS to RM if status, active, remarks, documents, or RM assignment were changed from Google Sheets!
-          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged) {
+          // Send SMS to RM ONLY when status, active, remarks, documents, or RM assignment were changed via a manual sheet edit!
+          if (isManualSheetEdit && (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged)) {
             val targetRmUser = database.userDao().getUser(updated.assignedRmCode)
             val rmMobile = targetRmUser?.mobile ?: ""
             val rmName = targetRmUser?.name ?: updated.assignedRmCode
@@ -2265,29 +2448,43 @@ class EblRepository(
             }
             val smsMessage = "[EBL Alert] Dear $rmName (${updated.assignedRmCode}), customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
 
-            var smsStatus = "DELIVERED"
-            if (context != null && rmMobile.isNotBlank()) {
-              val sentHardware = SmsService.sendSms(context, rmMobile, smsMessage)
-              smsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
-            }
+            val allRecentSms = database.smsNotificationDao().getAllSms()
+            val deletedSmsSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
+            val deletedSmsSigSet = deletedSmsSigs.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            val currentSig = "${existing.fileId}_${updated.assignedRmCode}_${if (hasRmChanged) "TRANSFER" else "UPDATE"}"
+            val isDeletedByUser = currentSig in deletedSmsSigSet
 
-            database.smsNotificationDao().insertSms(
-              SmsNotificationEntity(
-                recipientRmCode = updated.assignedRmCode,
-                recipientMobile = rmMobile,
-                recipientName = rmName,
-                triggeredByRole = "SHEETS_SYNC",
-                triggeredByCode = "Admin_Sheets",
-                actionType = if (hasRmChanged) "TRANSFER" else "UPDATE",
-                targetType = "CUSTOMER_FILE",
-                fileId = existing.fileId,
-                customerName = existing.customerName,
-                messageText = smsMessage,
-                sentTimestamp = now,
-                status = smsStatus,
-                isRead = false
+            val isDuplicate = isDeletedByUser || allRecentSms.any {
+              it.recipientRmCode == updated.assignedRmCode &&
+              it.fileId == existing.fileId &&
+              it.actionType == (if (hasRmChanged) "TRANSFER" else "UPDATE") &&
+              (now - it.sentTimestamp < 86400000L)
+            }
+            if (!isDuplicate) {
+              var smsStatus = "DELIVERED"
+              if (context != null && rmMobile.isNotBlank()) {
+                val sentHardware = SmsService.sendSms(context, rmMobile, smsMessage)
+                smsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
+              }
+
+              database.smsNotificationDao().insertSms(
+                SmsNotificationEntity(
+                  recipientRmCode = updated.assignedRmCode,
+                  recipientMobile = rmMobile,
+                  recipientName = rmName,
+                  triggeredByRole = "SHEETS_SYNC",
+                  triggeredByCode = "Admin_Sheets",
+                  actionType = if (hasRmChanged) "TRANSFER" else "UPDATE",
+                  targetType = "CUSTOMER_FILE",
+                  fileId = existing.fileId,
+                  customerName = existing.customerName,
+                  messageText = smsMessage,
+                  sentTimestamp = now,
+                  status = smsStatus,
+                  isRead = false
+                )
               )
-            )
+            }
 
             context?.let { ctx ->
               NotificationHelper.sendRmFileUpdateNotification(
@@ -2515,7 +2712,14 @@ class EblRepository(
   }
 
   suspend fun deleteChatMessage(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
     database.communicationDao().deleteMessage(id)
+    val currentDelChats = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
+    val updatedDelChats = (currentDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + id).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_chat_ids", updatedDelChats, currentUser?.rmCode ?: "SYSTEM", now)
+    )
     CoroutineScope(Dispatchers.IO).launch {
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
@@ -2610,23 +2814,37 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
     val event = database.communicationDao().getEventById(eventId)
-      ?: return@withContext Result.failure(Exception("Event not found."))
 
     // User requirement: Admin and Mentor have permission to create and delete events
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR" && !event.creatorRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR" && event != null && !event.creatorRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
       return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can delete team events."))
     }
 
     val now = DateUtils.currentDhakaMillis()
+    val allMsgs = database.communicationDao().getAllMessages()
+    val relatedMsgIds = allMsgs.filter {
+      it.eventId == eventId || (it.messageType == "EVENT" && it.messageText.contains(eventId)) || (event != null && it.messageText.contains(event.title))
+    }.map { it.id }
+
     database.communicationDao().deleteEvent(eventId)
     database.communicationDao().deleteResponsesForEvent(eventId)
     database.communicationDao().deleteMessagesByEventId(eventId)
+    relatedMsgIds.forEach { mId ->
+      database.communicationDao().deleteMessage(mId)
+    }
 
     // Store in persistent deleted_event_ids setting so it never gets restored
     val currentDel = database.appSettingDao().getSetting("deleted_event_ids")?.settingValue ?: ""
-    val updatedDel = if (currentDel.isBlank()) eventId else "$currentDel,$eventId"
+    val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + eventId + eventId.uppercase() + eventId.lowercase()).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_event_ids", updatedDel, currentUser.rmCode, now)
+    )
+
+    // Also track in deleted_chat_ids so event announcement message is never restored from sheet
+    val currentDelChats = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
+    val updatedDelChats = (currentDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + "EVENT_$eventId" + relatedMsgIds).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_chat_ids", updatedDelChats, currentUser.rmCode, now)
     )
 
     // Synchronize Event deletion directly to Google Sheets

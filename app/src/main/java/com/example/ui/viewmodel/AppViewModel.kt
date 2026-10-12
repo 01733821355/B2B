@@ -1045,6 +1045,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun savePresetRow(presetName: String, itemsText: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.savePresetRow(presetName, itemsText)
+      res.onSuccess {
+        _uiMessage.emit("Preset '$presetName' saved as row in Universal Settings & synced!")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to save preset: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
+  }
+
   fun updateRmProfile(
     rmCode: String,
     name: String,
