@@ -37,7 +37,19 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.draw.clip
 import com.example.data.model.FileAttachmentEntity
 import com.example.ui.common.AttachmentViewerDialog
-import com.example.util.AttachmentHelper
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PaddingValues
+import android.widget.Toast
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -96,6 +108,87 @@ fun CustomerDetailDialog(
   var newSelectedRmCode by remember(file.assignedRmCode) { mutableStateOf(file.assignedRmCode) }
   var isSubmittingReassign by remember { mutableStateOf(false) }
 
+  val scope = rememberCoroutineScope()
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val availableStatuses by viewModel.fileStatusOptions.collectAsState()
+  var showUpdateStatusDialog by remember { mutableStateOf(false) }
+  var selectedNewStatus by remember(file.applicationStatus) { mutableStateOf(file.applicationStatus) }
+  var statusRemarksInput by remember(file.remarks) { mutableStateOf(file.remarks) }
+  var isUpdatingStatus by remember { mutableStateOf(false) }
+
+  var showAddAttachmentModal by remember { mutableStateOf(false) }
+  var selectedUploadCategory by remember { mutableStateOf("Status Update Photo") }
+  var uploadDocNameInput by remember { mutableStateOf("") }
+  var isProcessingAttachmentUpload by remember { mutableStateOf(false) }
+
+  val photoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      scope.launch {
+        isProcessingAttachmentUpload = true
+        try {
+          val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+            context = context,
+            sourceUri = uri,
+            preferredCategory = selectedUploadCategory
+          )
+          val docName = if (uploadDocNameInput.isBlank()) saved.fileName else uploadDocNameInput.trim()
+          viewModel.addAttachment(
+            fileId = file.fileId,
+            category = selectedUploadCategory,
+            fileName = docName,
+            fileType = saved.fileType,
+            fileSizeBytes = saved.fileSizeBytes,
+            fileUri = saved.fileUri,
+            localFile = saved.file
+          )
+          Toast.makeText(context, "Photo uploaded to Google Drive successfully!", Toast.LENGTH_SHORT).show()
+          showAddAttachmentModal = false
+          uploadDocNameInput = ""
+        } catch (e: Exception) {
+          Toast.makeText(context, "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+          isProcessingAttachmentUpload = false
+        }
+      }
+    }
+  }
+
+  val docPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument()
+  ) { uri ->
+    if (uri != null) {
+      scope.launch {
+        isProcessingAttachmentUpload = true
+        try {
+          val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+            context = context,
+            sourceUri = uri,
+            preferredCategory = selectedUploadCategory
+          )
+          val docName = if (uploadDocNameInput.isBlank()) saved.fileName else uploadDocNameInput.trim()
+          viewModel.addAttachment(
+            fileId = file.fileId,
+            category = selectedUploadCategory,
+            fileName = docName,
+            fileType = saved.fileType,
+            fileSizeBytes = saved.fileSizeBytes,
+            fileUri = saved.fileUri,
+            localFile = saved.file
+          )
+          Toast.makeText(context, "Document uploaded to Google Drive successfully!", Toast.LENGTH_SHORT).show()
+          showAddAttachmentModal = false
+          uploadDocNameInput = ""
+        } catch (e: Exception) {
+          Toast.makeText(context, "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+          isProcessingAttachmentUpload = false
+        }
+      }
+    }
+  }
+
   Dialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -144,15 +237,39 @@ fun CustomerDetailDialog(
             .weight(1f, fill = false)
             .verticalScroll(scrollState)
         ) {
-          // Status row
+          // Status row with quick Edit Status affordance
           Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            ApplicationStatusBadge(file.applicationStatus)
-            ActiveStatusBadge(file.activeStatus)
-            CpvStatusBadge(file.cpvStatus)
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              ApplicationStatusBadge(file.applicationStatus)
+              ActiveStatusBadge(file.activeStatus)
+              CpvStatusBadge(file.cpvStatus)
+            }
+
+            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == file.assignedRmCode) {
+              OutlinedButton(
+                onClick = {
+                  selectedNewStatus = file.applicationStatus
+                  statusRemarksInput = file.remarks
+                  showUpdateStatusDialog = true
+                },
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier
+                  .height(28.dp)
+                  .testTag("btn_change_file_status")
+              ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("Edit Status", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+              }
+            }
           }
 
           Spacer(modifier = Modifier.height(14.dp))
@@ -266,8 +383,25 @@ fun CustomerDetailDialog(
 
           Spacer(modifier = Modifier.height(14.dp))
 
-          // Attachments
-          Text("Attached Documents (${attachments.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+          // Attachments Header with Drive Upload Action
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text("Attached Documents & Photos (${attachments.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Button(
+              onClick = { showAddAttachmentModal = true },
+              shape = RoundedCornerShape(6.dp),
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+              modifier = Modifier.height(28.dp).testTag("btn_detail_add_attachment")
+            ) {
+              Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(13.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Upload Photo / Doc", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            }
+          }
           Spacer(modifier = Modifier.height(6.dp))
           if (attachments.isEmpty()) {
             Text("No attachments uploaded for this file.", fontSize = 12.sp, color = Color.Gray)
@@ -499,6 +633,206 @@ fun CustomerDetailDialog(
           enabled = !isSubmittingReassign
         ) {
           Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Update Status Dialog (Admin, Mentor & RM)
+  if (showUpdateStatusDialog) {
+    AlertDialog(
+      onDismissRequest = { if (!isUpdatingStatus) showUpdateStatusDialog = false },
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Edit, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Update Application Status", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        }
+      },
+      text = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Text(
+            text = "Customer: ${file.customerName} (${file.fileId})",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = EblNavyDark
+          )
+          Spacer(modifier = Modifier.height(6.dp))
+          Text("Select new status (Synced to Google Sheets for all RMs):", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Status Chips selection
+          FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            availableStatuses.forEach { st ->
+              val isSelected = selectedNewStatus.equals(st, ignoreCase = true)
+              FilterChip(
+                selected = isSelected,
+                onClick = { selectedNewStatus = st },
+                label = { Text(st, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = EblNavyPrimary,
+                  selectedLabelColor = Color.White
+                )
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+          OutlinedTextField(
+            value = statusRemarksInput,
+            onValueChange = { statusRemarksInput = it },
+            label = { Text("Admin Remarks / Update Notes", fontSize = 11.sp) },
+            placeholder = { Text("e.g. Approved with condition, verified by admin...", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 3
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            isUpdatingStatus = true
+            viewModel.updateFileStatus(file.fileId, selectedNewStatus, statusRemarksInput) { success, err ->
+              isUpdatingStatus = false
+              if (success) {
+                showUpdateStatusDialog = false
+                Toast.makeText(context, "Status updated to '$selectedNewStatus' and synced!", Toast.LENGTH_SHORT).show()
+                onDismiss()
+              } else {
+                Toast.makeText(context, err ?: "Failed to update status", Toast.LENGTH_SHORT).show()
+              }
+            }
+          },
+          enabled = !isUpdatingStatus,
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          if (isUpdatingStatus) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+            Spacer(modifier = Modifier.width(6.dp))
+          }
+          Text("Update Status & Sync")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(
+          onClick = { showUpdateStatusDialog = false },
+          enabled = !isUpdatingStatus
+        ) {
+          Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Upload Photo / Document Modal to Google Drive
+  if (showAddAttachmentModal) {
+    val categories = listOf("Status Update Photo", "CPV Photo", "NID", "Salary Certificate", "Cheque Leaf", "Other Document")
+    AlertDialog(
+      onDismissRequest = { if (!isProcessingAttachmentUpload) showAddAttachmentModal = false },
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(22.dp))
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("Upload Photo / Doc to Drive", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+      },
+      text = {
+        Column(modifier = Modifier.fillMaxWidth()) {
+          Text(
+            text = "Files are saved to your Google Drive folder so all officers and admins can immediately view them.",
+            fontSize = 11.sp,
+            color = Color.Gray
+          )
+          Spacer(modifier = Modifier.height(10.dp))
+
+          Text("Category:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(4.dp))
+          FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            categories.forEach { cat ->
+              val isSel = selectedUploadCategory == cat
+              FilterChip(
+                selected = isSel,
+                onClick = { selectedUploadCategory = cat },
+                label = { Text(cat, fontSize = 10.sp) },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = EblNavyPrimary,
+                  selectedLabelColor = Color.White
+                )
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+          OutlinedTextField(
+            value = uploadDocNameInput,
+            onValueChange = { uploadDocNameInput = it },
+            label = { Text("Note / Custom Name (Optional)", fontSize = 11.sp) },
+            placeholder = { Text("e.g. Salary_PaySlip_June.pdf", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+          )
+
+          if (isProcessingAttachmentUpload) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = EblNavyPrimary)
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Uploading file to Google Drive...", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Medium)
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            Button(
+              onClick = {
+                photoPickerLauncher.launch(
+                  androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+              },
+              enabled = !isProcessingAttachmentUpload,
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.weight(1f).height(38.dp)
+            ) {
+              Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Pick Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+
+            Button(
+              onClick = {
+                docPickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+              },
+              enabled = !isProcessingAttachmentUpload,
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.weight(1f).height(38.dp)
+            ) {
+              Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Pick Doc / PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
+      },
+      confirmButton = {},
+      dismissButton = {
+        OutlinedButton(
+          onClick = { showAddAttachmentModal = false },
+          enabled = !isProcessingAttachmentUpload
+        ) {
+          Text("Close")
         }
       }
     )

@@ -184,6 +184,39 @@ object ExcelReportGenerator {
     })
   }
 
+  /**
+   * Saves a permanent copy of the Excel spreadsheet into device Downloads storage
+   */
+  fun saveExcelToDownloads(context: Context, excelFile: File, displayName: String): Uri? {
+    try {
+      if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+        val values = android.content.ContentValues().apply {
+          put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+          put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/vnd.ms-excel")
+          put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+        }
+        val resolver = context.contentResolver
+        val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+        if (uri != null) {
+          resolver.openOutputStream(uri)?.use { out ->
+            excelFile.inputStream().use { input ->
+              input.copyTo(out)
+            }
+          }
+          return uri
+        }
+      } else {
+        @Suppress("DEPRECATION")
+        val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+        downloadsDir.mkdirs()
+        val destFile = File(downloadsDir, displayName)
+        excelFile.copyTo(destFile, overwrite = true)
+        return Uri.fromFile(destFile)
+      }
+    } catch (_: Exception) {}
+    return null
+  }
+
   private fun escapeXml(text: String): String {
     return text.replace("&", "&amp;")
       .replace("<", "&lt;")

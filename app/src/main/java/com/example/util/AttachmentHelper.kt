@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -14,13 +15,16 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.util.Base64
 import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.model.FileAttachmentEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 
 data class SavedAttachmentResult(
@@ -118,14 +122,46 @@ object AttachmentHelper {
     )
   }
 
+  fun getGoogleDriveThumbnailUrl(url: String): String {
+    if (!url.startsWith("http")) return url
+    val fileId = extractGoogleDriveFileId(url)
+    return if (fileId != null) {
+      "https://drive.google.com/thumbnail?id=$fileId&sz=w1200"
+    } else {
+      url
+    }
+  }
+
+  fun getGoogleDriveDownloadUrl(url: String): String {
+    if (!url.startsWith("http")) return url
+    val fileId = extractGoogleDriveFileId(url)
+    return if (fileId != null) {
+      "https://drive.google.com/uc?export=download&id=$fileId"
+    } else {
+      url
+    }
+  }
+
+  fun extractGoogleDriveFileId(url: String): String? {
+    if (!url.startsWith("http")) return null
+    val regex1 = Regex("/d/([a-zA-Z0-9_-]+)")
+    val match1 = regex1.find(url)
+    if (match1 != null) return match1.groupValues[1]
+
+    val regex2 = Regex("[?&]id=([a-zA-Z0-9_-]+)")
+    val match2 = regex2.find(url)
+    if (match2 != null) return match2.groupValues[1]
+
+    return null
+  }
+
   /**
    * Resolves a guaranteed local File for the given attachment entity.
-   * If the file does not exist locally (e.g. synced record or sample), creates a valid,
-   * readable fallback file so open/view/download ALWAYS succeeds.
+   * If remote, returns cached file if available, otherwise safely downloads or generates fallback.
    */
   fun resolveFile(context: Context, attachment: FileAttachmentEntity): File {
     // 1. Direct storagePath check
-    if (attachment.storagePath.isNotBlank()) {
+    if (attachment.storagePath.isNotBlank() && !attachment.storagePath.startsWith("http")) {
       val f = File(attachment.storagePath)
       if (f.exists() && f.length() > 0) return f
     }
@@ -151,6 +187,27 @@ object AttachmentHelper {
       } catch (_: Exception) {}
     }
 
+    // 3.5. Try cached file from remote Google Drive URL
+    if (attachment.fileUri.startsWith("http://") || attachment.fileUri.startsWith("https://")) {
+      val remoteCache = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
+      if (remoteCache.exists() && remoteCache.length() > 0) {
+        return remoteCache
+      }
+
+      // If running on a worker thread (not main UI thread), download directly
+      if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
+        val downloaded = downloadRemoteFileSync(attachment.fileUri, remoteCache)
+        if (downloaded && remoteCache.exists() && remoteCache.length() > 0) {
+          return remoteCache
+        }
+      } else {
+        // Asynchronously schedule background download so it's ready for future calls
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+          downloadRemoteFileSync(attachment.fileUri, remoteCache)
+        }
+      }
+    }
+
     // 4. Generate guaranteed valid sample file for viewing & downloading
     val targetFile = File(attachDir, "EBL_${attachment.attachmentId}_${attachment.fileName}")
     if (attachment.fileType.contains("pdf", ignoreCase = true) || attachment.fileName.endsWith(".pdf", ignoreCase = true)) {
@@ -161,12 +218,82 @@ object AttachmentHelper {
     return targetFile
   }
 
+  suspend fun resolveFileAsync(context: Context, attachment: FileAttachmentEntity): File =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+      val attachDir = File(context.filesDir, "attachments").apply { mkdirs() }
+      if (attachment.storagePath.isNotBlank() && !attachment.storagePath.startsWith("http")) {
+        val f = File(attachment.storagePath)
+        if (f.exists() && f.length() > 0) return@withContext f
+      }
+
+      val remoteCache = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
+      if (remoteCache.exists() && remoteCache.length() > 0) {
+        return@withContext remoteCache
+      }
+
+      if (attachment.fileUri.startsWith("http://") || attachment.fileUri.startsWith("https://")) {
+        val ok = downloadRemoteFileSync(attachment.fileUri, remoteCache)
+        if (ok && remoteCache.exists() && remoteCache.length() > 0) {
+          return@withContext remoteCache
+        }
+      }
+
+      return@withContext resolveFile(context, attachment)
+    }
+
+  private fun downloadRemoteFileSync(urlStr: String, destFile: File): Boolean {
+    return try {
+      val targetUrl = getGoogleDriveDownloadUrl(urlStr)
+      val url = java.net.URL(targetUrl)
+      val conn = url.openConnection() as java.net.HttpURLConnection
+      conn.connectTimeout = 12000
+      conn.readTimeout = 25000
+      conn.instanceFollowRedirects = true
+      conn.setRequestProperty("User-Agent", "Mozilla/5.0 EBLSuiteApp/1.0")
+
+      var responseCode = conn.responseCode
+      var finalConn = conn
+      // Handle redirect if needed
+      if (responseCode == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
+          responseCode == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
+          responseCode == java.net.HttpURLConnection.HTTP_SEE_OTHER) {
+        val newUrl = conn.getHeaderField("Location")
+        if (!newUrl.isNullOrBlank()) {
+          finalConn = java.net.URL(newUrl).openConnection() as java.net.HttpURLConnection
+          finalConn.connectTimeout = 12000
+          finalConn.readTimeout = 25000
+          finalConn.setRequestProperty("User-Agent", "Mozilla/5.0 EBLSuiteApp/1.0")
+          responseCode = finalConn.responseCode
+        }
+      }
+
+      if (responseCode in 200..299) {
+        finalConn.inputStream.use { input ->
+          FileOutputStream(destFile).use { output -> input.copyTo(output) }
+        }
+        destFile.exists() && destFile.length() > 0
+      } else {
+        false
+      }
+    } catch (_: Exception) {
+      false
+    }
+  }
+
   /**
    * Opens the attachment using external system viewer (Adobe, Drive, Photos, etc.)
    */
   fun viewAttachment(context: Context, attachment: FileAttachmentEntity) {
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+      val file = resolveFileAsync(context, attachment)
+      kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        viewAttachmentWithFile(context, file, attachment)
+      }
+    }
+  }
+
+  fun viewAttachmentWithFile(context: Context, file: File, attachment: FileAttachmentEntity) {
     try {
-      val file = resolveFile(context, attachment)
       val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
       val mime = attachment.fileType.ifBlank {
         if (file.name.endsWith(".pdf", ignoreCase = true)) "application/pdf" else "image/*"
@@ -186,68 +313,72 @@ object AttachmentHelper {
       Toast.makeText(context, "Direct open failed, opening share menu...", Toast.LENGTH_SHORT).show()
       shareAttachment(context, attachment)
     }
-  }
-
-  /**
-   * Downloads and saves the attachment into the device's public Downloads directory.
-   */
   fun downloadAttachment(context: Context, attachment: FileAttachmentEntity): Boolean {
-    return try {
-      val sourceFile = resolveFile(context, attachment)
-      val fileName = attachment.fileName.ifBlank { "Document_${System.currentTimeMillis()}" }
-      val mime = attachment.fileType.ifBlank { "application/octet-stream" }
-
-      var success = false
-
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        val values = ContentValues().apply {
-          put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-          put(MediaStore.MediaColumns.MIME_TYPE, mime)
-          put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/EBL_Documents")
-          put(MediaStore.MediaColumns.IS_PENDING, 1)
-        }
-
-        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-        if (uri != null) {
-          context.contentResolver.openOutputStream(uri)?.use { out ->
-            sourceFile.inputStream().use { input -> input.copyTo(out) }
-          }
-          values.clear()
-          values.put(MediaStore.MediaColumns.IS_PENDING, 0)
-          context.contentResolver.update(uri, values, null, null)
-          success = true
-        }
-      }
-
-      // Fallback for pre-Q or if MediaStore insert returned null
-      if (!success) {
-        val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val eblFolder = File(publicDownloads, "EBL_Documents").apply { mkdirs() }
-        val destFile = File(eblFolder, fileName)
-        sourceFile.inputStream().use { input ->
-          FileOutputStream(destFile).use { output -> input.copyTo(output) }
-        }
-        success = destFile.exists() && destFile.length() > 0
-      }
-
-      Toast.makeText(
-        context,
-        "ডকুমেন্ট ডাউনলোড সফল হয়েছে!\nফাইল: $fileName\nপাথ: Downloads/EBL_Documents",
-        Toast.LENGTH_LONG
-      ).show()
-
-      true
-    } catch (e: Exception) {
-      e.printStackTrace()
-      Toast.makeText(
-        context,
-        "ডাউনলোডে সমস্যা হয়েছে। ফাইলটি শেয়ার অপশন দিয়ে সেভ করতে পারেন।",
-        Toast.LENGTH_LONG
-      ).show()
-      shareAttachment(context, attachment)
-      false
+    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+      downloadAttachmentAsync(context, attachment)
     }
+    return true
   }
+
+  suspend fun downloadAttachmentAsync(context: Context, attachment: FileAttachmentEntity): Boolean =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+      try {
+        val sourceFile = resolveFileAsync(context, attachment)
+        val fileName = attachment.fileName.ifBlank { "Document_${System.currentTimeMillis()}" }
+        val mime = attachment.fileType.ifBlank { "application/octet-stream" }
+
+        var success = false
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+          val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/EBL_Documents")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+          }
+
+          val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+          if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+              sourceFile.inputStream().use { input -> input.copyTo(out) }
+            }
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            context.contentResolver.update(uri, values, null, null)
+            success = true
+          }
+        }
+
+        if (!success) {
+          val publicDownloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+          val eblFolder = File(publicDownloads, "EBL_Documents").apply { mkdirs() }
+          val destFile = File(eblFolder, fileName)
+          sourceFile.inputStream().use { input ->
+            FileOutputStream(destFile).use { output -> input.copyTo(output) }
+          }
+          success = destFile.exists() && destFile.length() > 0
+        }
+
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+          Toast.makeText(
+            context,
+            "ডকুমেন্ট ডাউনলোড সফল হয়েছে!\nফাইল: $fileName\nপাথ: Downloads/EBL_Documents",
+            Toast.LENGTH_LONG
+          ).show()
+        }
+        true
+      } catch (e: Exception) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+          Toast.makeText(
+            context,
+            "ডাউনলোডে সমস্যা হয়েছে। ফাইলটি শেয়ার অপশন দিয়ে সেভ করতে পারেন।",
+            Toast.LENGTH_LONG
+          ).show()
+          shareAttachment(context, attachment)
+        }
+        false
+      }
+
 
   /**
    * Shares the attachment with any installed app (WhatsApp, Gmail, Drive, etc.)
@@ -408,6 +539,61 @@ object AttachmentHelper {
       }
     } catch (e: Exception) {
       e.printStackTrace()
+    }
+  }
+
+  /**
+   * Encodes a local file to Base64 for Google Drive / Google Sheets uploading.
+   * If it's an image, downscales to maxDimension (e.g. 1600px) and compresses to JPEG 85%
+   * to ensure rapid transmission. For PDFs/docs up to 10MB, reads raw bytes.
+   */
+  fun fileToBase64(file: File, maxDimension: Int = 1600): String? {
+    if (!file.exists() || file.length() == 0L) return null
+    return try {
+      val nameLower = file.name.lowercase()
+      val isImage = listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { nameLower.endsWith(it) }
+
+      if (isImage) {
+        val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(file.absolutePath, boundsOptions)
+
+        var sampleSize = 1
+        var w = boundsOptions.outWidth
+        var h = boundsOptions.outHeight
+        while (w > maxDimension || h > maxDimension) {
+          sampleSize *= 2
+          w /= 2
+          h /= 2
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        val bmp = BitmapFactory.decodeFile(file.absolutePath, decodeOptions) ?: return null
+
+        val finalBmp = if (bmp.width > maxDimension || bmp.height > maxDimension) {
+          val ratio = bmp.width.toFloat() / bmp.height.toFloat()
+          val targetW: Int
+          val targetH: Int
+          if (bmp.width > bmp.height) {
+            targetW = maxDimension
+            targetH = (maxDimension / ratio).toInt().coerceAtLeast(1)
+          } else {
+            targetH = maxDimension
+            targetW = (maxDimension * ratio).toInt().coerceAtLeast(1)
+          }
+          Bitmap.createScaledBitmap(bmp, targetW, targetH, true)
+        } else bmp
+
+        val baos = ByteArrayOutputStream()
+        finalBmp.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+        Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+      } else {
+        if (file.length() > 10 * 1024 * 1024) return null // Max 10MB for documents
+        val bytes = file.readBytes()
+        Base64.encodeToString(bytes, Base64.NO_WRAP)
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+      null
     }
   }
 }

@@ -218,7 +218,7 @@ fun AttachmentViewerDialog(
             ) {
               AsyncImage(
                 model = ImageRequest.Builder(context)
-                  .data(resolvedFile)
+                  .data(if (attachment.fileUri.startsWith("http")) AttachmentHelper.getGoogleDriveThumbnailUrl(attachment.fileUri) else resolvedFile)
                   .crossfade(true)
                   .build(),
                 contentDescription = attachment.fileName,

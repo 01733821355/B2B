@@ -14,7 +14,8 @@ import {
   Trash2,
   Eye,
   X,
-  FileText
+  FileText,
+  Download
 } from 'lucide-react';
 
 interface CustomerFileListProps {
@@ -77,6 +78,33 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
     storageService.addAuditLog('FILE_EXPUNGE', `Permanently deleted file ${file.fileId}`, file.fileId, file.assignedRmCode);
     setFiles(updated);
     setFileToDelete(null);
+  };
+
+  const exportPdf = () => {
+    window.print();
+  };
+
+  const exportExcel = () => {
+    const headers = ['File ID', 'Customer Name', 'Company Name', 'Mobile', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM', 'Remarks'];
+    const rows = filteredFiles.map(f => [
+      `"${f.fileId}"`,
+      `"${f.customerName.replace(/"/g, '""')}"`,
+      `"${(f.companyName || '').replace(/"/g, '""')}"`,
+      `"${f.mobile}"`,
+      `"${f.productType}"`,
+      `"${f.applicationStatus}"`,
+      `"${f.activeStatus}"`,
+      `"${f.assignedRmCode}"`,
+      `"${(f.remarks || '').replace(/"/g, '""')}"`
+    ]);
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `EBL_Customer_Files_Report_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Filtered files according to user role and search criteria
@@ -199,14 +227,9 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
             className="px-2.5 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700"
           >
             <option value="All">Status: All</option>
-            <option value="Collected">Collected</option>
-            <option value="Submitted">Submitted</option>
-            <option value="Approved">Approved</option>
-            <option value="Declined">Declined</option>
-            <option value="Query">Query</option>
-            <option value="Return to Source">Return to Source</option>
-            <option value="Condition">Condition</option>
-            <option value="STC">STC</option>
+            {storageService.getFileStatuses().map(st => (
+              <option key={st} value={st}>{st}</option>
+            ))}
           </select>
 
           <select

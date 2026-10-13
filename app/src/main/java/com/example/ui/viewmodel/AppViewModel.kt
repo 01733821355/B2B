@@ -92,6 +92,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val appCustomName: StateFlow<String> = eblRepository.getAppCustomNameFlow()
     .stateIn(viewModelScope, SharingStarted.Eagerly, "RM File Management Suite")
 
+  val fileStatusOptions: StateFlow<List<String>> = eblRepository.getFileStatusOptionsFlow()
+    .stateIn(
+      viewModelScope,
+      SharingStarted.WhileSubscribed(5000),
+      listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+    )
+
   private val _currentScreen = MutableStateFlow<Screen>(Screen.Login)
   val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
@@ -113,7 +120,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         authPrefs.edit().putString("last_logged_rm_code", dbLastRm).apply()
       }
     }
+
+    // Automatically synchronize with Google Sheets on application launch
+    // Ensures fresh installs and re-opened sessions immediately pull latest cloud data
+    viewModelScope.launch {
+      delay(800)
+      try {
+        eblRepository.triggerGoogleSheetsSync()
+      } catch (_: Exception) {}
+    }
   }
+
+  // Application & File Status Options flow (Admin customizable, dynamically visible to all RMs)
+  val applicationStatusOptions: StateFlow<List<String>> = eblRepository.getFileStatusOptionsFlow()
+    .stateIn(
+      viewModelScope,
+      SharingStarted.WhileSubscribed(5000),
+      listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+    )
 
   // Navigation backstack support
   private val screenBackstack = mutableListOf<Screen>()
@@ -1140,18 +1164,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun updateFileStatusOptions(newStatuses: String, onDone: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.updateFileStatusOptions(newStatuses)
+      res.onSuccess {
+        _uiMessage.emit("Application status categories updated universally.")
+        onDone(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to update status categories: ${err.message}")
+        onDone(false, err.message)
+      }
+    }
+  }
+
+  fun updateFileStatus(
+    fileId: String,
+    newStatus: String,
+    newRemarks: String? = null,
+    onDone: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.updateFileStatus(fileId, newStatus, newRemarks)
+      res.onSuccess {
+        _uiMessage.emit("Customer file status updated to '$newStatus'.")
+        onDone(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to update status: ${err.message}")
+        onDone(false, err.message)
+      }
+    }
+  }
+
   fun addAttachment(
     fileId: String,
     category: String,
     fileName: String,
     fileType: String,
     fileSizeBytes: Long,
-    fileUri: String
+    fileUri: String,
+    localFile: java.io.File? = null
   ) {
     viewModelScope.launch {
-      val res = eblRepository.addAttachment(fileId, category, fileName, fileType, fileSizeBytes, fileUri)
+      val res = eblRepository.addAttachment(fileId, category, fileName, fileType, fileSizeBytes, fileUri, localFile)
       res.onSuccess {
-        _uiMessage.emit("Attachment '$fileName' added.")
+        _uiMessage.emit("Attachment '$fileName' saved & uploaded to Drive.")
       }.onFailure { err ->
         _uiMessage.emit("Failed to add attachment: ${err.message}")
       }

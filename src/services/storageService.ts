@@ -364,7 +364,9 @@ class StorageService {
         isSynced: true
       }
     ];
-    localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(sampleFiles));
+    if (!localStorage.getItem(STORAGE_KEY_FILES)) {
+      localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify([]));
+    }
 
     // 3. Attachments
     const sampleAttachments: FileAttachment[] = [
@@ -405,7 +407,9 @@ class StorageService {
         uploadedAt: threeDaysAgo
       }
     ];
-    localStorage.setItem(STORAGE_KEY_ATTACHMENTS, JSON.stringify(sampleAttachments));
+    if (!localStorage.getItem(STORAGE_KEY_ATTACHMENTS)) {
+      localStorage.setItem(STORAGE_KEY_ATTACHMENTS, JSON.stringify([]));
+    }
 
     // 4. Audit Logs
     const sampleLogs: AuditLog[] = [
@@ -459,6 +463,12 @@ class StorageService {
         settingValue: 'SATURDAY',
         updatedBy: 'SYSTEM',
         updatedAt: now
+      },
+      {
+        settingKey: 'FILE_STATUSES_LIST',
+        settingValue: 'Collected, Submitted, Analyst Receive, Approved, Declined, Query, Return to Source, Condition, STC',
+        updatedBy: 'SYSTEM',
+        updatedAt: now
       }
     ];
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(sampleSettings));
@@ -508,6 +518,24 @@ class StorageService {
   saveCustomerFiles(files: CustomerFile[]): void {
     localStorage.setItem(STORAGE_KEY_FILES, JSON.stringify(files));
     this.updatePendingCount();
+  }
+
+  deleteCustomerFile(fileId: string): void {
+    const files = this.getCustomerFiles();
+    const updated = files.map(f => f.fileId === fileId ? { ...f, isDeleted: true, isSynced: false, updatedAt: Date.now() } : f);
+    this.saveCustomerFiles(updated);
+    this.addAuditLog('FILE_DELETE', `Deleted customer file ${fileId}`, fileId);
+  }
+
+  updateCustomerFile(updatedFile: CustomerFile): void {
+    const files = this.getCustomerFiles();
+    const idx = files.findIndex(f => f.fileId === updatedFile.fileId);
+    if (idx >= 0) {
+      files[idx] = { ...updatedFile, updatedAt: Date.now(), isSynced: false };
+    } else {
+      files.unshift({ ...updatedFile, createdAt: Date.now(), updatedAt: Date.now(), isSynced: false });
+    }
+    this.saveCustomerFiles(files);
   }
 
   // Attachments
@@ -566,6 +594,15 @@ class StorageService {
     }
     localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(settings));
     this.addAuditLog('SETTING_UPDATE', `Updated setting '${key}'`);
+  }
+
+  getFileStatuses(): string[] {
+    const settings = this.getSettings();
+    const found = settings.find(s => s.settingKey === 'FILE_STATUSES_LIST');
+    if (found && found.settingValue) {
+      return found.settingValue.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return ['Collected', 'Submitted', 'Analyst Receive', 'Approved', 'Declined', 'Query', 'Return to Source', 'Condition', 'STC'];
   }
 
   // Sync Status

@@ -18,6 +18,9 @@ interface FileAttachmentDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertAttachment(attachment: FileAttachmentEntity)
 
+  @Query("SELECT * FROM file_attachments WHERE attachmentId = :attachmentId LIMIT 1")
+  suspend fun getAttachmentById(attachmentId: String): FileAttachmentEntity?
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertAttachments(attachments: List<FileAttachmentEntity>)
 
@@ -26,4 +29,7 @@ interface FileAttachmentDao {
 
   @Query("SELECT * FROM file_attachments ORDER BY uploadedAt DESC")
   suspend fun getAllAttachments(): List<FileAttachmentEntity>
+
+  @Query("UPDATE file_attachments SET fileUri = :fileUri, storagePath = :storagePath WHERE attachmentId = :attachmentId")
+  suspend fun updateAttachmentUri(attachmentId: String, fileUri: String, storagePath: String)
 }

@@ -50,17 +50,8 @@ export const CustomerFileForm: React.FC<CustomerFileFormProps> = ({
   const productOptions = ['Credit Card', 'B2B', 'Corporate Card', 'Split', 'Limit Enhancement'];
   const [productType, setProductType] = useState('Credit Card');
 
-  const statusOptions: ApplicationStatus[] = [
-    'Collected',
-    'Submitted',
-    'Approved',
-    'Declined',
-    'Query',
-    'Return to Source',
-    'Condition',
-    'STC'
-  ];
-  const [applicationStatus, setApplicationStatus] = useState<ApplicationStatus>('Collected');
+  const statusOptions = storageService.getFileStatuses();
+  const [applicationStatus, setApplicationStatus] = useState<string>(statusOptions[0] || 'Collected');
 
   const activeOptions: ActiveStatus[] = ['N', 'Y', 'C'];
   const [activeStatus, setActiveStatus] = useState<ActiveStatus>('N');

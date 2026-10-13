@@ -677,6 +677,52 @@ class EblRepository(
     } catch (_: Exception) {}
   }
 
+  suspend fun uploadFileToGoogleDrive(
+    file: java.io.File,
+    fileName: String,
+    fileType: String
+  ): Result<String> = withContext(Dispatchers.IO) {
+    try {
+      val base64 = com.example.util.AttachmentHelper.fileToBase64(file)
+        ?: return@withContext Result.failure(Exception("Failed to encode file for upload."))
+
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: com.example.data.model.SyncStatusEntity()
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) {
+        return@withContext Result.failure(Exception("Google Apps Script URL is invalid."))
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPLOAD_FILE_TO_DRIVE")
+        put("fileBase64", base64)
+        put("fileName", fileName)
+        put("fileType", fileType)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      val respStr = httpClient.newCall(request).execute().use { resp ->
+        resp.body?.string().orEmpty()
+      }
+
+      val respJson = org.json.JSONObject(respStr)
+      if (respJson.optString("status").equals("SUCCESS", ignoreCase = true)) {
+        val fileUrl = respJson.optString("fileUrl").ifBlank { respJson.optString("driveUrl") }
+        if (fileUrl.isNotBlank()) {
+          return@withContext Result.success(fileUrl)
+        }
+      }
+      val err = respJson.optString("message", "Unknown error uploading to Drive")
+      Result.failure(Exception(err))
+    } catch (e: Exception) {
+      Result.failure(e)
+    }
+  }
+
   suspend fun syncDocumentUpsertToGoogleSheets(doc: com.example.data.model.ImportantDocumentEntity): Unit = withContext(Dispatchers.IO) {
     try {
       val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
@@ -700,6 +746,16 @@ class EblRepository(
         put("uploaderRole", doc.uploaderRole)
         put("createdAt", DateUtils.formatDateTime(doc.createdAt))
         put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
+
+        if (doc.storagePath.isNotBlank()) {
+          val localF = java.io.File(doc.storagePath)
+          if (localF.exists() && localF.length() > 0) {
+            val b64 = com.example.util.AttachmentHelper.fileToBase64(localF)
+            if (b64 != null) {
+              put("fileBase64", b64)
+            }
+          }
+        }
       }
 
       val payload = org.json.JSONObject().apply {
@@ -710,7 +766,19 @@ class EblRepository(
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
-      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+      val respStr = httpClient.newCall(request).execute().use { resp -> resp.body?.string().orEmpty() }
+      if (respStr.isNotBlank()) {
+        try {
+          val rj = org.json.JSONObject(respStr)
+          val returnedUri = rj.optString("fileUri")
+          val returnedStorage = rj.optString("storagePath")
+          if (returnedUri.startsWith("http")) {
+            database.importantDocumentDao().updateDocument(
+              doc.copy(fileUri = returnedUri, storagePath = returnedStorage.ifBlank { returnedUri })
+            )
+          }
+        } catch (_: Exception) {}
+      }
     } catch (_: Exception) {}
   }
 
@@ -935,7 +1003,8 @@ class EblRepository(
     fileName: String,
     fileType: String,
     fileSizeBytes: Long,
-    fileUri: String
+    fileUri: String,
+    localFile: java.io.File? = null
   ): Result<FileAttachmentEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -943,20 +1012,41 @@ class EblRepository(
     val attachmentId = "ATT-${SecurityUtils.generateUniqueId().take(8)}"
     val now = DateUtils.currentDhakaMillis()
 
+    var finalFileUri = fileUri
+    var finalStoragePath = if (localFile != null && localFile.exists()) localFile.absolutePath else "files/${currentUser.rmCode}/$fileId/$fileName"
+
+    // If a physical file is provided, upload directly to Google Drive so ALL users on other devices can see it!
+    val targetFile = localFile
+      ?: (if (fileUri.isNotBlank() && !fileUri.startsWith("http")) java.io.File(fileUri) else null)
+      ?: (if (finalStoragePath.isNotBlank() && !finalStoragePath.startsWith("http")) java.io.File(finalStoragePath) else null)
+    if (targetFile != null && targetFile.exists() && targetFile.length() > 0) {
+      try {
+        val driveRes = uploadFileToGoogleDrive(targetFile, fileName, fileType)
+        if (driveRes.isSuccess) {
+          val driveUrl = driveRes.getOrNull()
+          if (!driveUrl.isNullOrBlank()) {
+            finalFileUri = driveUrl
+            finalStoragePath = driveUrl
+          }
+        }
+      } catch (_: Exception) {}
+    }
+
     val attachment = FileAttachmentEntity(
       attachmentId = attachmentId,
       fileId = fileId,
       category = category,
       fileName = fileName,
       fileType = fileType,
-      storagePath = "files/${currentUser.rmCode}/$fileId/$fileName",
-      fileUri = fileUri,
+      storagePath = finalStoragePath,
+      fileUri = finalFileUri,
       fileSizeBytes = fileSizeBytes,
       uploadedBy = currentUser.rmCode,
       uploadedAt = now
     )
 
     database.fileAttachmentDao().insertAttachment(attachment)
+    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(attachment)
   }
 
@@ -1573,6 +1663,146 @@ class EblRepository(
     Result.success(Unit)
   }
 
+  // -------------------------------------------------------------
+  // File & Application Statuses Management (Admin customizable, visible to all RMs)
+  // -------------------------------------------------------------
+  fun getFileStatusOptionsFlow(): Flow<List<String>> {
+    return database.appSettingDao().getSettingFlow("FILE_STATUSES_LIST").map { setting ->
+      val raw = setting?.settingValue
+      if (!raw.isNullOrBlank()) {
+        raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+      } else {
+        listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+      }
+    }
+  }
+
+  suspend fun getFileStatusOptions(): List<String> = withContext(Dispatchers.IO) {
+    val setting = database.appSettingDao().getSetting("FILE_STATUSES_LIST")
+    val raw = setting?.settingValue
+    if (!raw.isNullOrBlank()) {
+      raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    } else {
+      listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+    }
+  }
+
+  suspend fun updateFileStatusOptions(newStatuses: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    if (currentUser?.role != "ADMIN") {
+      return@withContext Result.failure(Exception("Only Central Administrators can modify application status categories."))
+    }
+    val clean = newStatuses.split(",")
+      .map { it.trim() }
+      .filter { it.isNotBlank() }
+      .joinToString(", ")
+    val now = DateUtils.currentDhakaMillis()
+    val finalVal = clean.ifBlank {
+      "Collected, Submitted, Analyst Receive, Approved, Declined, Query, Return to Source, Condition, STC"
+    }
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = "FILE_STATUSES_LIST",
+        settingValue = finalVal,
+        updatedBy = currentUser.rmCode,
+        updatedAt = now
+      )
+    )
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
+  suspend fun updateFileStatus(
+    fileId: String,
+    newStatus: String,
+    newRemarks: String? = null
+  ): Result<CustomerFileEntity> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+
+    val existing = database.customerFileDao().getFileById(fileId)
+      ?: database.customerFileDao().getFileByAnyId(fileId)
+      ?: return@withContext Result.failure(Exception("Customer file not found."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR" && !existing.assignedRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
+      return@withContext Result.failure(Exception("Access Denied: Only Administrator or Mentor can update file status."))
+    }
+
+    val now = DateUtils.currentDhakaMillis()
+    val updatedRemarks = if (!newRemarks.isNullOrBlank()) newRemarks.trim() else existing.remarks
+    val updated = existing.copy(
+      applicationStatus = newStatus.trim(),
+      remarks = updatedRemarks,
+      updatedAt = now,
+      updatedBy = currentUser.rmCode,
+      isSynced = false
+    )
+
+    database.customerFileDao().updateFile(updated)
+
+    // Audit log
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "UPDATE_STATUS",
+        fileId = existing.fileId,
+        details = "Status updated from '${existing.applicationStatus}' to '$newStatus' by ${currentUser.role} (${currentUser.name})",
+        timestamp = now
+      )
+    )
+
+    // Send SMS Notification to assigned RM so RM is immediately informed!
+    val targetRmUser = database.userDao().getUser(updated.assignedRmCode)
+    val rmMobile = targetRmUser?.mobile ?: ""
+    val rmName = targetRmUser?.name ?: updated.assignedRmCode
+    val formattedTime = DateUtils.formatDateTime(now)
+    val smsMessage = "[EBL Alert] Dear $rmName (${updated.assignedRmCode}), your customer file ${updated.fileId} ('${updated.customerName}') status was updated to '$newStatus' by ${currentUser.role} (${currentUser.name}). Notes: ${updatedRemarks.take(40)}. Time: $formattedTime."
+
+    var smsStatus = "DELIVERED"
+    if (context != null && rmMobile.isNotBlank()) {
+      val sent = SmsService.sendSms(context, rmMobile, smsMessage)
+      smsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+    }
+
+    database.smsNotificationDao().insertSms(
+      SmsNotificationEntity(
+        recipientRmCode = updated.assignedRmCode,
+        recipientMobile = rmMobile,
+        recipientName = rmName,
+        triggeredByRole = currentUser.role,
+        triggeredByCode = currentUser.rmCode,
+        actionType = "STATUS_UPDATE",
+        targetType = "CUSTOMER_FILE",
+        fileId = updated.fileId,
+        customerName = updated.customerName,
+        messageText = smsMessage,
+        sentTimestamp = now,
+        status = smsStatus,
+        isRead = false
+      )
+    )
+
+    context?.let { ctx ->
+      NotificationHelper.sendRmFileUpdateNotification(
+        context = ctx,
+        targetRmCode = updated.assignedRmCode,
+        ccNumber = updated.ccNumber.ifBlank { updated.fileId },
+        customerName = updated.customerName,
+        changeDetails = "Status updated to: $newStatus",
+        updatedByRole = currentUser.role
+      )
+    }
+
+    // Trigger instant background sync to Google Sheets so ALL users (RM, Admin, Mentor) see the change live!
+    applicationScope.launch {
+      triggerGoogleSheetsSync()
+    }
+
+    Result.success(updated)
+  }
+
   suspend fun triggerGoogleSheetsSync(): Result<String> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
     val syncedBy = currentUser?.rmCode ?: "APP_BACKGROUND_SYNC"
@@ -1662,8 +1892,8 @@ class EblRepository(
         val hasFtrKey = allSettings.any { it.settingKey == "Checklist Footer" }
 
         for (s in allSettings) {
-          // Filter internal sync states and redundant duplicate legacy keys
-          if (s.settingKey.startsWith("deleted_") || s.settingKey.startsWith("RM_PASS_UPDATED_AT_")) continue
+          // Filter internal password update sync state and duplicate legacy template keys
+          if (s.settingKey.startsWith("RM_PASS_UPDATED_AT_")) continue
           if (s.settingKey == "CHECKLIST_HEADER_TEMPLATE" && hasHdrKey) continue
           if (s.settingKey == "CHECKLIST_REGARDS_TEMPLATE" && hasFtrKey) continue
           // If a clean preset name exists, omit the uppercase underscore legacy alias
@@ -1721,7 +1951,7 @@ class EblRepository(
 
         val attachmentsArray = org.json.JSONArray()
         for (att in allAttachments) {
-          attachmentsArray.put(JSONObject().apply {
+          val aObj = JSONObject().apply {
             put("attachmentId", att.attachmentId)
             put("fileId", att.fileId)
             put("fileName", att.fileName)
@@ -1729,7 +1959,21 @@ class EblRepository(
             put("fileSize", att.fileSizeBytes)
             put("uploadedBy", att.uploadedBy)
             put("uploadedAt", DateUtils.formatDateTime(att.uploadedAt))
-          })
+            put("fileUri", att.fileUri)
+            put("storagePath", att.storagePath)
+          }
+          // If attachment file is not yet saved to Google Drive, upload base64 via Apps Script connector
+          if (!att.fileUri.startsWith("http")) {
+            val f = if (att.storagePath.isNotBlank()) java.io.File(att.storagePath) else null
+            if (f != null && f.exists() && f.length() > 0 && f.length() < 12 * 1024 * 1024) {
+              val b64 = com.example.util.AttachmentHelper.fileToBase64(f)
+              if (b64 != null) {
+                aObj.put("fileBase64", b64)
+                aObj.put("fileType", att.fileType)
+              }
+            }
+          }
+          attachmentsArray.put(aObj)
         }
 
         val locationsArray = org.json.JSONArray()
@@ -1955,6 +2199,10 @@ class EblRepository(
                 if (sheetResponses != null && sheetResponses.length() > 0) {
                   processSheetEventResponses(sheetResponses)
                 }
+                val sheetAtts = respJson.optJSONArray("attachments")
+                if (sheetAtts != null && sheetAtts.length() > 0) {
+                  processSheetAttachments(sheetAtts)
+                }
               } catch (_: Exception) {}
             }
           }
@@ -2052,8 +2300,11 @@ class EblRepository(
       val responsesArray = json.optJSONArray("eventResponses") ?: json.optJSONArray("responses") ?: JSONArray()
       processSheetEventResponses(responsesArray)
 
+      val attachmentsArray = json.optJSONArray("attachments") ?: JSONArray()
+      val updatedAttsCount = processSheetAttachments(attachmentsArray)
+
       val now = DateUtils.currentDhakaMillis()
-      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s), $updatedDocsCount document(s) updated."
+      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s), $updatedDocsCount document(s), $updatedAttsCount attachment(s) updated."
       database.appSettingDao().insertOrUpdateSyncStatus(
         currentStatus.copy(
           appsScriptUrl = activeWebAppUrl,
@@ -2226,6 +2477,22 @@ class EblRepository(
           database.appSettingDao().insertOrUpdateSetting(
             AppSettingEntity("Checklist Footer", value, "GoogleSheets_Universal", now)
           )
+        } else if (key.equals("deleted_file_ids", true)) {
+          val delList = value.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }
+          for (delId in delList) {
+            val f = database.customerFileDao().getFileById(delId) ?: database.customerFileDao().getFileByAnyId(delId)
+            if (f != null && !f.isDeleted) {
+              database.customerFileDao().softDeleteFile(f.fileId, "GoogleSheets_Universal_Sync", now)
+            }
+          }
+        } else if (key.equals("deleted_doc_ids", true)) {
+          val delList = value.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
+          for (docId in delList) {
+            val d = database.importantDocumentDao().getDocumentById(docId)
+            if (d != null && !d.isDeleted) {
+              database.importantDocumentDao().softDeleteDocument(d.docId, "GoogleSheets_Universal_Sync", now)
+            }
+          }
         } else if (!key.startsWith("CHECKLIST_") && !key.startsWith("deleted_") && !key.startsWith("app_") &&
                    !key.startsWith("PRODUCT_") && !key.startsWith("WEEK_") && !key.startsWith("REPORTING_") && !key.startsWith("PENDING_")) {
           // It's a custom preset row from Google Sheets!
@@ -2246,6 +2513,51 @@ class EblRepository(
       }
     }
     return updatedCount
+  }
+
+  private suspend fun processSheetAttachments(sheetAttsJson: JSONArray): Int {
+    var count = 0
+    for (i in 0 until sheetAttsJson.length()) {
+      val obj = sheetAttsJson.optJSONObject(i) ?: continue
+      val attId = obj.optString("attachmentId").trim()
+      val fileId = obj.optString("fileId").trim()
+      if (attId.isBlank() || fileId.isBlank()) continue
+
+      val fileName = obj.optString("fileName", "photo.jpg").trim()
+      val category = obj.optString("category", "General").trim()
+      val fileSize = obj.optLong("fileSize", obj.optLong("fileSizeBytes", 1024L))
+      val uploadedBy = obj.optString("uploadedBy", "RM").trim()
+      val uploadedAt = DateUtils.parseDateTime(obj.optString("uploadedAt")) ?: DateUtils.currentDhakaMillis()
+      val fileUri = obj.optString("fileUri", obj.optString("driveLink", "")).trim()
+      val storagePath = obj.optString("storagePath", fileUri).trim()
+
+      val existing = database.fileAttachmentDao().getAttachmentById(attId)
+      if (existing == null) {
+        val entity = FileAttachmentEntity(
+          attachmentId = attId,
+          fileId = fileId,
+          category = category,
+          fileName = fileName,
+          fileType = if (fileName.endsWith(".pdf", ignoreCase = true)) "application/pdf" else "image/jpeg",
+          storagePath = if (storagePath.isNotBlank()) storagePath else fileUri,
+          fileUri = fileUri,
+          fileSizeBytes = fileSize,
+          uploadedBy = uploadedBy,
+          uploadedAt = uploadedAt
+        )
+        database.fileAttachmentDao().insertAttachment(entity)
+        count++
+      } else if (fileUri.startsWith("http") && !existing.fileUri.startsWith("http")) {
+        database.fileAttachmentDao().insertAttachment(
+          existing.copy(
+            fileUri = fileUri,
+            storagePath = if (storagePath.isNotBlank()) storagePath else fileUri
+          )
+        )
+        count++
+      }
+    }
+    return count
   }
 
   private suspend fun processSheetDocuments(sheetDocsJson: JSONArray): Int {
@@ -2448,6 +2760,9 @@ class EblRepository(
     }
 
     // 3. Upsert / update files present in Google Sheets
+    val delFilesSetting = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue ?: ""
+    val deletedIdsSet = delFilesSetting.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() }.toSet()
+
     for (i in 0 until sheetFilesJson.length()) {
       val obj = sheetFilesJson.optJSONObject(i) ?: continue
       val fileId = obj.optString("fileId").trim()
@@ -2462,8 +2777,20 @@ class EblRepository(
         // Record was deleted in app or sheet; do NOT resurrect or re-enable it!
         continue
       }
+      if (targetId.lowercase() in deletedIdsSet || (ccNumber.isNotBlank() && ccNumber.lowercase() in deletedIdsSet)) {
+        continue
+      }
       val appStatus = obj.optString("applicationStatus", existing?.applicationStatus ?: "Submitted")
       val activeStatus = obj.optString("activeStatus", existing?.activeStatus ?: "Y")
+      val isExplicitlyDeleted = obj.optBoolean("isDeleted", false) ||
+                                appStatus.equals("DELETED", ignoreCase = true) ||
+                                activeStatus.equals("DELETED", ignoreCase = true)
+      if (isExplicitlyDeleted) {
+        if (existing != null && !existing.isDeleted) {
+          database.customerFileDao().softDeleteFile(existing.fileId, "GoogleSheets_Sync", now)
+        }
+        continue
+      }
       val remarks = obj.optString("remarks", existing?.remarks ?: "")
       val pendingDocs = obj.optString("pendingDocuments", existing?.pendingDocuments ?: "")
       val rmCode = obj.optString("assignedRmCode", existing?.assignedRmCode ?: "104393").trim().uppercase()
@@ -2630,10 +2957,10 @@ class EblRepository(
           ccNumber = ccNumber,
           pendingDocuments = pendingDocs,
           remarks = remarks,
-          cpvStatus = obj.optString("cpvRemarks", "Pending"),
+          cpvStatus = obj.optString("cpvStatus", "Pending"),
           serialNumber = sheetSl,
-          createdAt = now,
-          updatedAt = now,
+          createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now,
+          updatedAt = DateUtils.parseDateTime(obj.optString("updatedAt")) ?: now,
           createdBy = "GoogleSheets",
           updatedBy = "GoogleSheets_Sync",
           isSynced = true
@@ -2982,15 +3309,35 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
 
-    // User prompt constraint: ONLY Admin or Mentor can save or edit important documents
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can upload or edit important documents."))
+    // User requirement: Admin, Mentor, and RM can all upload important documents & circulars
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR" && currentUser.role != "RM") {
+      return@withContext Result.failure(Exception("Access Denied: Only bank personnel can upload documents."))
     }
 
     val now = DateUtils.currentDhakaMillis()
     val cleanId = docId?.trim().orEmpty()
     val existing = if (cleanId.isNotBlank()) database.importantDocumentDao().getDocumentById(cleanId) else null
     val targetDocId = existing?.docId ?: (if (cleanId.isNotBlank()) cleanId else "DOC_${System.currentTimeMillis()}")
+
+    var finalFileUri = fileUri.ifBlank { existing?.fileUri ?: "" }
+    var finalStoragePath = storagePath.ifBlank { existing?.storagePath ?: "" }
+
+    // If file is on local device, upload to Google Drive so ALL users across all devices can view it!
+    if (!finalFileUri.startsWith("http") && finalStoragePath.isNotBlank()) {
+      val localF = java.io.File(finalStoragePath)
+      if (localF.exists() && localF.length() > 0) {
+        try {
+          val driveRes = uploadFileToGoogleDrive(localF, fileName.ifBlank { existing?.fileName ?: "doc.pdf" }, fileType)
+          if (driveRes.isSuccess) {
+            val link = driveRes.getOrNull()
+            if (!link.isNullOrBlank()) {
+              finalFileUri = link
+              finalStoragePath = link
+            }
+          }
+        } catch (_: Exception) {}
+      }
+    }
 
     val entity = com.example.data.model.ImportantDocumentEntity(
       docId = targetDocId,
@@ -3000,8 +3347,8 @@ class EblRepository(
       fileName = fileName.trim().ifBlank { existing?.fileName ?: "Document_$targetDocId.pdf" },
       fileType = fileType.ifBlank { existing?.fileType ?: "application/pdf" },
       fileSizeBytes = if (fileSizeBytes > 0) fileSizeBytes else (existing?.fileSizeBytes ?: 1024L),
-      fileUri = fileUri.ifBlank { existing?.fileUri ?: "" },
-      storagePath = storagePath.ifBlank { existing?.storagePath ?: "" },
+      fileUri = finalFileUri,
+      storagePath = finalStoragePath,
       uploadedBy = existing?.uploadedBy ?: currentUser.rmCode,
       uploaderName = existing?.uploaderName ?: currentUser.name,
       uploaderRole = existing?.uploaderRole ?: currentUser.role,

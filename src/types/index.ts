@@ -26,12 +26,14 @@ export interface User {
 export type ApplicationStatus =
   | 'Collected'
   | 'Submitted'
+  | 'Analyst Receive'
   | 'Approved'
   | 'Declined'
   | 'Query'
   | 'Return to Source'
   | 'Condition'
-  | 'STC';
+  | 'STC'
+  | (string & {});
 
 export type ActiveStatus = 'Y' | 'N' | 'C';
 

@@ -224,33 +224,31 @@ fun ImportantDocumentsScreen(
           )
         }
 
-        // Upload button for Admin & Mentor ONLY - Fixed 30.dp height, no warp/stretching!
-        if (isPrivileged) {
-          Button(
-            onClick = {
-              documentToEdit = null
-              showUploadDialog = true
-            },
-            colors = ButtonDefaults.buttonColors(
-              containerColor = EblGold,
-              contentColor = EblNavyDark
-            ),
-            shape = RoundedCornerShape(6.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
-            modifier = Modifier
-              .height(30.dp)
-              .testTag("btn_add_important_doc")
-          ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-              text = "Upload",
-              fontSize = 11.sp,
-              fontWeight = FontWeight.Bold,
-              maxLines = 1,
-              softWrap = false
-            )
-          }
+        // Upload button for RM, Admin & Mentor - Saves to Google Drive for all users
+        Button(
+          onClick = {
+            documentToEdit = null
+            showUploadDialog = true
+          },
+          colors = ButtonDefaults.buttonColors(
+            containerColor = EblGold,
+            contentColor = EblNavyDark
+          ),
+          shape = RoundedCornerShape(6.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+          modifier = Modifier
+            .height(30.dp)
+            .testTag("btn_add_important_doc")
+        ) {
+          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+          Spacer(modifier = Modifier.width(3.dp))
+          Text(
+            text = "Upload",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false
+          )
         }
       }
     }

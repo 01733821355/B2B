@@ -27,9 +27,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.platform.LocalContext
+import com.example.util.PdfReportGenerator
+import com.example.util.ExcelReportGenerator
+import java.io.File
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -97,6 +101,13 @@ fun CustomerFileListScreen(
   var fileToDelete by remember { mutableStateOf<CustomerFileEntity?>(null) }
   var showFiltersDialog by remember { mutableStateOf(false) }
 
+  val context = LocalContext.current
+  val appCustomName by viewModel.appCustomName.collectAsState()
+  var generatedPdfFile by remember { mutableStateOf<File?>(null) }
+  var showPdfSuccessDialog by remember { mutableStateOf(false) }
+  var generatedExcelFile by remember { mutableStateOf<File?>(null) }
+  var showExcelSuccessDialog by remember { mutableStateOf(false) }
+
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
 
   Box(
@@ -131,22 +142,73 @@ fun CustomerFileListScreen(
         )
       }
 
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+      Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        // PDF Report Download Button
+        OutlinedButton(
+          onClick = {
+            val pdf = PdfReportGenerator.generatePdfReport(
+              context = context,
+              files = files,
+              currentUser = currentUser,
+              periodLabel = "Filtered Customer Database",
+              customAppName = appCustomName
+            )
+            generatedPdfFile = pdf
+            showPdfSuccessDialog = true
+          },
+          shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+          modifier = Modifier.height(34.dp).testTag("btn_list_export_pdf")
+        ) {
+          Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(14.dp))
+          Spacer(modifier = Modifier.width(3.dp))
+          Text("PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+
+        // Excel Report Download Button
+        OutlinedButton(
+          onClick = {
+            val excel = ExcelReportGenerator.generateExcelReport(
+              context = context,
+              files = files,
+              currentUser = currentUser,
+              periodLabel = "Filtered Customer Database",
+              customAppName = appCustomName
+            )
+            generatedExcelFile = excel
+            showExcelSuccessDialog = true
+          },
+          shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF15803D)),
+          modifier = Modifier.height(34.dp).testTag("btn_list_export_excel")
+        ) {
+          Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(14.dp))
+          Spacer(modifier = Modifier.width(3.dp))
+          Text("Excel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+
         IconButton(
           onClick = { viewModel.resetFilters() },
-          modifier = Modifier.testTag("btn_refresh_files")
+          modifier = Modifier.size(34.dp).testTag("btn_refresh_files")
         ) {
-          Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = EblNavyPrimary)
+          Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
         }
+
         Button(
           onClick = onAddNewFile,
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp),
-          modifier = Modifier.testTag("btn_list_add_file")
+          contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+          modifier = Modifier.height(34.dp).testTag("btn_list_add_file")
         ) {
-          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("New File", fontSize = 12.sp)
+          Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+          Spacer(modifier = Modifier.width(3.dp))
+          Text("New", fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
       }
     }
@@ -526,8 +588,8 @@ fun CustomerFileListScreen(
   // Filter Selector Dialog
   if (showFiltersDialog) {
     val dynamicProductTypes by viewModel.productTypes.collectAsState()
-    val productOptions = listOf("All") + (if (dynamicProductTypes.isNotEmpty()) dynamicProductTypes else listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement"))
-    val statusOptions = listOf("All", "Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+    val dynamicStatuses by viewModel.applicationStatusOptions.collectAsState()
+    val statusOptions = listOf("All") + (if (dynamicStatuses.isNotEmpty()) dynamicStatuses else listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC"))
     val activeOptions = listOf("All", "Y", "N", "C")
     val cpvOptions = listOf("All", "Pending", "Completed", "Failed", "Not Required")
 
@@ -608,6 +670,104 @@ fun CustomerFileListScreen(
           }
         ) {
           Text("Reset")
+        }
+      }
+    )
+  }
+
+  // PDF Generated Success Dialog
+  if (showPdfSuccessDialog && generatedPdfFile != null) {
+    AlertDialog(
+      onDismissRequest = { showPdfSuccessDialog = false },
+      title = { Text("PDF Report Generated", fontWeight = FontWeight.Bold) },
+      text = {
+        Column {
+          Text("Official Executive PDF report has been generated successfully.", fontSize = 12.sp)
+          Spacer(modifier = Modifier.height(6.dp))
+          Text("File: ${generatedPdfFile!!.name} (${generatedPdfFile!!.length() / 1024} KB)", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          Text("Saved locally. You can download directly to device storage or share via WhatsApp / Email.", fontSize = 11.sp, color = EblNavyPrimary)
+        }
+      },
+      confirmButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          OutlinedButton(
+            onClick = {
+              val savedUri = PdfReportGenerator.savePdfToDownloads(context, generatedPdfFile!!, generatedPdfFile!!.name)
+              if (savedUri != null) {
+                Toast.makeText(context, "PDF Report ডাউনলোড হয়েছে!\nপাথ: Downloads/${generatedPdfFile!!.name}", Toast.LENGTH_LONG).show()
+              } else {
+                Toast.makeText(context, "ডাউনলোড সম্পন্ন হয়েছে!", Toast.LENGTH_SHORT).show()
+              }
+            }
+          ) {
+            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Save to Downloads", fontSize = 11.sp)
+          }
+
+          Button(
+            onClick = {
+              PdfReportGenerator.shareOrViewPdf(context, generatedPdfFile!!)
+            }
+          ) {
+            Text("Open / Share", fontSize = 11.sp)
+          }
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showPdfSuccessDialog = false }) {
+          Text("Done")
+        }
+      }
+    )
+  }
+
+  // Excel Generated Success Dialog
+  if (showExcelSuccessDialog && generatedExcelFile != null) {
+    AlertDialog(
+      onDismissRequest = { showExcelSuccessDialog = false },
+      title = { Text("Excel Spreadsheet Generated", fontWeight = FontWeight.Bold) },
+      text = {
+        Column {
+          Text("Official Operations Excel spreadsheet has been generated successfully.", fontSize = 12.sp)
+          Spacer(modifier = Modifier.height(6.dp))
+          Text("File: ${generatedExcelFile!!.name} (${generatedExcelFile!!.length() / 1024} KB)", fontSize = 11.sp, color = Color.Gray)
+          Spacer(modifier = Modifier.height(10.dp))
+          Text("Compatible with Microsoft Excel, Google Sheets, and WPS Office.", fontSize = 11.sp, color = Color(0xFF15803D))
+        }
+      },
+      confirmButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          OutlinedButton(
+            onClick = {
+              val savedUri = ExcelReportGenerator.saveExcelToDownloads(context, generatedExcelFile!!, generatedExcelFile!!.name)
+              if (savedUri != null) {
+                Toast.makeText(context, "Excel Report ডাউনলোড হয়েছে!\nপাথ: Downloads/${generatedExcelFile!!.name}", Toast.LENGTH_LONG).show()
+              } else {
+                Toast.makeText(context, "ডাউনলোড সম্পন্ন হয়েছে!", Toast.LENGTH_SHORT).show()
+              }
+            },
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF15803D))
+          ) {
+            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Save to Downloads", fontSize = 11.sp)
+          }
+
+          Button(
+            onClick = {
+              ExcelReportGenerator.shareOrViewExcel(context, generatedExcelFile!!)
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D))
+          ) {
+            Text("Open / Share", fontSize = 11.sp)
+          }
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showExcelSuccessDialog = false }) {
+          Text("Done")
         }
       }
     )

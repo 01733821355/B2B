@@ -77,9 +77,13 @@ fun AppSettingsScreen(
 
   val weekStartSetting = settings.find { it.settingKey == "WEEK_START_DAY" }?.settingValue ?: "SATURDAY"
 
+  val fileStatusesSetting = settings.find { it.settingKey == "FILE_STATUSES_LIST" }?.settingValue
+    ?: "Collected, Submitted, Analyst Receive, Approved, Declined, Query, Return to Source, Condition, STC"
+
   var productsInput by remember(productSetting) { mutableStateOf(productSetting) }
   var pendingDocsInput by remember(pendingDocsSetting) { mutableStateOf(pendingDocsSetting) }
   var weekStartInput by remember(weekStartSetting) { mutableStateOf(weekStartSetting) }
+  var fileStatusesInput by remember(fileStatusesSetting) { mutableStateOf(fileStatusesSetting) }
 
   Column(
     modifier = modifier
@@ -150,6 +154,94 @@ fun AppSettingsScreen(
           Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(4.dp))
           Text("Save Products")
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // File & Application Statuses (Admin Customizable)
+    Card(
+      modifier = Modifier.fillMaxWidth(),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Text("File & Application Status Categories (Comma Separated)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text("Admin can add or edit file statuses (e.g. Collected, Approved, Disbursed). Updates are visible to all RMs.", fontSize = 11.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(8.dp))
+        com.example.ui.common.VoiceInputField(
+          value = fileStatusesInput,
+          onValueChange = { fileStatusesInput = it },
+          label = "Application Statuses",
+          singleLine = false,
+          maxLines = 4,
+          modifier = Modifier.fillMaxWidth(),
+          testTag = "input_setting_file_statuses"
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Active Status Items (Tap ✕ to remove):", fontSize = 11.sp, color = EblNavyDark, fontWeight = FontWeight.SemiBold)
+        Spacer(modifier = Modifier.height(4.dp))
+        FlowRow(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          fileStatusesInput.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach { st ->
+            FilterChip(
+              selected = true,
+              onClick = {
+                val remaining = fileStatusesInput.split(",").map { it.trim() }.filter { it.isNotBlank() && !it.equals(st, ignoreCase = true) }.joinToString(", ")
+                fileStatusesInput = remaining
+              },
+              label = { Text("$st ✕", fontSize = 11.sp) },
+              colors = FilterChipDefaults.filterChipColors(
+                selectedContainerColor = EblNavyPrimary,
+                selectedLabelColor = Color.White
+              )
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Quick Status Suggestions (Tap to add):", fontSize = 11.sp, color = Color.Gray)
+        Spacer(modifier = Modifier.height(4.dp))
+        FlowRow(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(4.dp),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          listOf("Collected", "Approved", "Submitted", "Under Review", "Analyst Receive", "Declined", "Query", "Return to Source", "Condition", "STC", "Disbursed").forEach { suggestion ->
+            val alreadyPresent = fileStatusesInput.split(",").any { it.trim().equals(suggestion, ignoreCase = true) }
+            if (!alreadyPresent) {
+              FilterChip(
+                selected = false,
+                onClick = {
+                  fileStatusesInput = if (fileStatusesInput.isBlank()) suggestion else "$fileStatusesInput, $suggestion"
+                },
+                label = { Text("+ $suggestion", fontSize = 10.sp) }
+              )
+            }
+          }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
+        Button(
+          onClick = {
+            viewModel.updateFileStatusOptions(fileStatusesInput.trim()) { success, err ->
+              if (success) {
+                Toast.makeText(context, "স্ট্যাটাস ক্যাটাগরি সফলভাবে আপডেট হয়েছে!", Toast.LENGTH_SHORT).show()
+              } else {
+                Toast.makeText(context, err ?: "Error saving statuses", Toast.LENGTH_SHORT).show()
+              }
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+          modifier = Modifier.align(Alignment.End).testTag("btn_save_file_statuses")
+        ) {
+          Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(4.dp))
+          Text("Save & Sync Statuses to All RMs")
         }
       }
     }

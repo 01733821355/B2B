@@ -138,6 +138,32 @@ function onEdit(e) {
   } catch (err) {}
 }
 
+function saveFileToDrive(base64Data, fileName, mimeType) {
+  try {
+    var folderName = "EBL RM Suite Drive Files";
+    var folders = DriveApp.getFoldersByName(folderName);
+    var targetFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+    try { targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (fe) {}
+    var cleanBase64 = String(base64Data || '');
+    if (cleanBase64.indexOf(',') > -1) {
+      cleanBase64 = cleanBase64.split(',')[1];
+    }
+    var decoded = Utilities.base64Decode(cleanBase64);
+    var mType = mimeType || 'image/jpeg';
+    var fName = fileName || ('file_' + new Date().getTime() + '.jpg');
+    var blob = Utilities.newBlob(decoded, mType, fName);
+    var file = targetFolder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    var fileId = file.getId();
+    var downloadUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1200";
+    var directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+    var viewUrl = file.getUrl();
+    return { success: true, fileId: fileId, url: downloadUrl, directUrl: directUrl, driveUrl: viewUrl };
+  } catch (err) {
+    return { success: false, error: err.toString() };
+  }
+}
+
 function doPost(e) {
   try {
     var contents = e.postData ? e.postData.contents : '{}';
@@ -179,7 +205,7 @@ function doPost(e) {
 
     // 5. Auto-create & format 'Attachments' Tab
     var attachSheet = getOrCreateSheet(ss, 'Attachments', [
-      'Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp'
+      'Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp', 'Drive Link'
     ], '#4C1D95');
 
     // 6. Auto-create & format 'SMS_Notifications' Tab
@@ -214,6 +240,36 @@ function doPost(e) {
     var respSheet = getOrCreateSheet(ss, 'Event_Submissions', [
       'Response ID', 'Event ID', 'RM Code', 'RM Name', 'Files Count', 'Requested Date', 'Location', 'Remarks', 'Customer Entries JSON', 'Submitted At'
     ], '#B45309');
+
+    // Universal Demo Customer Information Purge (Ensure NO demo files exist on spreadsheet)
+    var curCustFiles = fileSheet.getDataRange().getValues();
+    var demoCustIds = ['cust-001', 'cust-002', 'cust-003', 'cust-004', 'cust-005'];
+    for (var dcf = curCustFiles.length - 1; dcf >= 1; dcf--) {
+      var dFid = String(curCustFiles[dcf][2] || '').trim().toLowerCase();
+      var dCc = String(curCustFiles[dcf][1] || '').trim().toLowerCase();
+      var dName = String(curCustFiles[dcf][3] || '').trim().toLowerCase();
+      if (demoCustIds.indexOf(dFid) > -1 || demoCustIds.indexOf(dCc) > -1 || dName.indexOf('sample customer') > -1 || dName.indexOf('demo customer') > -1) {
+        fileSheet.deleteRow(dcf + 1);
+      }
+    }
+
+    // Direct Google Drive File Upload (Allows RM, Admin, Mentor photos to be saved to Google Drive)
+    if (data.action === 'UPLOAD_FILE_TO_DRIVE' && data.fileBase64) {
+      var driveRes = saveFileToDrive(data.fileBase64, data.fileName, data.fileType);
+      if (driveRes && driveRes.success) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          fileUrl: driveRes.url,
+          driveUrl: driveRes.driveUrl,
+          fileId: driveRes.fileId
+        })).setMimeType(ContentService.MimeType.JSON);
+      } else {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "ERROR",
+          message: driveRes ? driveRes.error : "Failed to upload to Google Drive"
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
 
     // Handle File Deletions (Immediately removes rows from Google Sheets across Customer_Files and other tabs)
     if (data.action === 'DELETE_FILE' || (data.deletedFileIds && data.deletedFileIds.length > 0)) {
@@ -274,6 +330,32 @@ function doPost(e) {
           }
         }
       }
+      // Persist deleted file IDs in Universal_Settings so any new mobile app install immediately knows they were deleted
+      try {
+        var setSheet = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheet) {
+          var sVals = setSheet.getDataRange().getValues();
+          var delRowIdx = -1;
+          var curDelVal = '';
+          for (var sr = 1; sr < sVals.length; sr++) {
+            if (String(sVals[sr][0] || '').trim().toLowerCase() === 'deleted_file_ids') {
+              delRowIdx = sr + 1;
+              curDelVal = String(sVals[sr][1] || '').trim();
+              break;
+            }
+          }
+          var allDels = curDelVal ? curDelVal.split(',') : [];
+          toDelete.forEach(function(td) { if (td && allDels.indexOf(td) === -1) allDels.push(td); });
+          var newDelStr = allDels.join(',');
+          if (delRowIdx > -1) {
+            setSheet.getRange(delRowIdx, 2).setValue(newDelStr);
+            setSheet.getRange(delRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheet.appendRow(['deleted_file_ids', newDelStr, 'Universal Deleted File IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errDel) {}
+
       if (data.action === 'DELETE_FILE') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted file row from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -387,11 +469,18 @@ function doPost(e) {
       }
     }
 
-    // Handle Direct Important Document Upsert (Immediately syncs new/updated document to Google Sheets)
+    // Handle Direct Important Document Upsert (Immediately syncs new/updated document to Google Sheets & Drive)
     if (data.action === 'UPSERT_DOC' && data.document) {
       var docU = data.document;
       var didU = String(docU.docId || '').trim();
       if (didU) {
+        if (docU.fileBase64) {
+          var dUpload = saveFileToDrive(docU.fileBase64, docU.fileName, docU.fileType);
+          if (dUpload && dUpload.success) {
+            docU.fileUri = dUpload.url;
+            docU.storagePath = dUpload.driveUrl;
+          }
+        }
         var curDocsU = docSheet.getDataRange().getValues();
         var foundDocRow = 0;
         for (var du = 1; du < curDocsU.length; du++) {
@@ -421,8 +510,12 @@ function doPost(e) {
         } else {
           docSheet.appendRow(docRowU);
         }
-        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Upserted Document to sheet." }))
-          .setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Document to sheet and Drive.",
+          fileUri: docU.fileUri,
+          storagePath: docU.storagePath
+        })).setMimeType(ContentService.MimeType.JSON);
       }
     }
 
@@ -618,27 +711,39 @@ function doPost(e) {
       });
     }
 
-    // Record File Attachments Metadata
+    // Record File Attachments Metadata & Drive Links
     if (data.attachments && data.attachments.length > 0) {
       var attData = attachSheet.getDataRange().getValues();
       var attMap = {};
       for (var a = 1; a < attData.length; a++) {
         var aId = String(attData[a][0] || '').trim();
-        if (aId) attMap[aId] = true;
+        if (aId) attMap[aId] = a + 1;
       }
       data.attachments.forEach(function(at) {
         var atId = String(at.attachmentId || '').trim();
-        if (!attMap[atId]) {
-          attachSheet.appendRow([
-            atId,
-            at.fileId || '',
-            at.fileName || '',
-            at.category || '',
-            at.fileSize || 0,
-            at.uploadedBy || '',
-            at.uploadedAt || ''
-          ]);
-          attMap[atId] = true;
+        if (!atId) return;
+        var attDriveLink = at.fileUri || at.driveLink || '';
+        if (at.fileBase64 && (!attDriveLink || attDriveLink.indexOf('http') !== 0)) {
+          var atRes = saveFileToDrive(at.fileBase64, at.fileName, at.fileType);
+          if (atRes && atRes.success) {
+            attDriveLink = atRes.url;
+          }
+        }
+        var attRow = [
+          atId,
+          at.fileId || '',
+          at.fileName || '',
+          at.category || '',
+          at.fileSize || at.fileSizeBytes || 0,
+          at.uploadedBy || '',
+          at.uploadedAt || '',
+          attDriveLink
+        ];
+        if (attMap[atId]) {
+          attachSheet.getRange(attMap[atId], 1, 1, attRow.length).setValues([attRow]);
+        } else {
+          attachSheet.appendRow(attRow);
+          attMap[atId] = attachSheet.getLastRow();
         }
       });
     }
@@ -687,7 +792,7 @@ function doPost(e) {
       });
     }
 
-    // Upsert Important Documents (Policies, Circulars, Guidelines)
+    // Upsert Important Documents (Policies, Circulars, Guidelines & Drive Links)
     if (data.importantDocuments && data.importantDocuments.length > 0) {
       var docExisting = docSheet.getDataRange().getValues();
       var docMap = {};
@@ -698,6 +803,15 @@ function doPost(e) {
       data.importantDocuments.forEach(function(doc) {
         var did = String(doc.docId || '').trim();
         if (!did) return;
+        var docDriveLink = doc.fileUri || '';
+        var docStorage = doc.storagePath || '';
+        if (doc.fileBase64 && (!docDriveLink || docDriveLink.indexOf('http') !== 0)) {
+          var dRes = saveFileToDrive(doc.fileBase64, doc.fileName, doc.fileType);
+          if (dRes && dRes.success) {
+            docDriveLink = dRes.url;
+            docStorage = dRes.driveUrl;
+          }
+        }
         var row = [
           did,
           doc.title || '',
@@ -706,8 +820,8 @@ function doPost(e) {
           doc.fileName || '',
           doc.fileType || 'application/pdf',
           doc.fileSizeBytes || 1024,
-          doc.fileUri || '',
-          doc.storagePath || '',
+          docDriveLink,
+          docStorage,
           doc.uploadedBy || '',
           doc.uploaderName || '',
           doc.uploaderRole || '',
@@ -822,7 +936,8 @@ function doPost(e) {
       importantDocuments: extractAllSheetDocuments(docSheet),
       chatMessages: extractAllSheetChat(chatSheet),
       events: extractAllSheetEvents(eventSheet),
-      eventResponses: extractAllSheetResponses(respSheet)
+      eventResponses: extractAllSheetResponses(respSheet),
+      attachments: extractAllSheetAttachments(attachSheet)
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -843,6 +958,7 @@ function handleFetchAllData() {
     var chatSheet = ss.getSheetByName('Chat_And_Calls');
     var eventSheet = ss.getSheetByName('Team_Events');
     var respSheet = ss.getSheetByName('Event_Submissions');
+    var attachSheet = ss.getSheetByName('Attachments');
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -852,7 +968,8 @@ function handleFetchAllData() {
       importantDocuments: docSheet ? extractAllSheetDocuments(docSheet) : [],
       chatMessages: chatSheet ? extractAllSheetChat(chatSheet) : [],
       events: eventSheet ? extractAllSheetEvents(eventSheet) : [],
-      eventResponses: respSheet ? extractAllSheetResponses(respSheet) : []
+      eventResponses: respSheet ? extractAllSheetResponses(respSheet) : [],
+      attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : []
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -860,6 +977,31 @@ function handleFetchAllData() {
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+function extractAllSheetAttachments(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var atId = String(row[0] || '').trim();
+    if (!atId) continue;
+    list.push({
+      attachmentId: atId,
+      fileId: String(row[1] || ''),
+      fileName: String(row[2] || ''),
+      category: String(row[3] || ''),
+      fileSizeBytes: Number(row[4]) || 1024,
+      fileSize: Number(row[4]) || 1024,
+      uploadedBy: String(row[5] || ''),
+      uploadedAt: String(row[6] || ''),
+      fileUri: String(row[7] || ''),
+      storagePath: String(row[7] || '')
+    });
+  }
+  return list;
 }
 
 function extractAllSheetDocuments(sheet) {

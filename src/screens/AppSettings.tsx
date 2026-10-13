@@ -14,9 +14,13 @@ export const AppSettings: React.FC = () => {
   const weekInitial = settings.find(s => s.settingKey === 'WEEK_START_DAY')?.settingValue
     || 'SATURDAY';
 
+  const statusInitial = settings.find(s => s.settingKey === 'FILE_STATUSES_LIST')?.settingValue
+    || 'Collected, Submitted, Analyst Receive, Approved, Declined, Query, Return to Source, Condition, STC';
+
   const [products, setProducts] = useState(prodInitial);
   const [docs, setDocs] = useState(docsInitial);
   const [weekStart, setWeekStart] = useState(weekInitial);
+  const [fileStatuses, setFileStatuses] = useState(statusInitial);
   const [savedKey, setSavedKey] = useState<string | null>(null);
 
   const handleSave = (key: string, val: string) => {
@@ -58,6 +62,36 @@ export const AppSettings: React.FC = () => {
           >
             {savedKey === 'PRODUCT_TYPES' ? <Check className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
             <span>{savedKey === 'PRODUCT_TYPES' ? 'Saved!' : 'Save Products'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* File & Application Statuses */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-3">
+        <div>
+          <h3 className="font-bold text-sm text-slate-800">Application / File Statuses</h3>
+          <p className="text-slate-500 text-[11px]">Comma-separated statuses available to all RMs and Mentors across devices</p>
+        </div>
+        <textarea
+          rows={2}
+          value={fileStatuses}
+          onChange={e => setFileStatuses(e.target.value)}
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ebl-navy-primary focus:outline-none"
+        />
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {fileStatuses.split(',').map(s => s.trim()).filter(Boolean).map(st => (
+            <span key={st} className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+              {st}
+            </span>
+          ))}
+        </div>
+        <div className="flex justify-end">
+          <button
+            onClick={() => handleSave('FILE_STATUSES_LIST', fileStatuses)}
+            className="flex items-center space-x-1.5 px-4 py-2 bg-ebl-navy-primary text-white rounded-lg font-bold hover:bg-ebl-navy-secondary transition"
+          >
+            {savedKey === 'FILE_STATUSES_LIST' ? <Check className="w-4 h-4 text-emerald-400" /> : <Save className="w-4 h-4" />}
+            <span>{savedKey === 'FILE_STATUSES_LIST' ? 'Saved!' : 'Save Statuses'}</span>
           </button>
         </div>
       </div>

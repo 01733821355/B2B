@@ -142,7 +142,8 @@ fun CustomerFileFormScreen(
           fileName = saved.fileName,
           fileType = saved.fileType,
           fileSizeBytes = saved.fileSizeBytes,
-          fileUri = saved.fileUri
+          fileUri = saved.fileUri,
+          localFile = saved.file
         )
       }
     }
@@ -164,7 +165,8 @@ fun CustomerFileFormScreen(
           fileName = saved.fileName,
           fileType = saved.fileType,
           fileSizeBytes = saved.fileSizeBytes,
-          fileUri = saved.fileUri
+          fileUri = saved.fileUri,
+          localFile = saved.file
         )
       }
     }
@@ -186,7 +188,8 @@ fun CustomerFileFormScreen(
           fileName = saved.fileName,
           fileType = saved.fileType,
           fileSizeBytes = saved.fileSizeBytes,
-          fileUri = saved.fileUri
+          fileUri = saved.fileUri,
+          localFile = saved.file
         )
       }
     }
@@ -208,7 +211,8 @@ fun CustomerFileFormScreen(
           fileName = saved.fileName,
           fileType = saved.fileType,
           fileSizeBytes = saved.fileSizeBytes,
-          fileUri = saved.fileUri
+          fileUri = saved.fileUri,
+          localFile = saved.file
         )
       }
     }
@@ -230,7 +234,8 @@ fun CustomerFileFormScreen(
           fileName = saved.fileName,
           fileType = saved.fileType,
           fileSizeBytes = saved.fileSizeBytes,
-          fileUri = saved.fileUri
+          fileUri = saved.fileUri,
+          localFile = saved.file
         )
       }
     }
@@ -349,8 +354,8 @@ fun CustomerFileFormScreen(
   var selectedProductType by remember { mutableStateOf(productOptions.first()) }
   var productExpanded by remember { mutableStateOf(false) }
 
-  // Includes "Analyst Receive" immediately after "Collected", "Submitted" as requested!
-  val statusOptions = listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
+  val dynamicStatusOptions by viewModel.applicationStatusOptions.collectAsState()
+  val statusOptions = if (dynamicStatusOptions.isNotEmpty()) dynamicStatusOptions else listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC")
   var selectedApplicationStatus by remember { mutableStateOf("Collected") }
   var statusExpanded by remember { mutableStateOf(false) }
 
