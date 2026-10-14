@@ -17,6 +17,9 @@ interface AppSettingDao {
   suspend fun getAllSettings(): List<AppSettingEntity>
 
   @Query("SELECT * FROM app_settings WHERE settingKey = :key LIMIT 1")
+  fun getSettingFlow(key: String): Flow<AppSettingEntity?>
+
+  @Query("SELECT * FROM app_settings WHERE settingKey = :key LIMIT 1")
   suspend fun getSetting(key: String): AppSettingEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -29,6 +29,10 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.TableChart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Download
+import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalContext
 import com.example.util.PdfReportGenerator
@@ -588,6 +592,7 @@ fun CustomerFileListScreen(
   // Filter Selector Dialog
   if (showFiltersDialog) {
     val dynamicProductTypes by viewModel.productTypes.collectAsState()
+    val productOptions = listOf("All") + (if (dynamicProductTypes.isNotEmpty()) dynamicProductTypes else listOf("Credit Card", "B2B", "Corporate Card", "Split", "Limit Enhancement"))
     val dynamicStatuses by viewModel.applicationStatusOptions.collectAsState()
     val statusOptions = listOf("All") + (if (dynamicStatuses.isNotEmpty()) dynamicStatuses else listOf("Collected", "Submitted", "Analyst Receive", "Approved", "Declined", "Query", "Return to Source", "Condition", "STC"))
     val activeOptions = listOf("All", "Y", "N", "C")

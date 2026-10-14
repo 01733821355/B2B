@@ -1667,7 +1667,7 @@ class EblRepository(
   // File & Application Statuses Management (Admin customizable, visible to all RMs)
   // -------------------------------------------------------------
   fun getFileStatusOptionsFlow(): Flow<List<String>> {
-    return database.appSettingDao().getSettingFlow("FILE_STATUSES_LIST").map { setting ->
+    return database.appSettingDao().getSettingFlow("FILE_STATUSES_LIST").map { setting: AppSettingEntity? ->
       val raw = setting?.settingValue
       if (!raw.isNullOrBlank()) {
         raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
@@ -2490,7 +2490,7 @@ class EblRepository(
           for (docId in delList) {
             val d = database.importantDocumentDao().getDocumentById(docId)
             if (d != null && !d.isDeleted) {
-              database.importantDocumentDao().softDeleteDocument(d.docId, "GoogleSheets_Universal_Sync", now)
+              database.importantDocumentDao().softDeleteDocument(d.docId, now)
             }
           }
         } else if (!key.startsWith("CHECKLIST_") && !key.startsWith("deleted_") && !key.startsWith("app_") &&

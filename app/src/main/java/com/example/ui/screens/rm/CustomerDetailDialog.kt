@@ -45,9 +45,10 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PaddingValues
 import android.widget.Toast
+import com.example.util.AttachmentHelper
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.AlertDialog

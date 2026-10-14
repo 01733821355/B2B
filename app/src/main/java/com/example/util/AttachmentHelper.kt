@@ -20,7 +20,9 @@ import android.webkit.MimeTypeMap
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.data.model.FileAttachmentEntity
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -313,15 +315,17 @@ object AttachmentHelper {
       Toast.makeText(context, "Direct open failed, opening share menu...", Toast.LENGTH_SHORT).show()
       shareAttachment(context, attachment)
     }
+  }
+
   fun downloadAttachment(context: Context, attachment: FileAttachmentEntity): Boolean {
-    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+    CoroutineScope(Dispatchers.IO).launch {
       downloadAttachmentAsync(context, attachment)
     }
     return true
   }
 
   suspend fun downloadAttachmentAsync(context: Context, attachment: FileAttachmentEntity): Boolean =
-    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    withContext(Dispatchers.IO) {
       try {
         val sourceFile = resolveFileAsync(context, attachment)
         val fileName = attachment.fileName.ifBlank { "Document_${System.currentTimeMillis()}" }
@@ -359,7 +363,7 @@ object AttachmentHelper {
           success = destFile.exists() && destFile.length() > 0
         }
 
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        withContext(Dispatchers.Main) {
           Toast.makeText(
             context,
             "ডকুমেন্ট ডাউনলোড সফল হয়েছে!\nফাইল: $fileName\nপাথ: Downloads/EBL_Documents",
@@ -368,7 +372,7 @@ object AttachmentHelper {
         }
         true
       } catch (e: Exception) {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+        withContext(Dispatchers.Main) {
           Toast.makeText(
             context,
             "ডাউনলোডে সমস্যা হয়েছে। ফাইলটি শেয়ার অপশন দিয়ে সেভ করতে পারেন।",
@@ -378,6 +382,7 @@ object AttachmentHelper {
         }
         false
       }
+    }
 
 
   /**
