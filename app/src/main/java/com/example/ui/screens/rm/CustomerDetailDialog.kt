@@ -51,6 +51,7 @@ import android.widget.Toast
 import com.example.util.AttachmentHelper
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -90,7 +91,7 @@ import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.AppViewModel
 import com.example.util.DateUtils
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CustomerDetailDialog(
   file: CustomerFileEntity,

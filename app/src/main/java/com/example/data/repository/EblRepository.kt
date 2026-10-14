@@ -2060,7 +2060,7 @@ class EblRepository(
         val allImportantDocs = database.importantDocumentDao().getAllActiveDocuments()
         val docsArray = org.json.JSONArray()
         for (doc in allImportantDocs) {
-          docsArray.put(JSONObject().apply {
+          val dObj = JSONObject().apply {
             put("docId", doc.docId)
             put("title", doc.title)
             put("category", doc.category)
@@ -2075,7 +2075,18 @@ class EblRepository(
             put("uploaderRole", doc.uploaderRole)
             put("createdAt", DateUtils.formatDateTime(doc.createdAt))
             put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
-          })
+          }
+          if (!doc.fileUri.startsWith("http")) {
+            val f = if (doc.storagePath.isNotBlank()) java.io.File(doc.storagePath) else null
+            if (f != null && f.exists() && f.length() > 0 && f.length() < 12 * 1024 * 1024) {
+              val b64 = com.example.util.AttachmentHelper.fileToBase64(f)
+              if (b64 != null) {
+                dObj.put("fileBase64", b64)
+                dObj.put("fileType", doc.fileType)
+              }
+            }
+          }
+          docsArray.put(dObj)
         }
 
         // Gather chat and communication messages

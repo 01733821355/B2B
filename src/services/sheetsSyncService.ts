@@ -19,7 +19,8 @@ export class SheetsSyncService {
           secretKey: status.syncSecretKey,
           timestamp: new Date().toISOString(),
           customerFiles: unsyncedFiles,
-          rmMapping: users
+          rmMapping: users,
+          attachments: storageService.getAttachments()
         };
 
         const res = await fetch(status.appsScriptUrl, {
