@@ -81,7 +81,89 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
   };
 
   const exportPdf = () => {
-    window.print();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>EBL RM File Management - Customer Files Report</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 20px; font-size: 11px; color: #1e293b; }
+          .header { border-bottom: 2px solid #002b66; padding-bottom: 12px; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
+          .title { font-size: 18px; font-weight: bold; color: #002b66; margin: 0; }
+          .subtitle { font-size: 11px; color: #64748b; margin-top: 4px; }
+          .meta { text-align: right; font-size: 11px; color: #64748b; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 10px; }
+          th { background: #f1f5f9; color: #334155; font-weight: 700; text-align: left; padding: 6px; border: 1px solid #cbd5e1; }
+          td { padding: 6px; border: 1px solid #e2e8f0; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          .footer { margin-top: 24px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+          @media print {
+            body { padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <h1 class="title">Eastern Bank PLC (EBL)</h1>
+            <div class="subtitle">Retail Banking Division — Customer Files Operational Summary</div>
+          </div>
+          <div class="meta">
+            <div><strong>Generated:</strong> ${new Date().toLocaleString()}</div>
+            <div><strong>Officer / Role:</strong> ${currentUser.name} (${currentUser.role} - ${currentUser.rmCode})</div>
+            <div><strong>Total Records:</strong> ${filteredFiles.length}</div>
+          </div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 30px;">#</th>
+              <th>File ID</th>
+              <th>Customer Name</th>
+              <th>Company</th>
+              <th>Mobile</th>
+              <th>Product</th>
+              <th>Status</th>
+              <th>Active</th>
+              <th>RM</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredFiles.map((f, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td><strong>${f.fileId}</strong></td>
+                <td>${f.customerName}</td>
+                <td>${f.companyName || '-'}</td>
+                <td>${f.mobile}</td>
+                <td>${f.productType}</td>
+                <td>${f.applicationStatus}</td>
+                <td>${f.activeStatus}</td>
+                <td>${f.assignedRmCode}</td>
+                <td>${f.remarks || '-'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="footer">
+          Confidential — Eastern Bank PLC Internal Record. Generated via EBL RM File Suite.
+        </div>
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   const exportExcel = () => {
@@ -165,10 +247,30 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Export PDF Button */}
+          <button
+            onClick={exportPdf}
+            className="flex items-center space-x-1.5 px-3 py-2 border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-lg transition text-xs shadow-sm"
+            title="Download / Print PDF Report"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>PDF Report</span>
+          </button>
+
+          {/* Export Excel Button */}
+          <button
+            onClick={exportExcel}
+            className="flex items-center space-x-1.5 px-3 py-2 border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold rounded-lg transition text-xs shadow-sm"
+            title="Download Excel / CSV Spreadsheet"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Excel (CSV)</span>
+          </button>
+
           <button
             onClick={refreshFiles}
-            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600"
+            className="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600 shadow-sm"
             title="Refresh database records"
           >
             <RefreshCw className="w-4 h-4" />
@@ -176,7 +278,7 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
           {!showDeletedOnly && (
             <button
               onClick={() => onNavigate('customer_form')}
-              className="flex items-center space-x-1.5 px-3 py-2 bg-ebl-navy-primary hover:bg-ebl-navy-secondary text-white font-bold rounded-lg transition"
+              className="flex items-center space-x-1.5 px-3 py-2 bg-ebl-navy-primary hover:bg-ebl-navy-secondary text-white font-bold rounded-lg transition shadow-sm"
             >
               <Plus className="w-4 h-4" />
               <span>New File</span>
@@ -402,6 +504,7 @@ export const CustomerFileList: React.FC<CustomerFileListProps> = ({
           currentUser={currentUser}
           onClose={() => setSelectedFile(null)}
           onEdit={(id) => onNavigate('customer_form', id)}
+          onFileUpdated={refreshFiles}
         />
       )}
 
