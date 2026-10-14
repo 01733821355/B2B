@@ -1302,6 +1302,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun updateEventSettings(
+    eventId: String,
+    title: String,
+    description: String,
+    targetDate: String,
+    status: String,
+    allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS",
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.updateEventSettings(eventId, title, description, targetDate, status, allowedFields)
+      res.onSuccess {
+        _uiMessage.emit("✓ Event settings updated!")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
   fun submitEventResponse(
     eventId: String,
     filesCount: Int,

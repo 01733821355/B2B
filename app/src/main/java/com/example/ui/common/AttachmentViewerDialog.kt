@@ -73,12 +73,38 @@ fun AttachmentViewerDialog(
   val context = LocalContext.current
   val scrollState = rememberScrollState()
 
-  // Ensure file is available locally
-  val resolvedFile = remember(attachment) {
-    AttachmentHelper.resolveFile(context, attachment)
+  var downloadedFile by remember { mutableStateOf<File?>(null) }
+  var isDownloading by remember { mutableStateOf(false) }
+  var downloadFailed by remember { mutableStateOf(false) }
+
+  // Asynchronously resolve/download real file from Google Drive on IO thread
+  LaunchedEffect(attachment) {
+    isDownloading = true
+    downloadFailed = false
+    try {
+      val f = AttachmentHelper.resolveFileAsync(context, attachment)
+      if (f != null && f.exists() && f.length() > 0) {
+        downloadedFile = f
+      } else if (attachment.fileUri.startsWith("http")) {
+        // Retry with synchronous worker download
+        val attachDir = File(context.filesDir, "attachments").apply { mkdirs() }
+        val target = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
+        val ok = AttachmentHelper.downloadRemoteFileSync(attachment.fileUri, target)
+        if (ok && target.exists() && target.length() > 0) {
+          downloadedFile = target
+        } else {
+          downloadFailed = true
+        }
+      }
+    } catch (_: Exception) {
+      downloadFailed = true
+    } finally {
+      isDownloading = false
+    }
   }
 
   var showDeleteConfirm by remember { mutableStateOf(false) }
+  var showFullscreenZoom by remember { mutableStateOf(false) }
 
   val isImage = attachment.fileType.startsWith("image/", ignoreCase = true) ||
     listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { attachment.fileName.endsWith(it, ignoreCase = true) }
@@ -193,7 +219,26 @@ fun AttachmentViewerDialog(
           )
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        if (attachment.fileUri.startsWith("http")) {
+          Spacer(modifier = Modifier.height(6.dp))
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEFF6FF),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Google Drive Storage (mdbappyhossain017@gmail.com)", fontSize = 10.sp, color = Color(0xFF1D4ED8), fontWeight = FontWeight.SemiBold)
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Content Preview Box
         Column(
@@ -203,30 +248,59 @@ fun AttachmentViewerDialog(
             .verticalScroll(scrollState),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
-          if (isImage) {
+          if (isDownloading) {
             Box(
               modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 200.dp, max = 320.dp)
+                .height(200.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF8FAFC))
+                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)),
+              contentAlignment = Alignment.Center
+            ) {
+              Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(modifier = Modifier.size(36.dp), color = EblNavyPrimary)
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("Google Drive থেকে ডাউনলোড হচ্ছে...", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                Text("Cloud Storage: mdbappyhossain017@gmail.com", fontSize = 10.sp, color = Color.Gray)
+              }
+            }
+          } else if (isImage) {
+            val imageModel = downloadedFile ?: (if (attachment.fileUri.startsWith("http")) {
+              AttachmentHelper.getGoogleDriveDirectCdnUrl(attachment.fileUri)
+            } else null)
+
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 200.dp, max = 340.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(Color(0xFFF8FAFC))
                 .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp))
                 .clickable {
-                  AttachmentHelper.viewAttachment(context, attachment)
+                  showFullscreenZoom = true
                 },
               contentAlignment = Alignment.Center
             ) {
-              AsyncImage(
-                model = ImageRequest.Builder(context)
-                  .data(if (attachment.fileUri.startsWith("http")) AttachmentHelper.getGoogleDriveThumbnailUrl(attachment.fileUri) else resolvedFile)
-                  .crossfade(true)
-                  .build(),
-                contentDescription = attachment.fileName,
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                  .fillMaxWidth()
-                  .heightIn(max = 320.dp)
-              )
+              if (imageModel != null) {
+                AsyncImage(
+                  model = ImageRequest.Builder(context)
+                    .data(imageModel)
+                    .crossfade(true)
+                    .build(),
+                  contentDescription = attachment.fileName,
+                  contentScale = ContentScale.Fit,
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 340.dp)
+                )
+              } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                  Icon(Icons.Default.BrokenImage, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+                  Spacer(modifier = Modifier.height(6.dp))
+                  Text("ছবি লোড করা যায়নি। নিচে ওপেন বাটনে ক্লিক করুন।", fontSize = 11.sp, color = Color.Gray)
+                }
+              }
 
               // Tap hint badge
               Surface(
@@ -464,5 +538,46 @@ fun AttachmentViewerDialog(
         }
       }
     )
+  }
+
+  // Fullscreen Photo Zoom Dialog
+  if (showFullscreenZoom) {
+    val zoomImageModel = downloadedFile ?: (if (attachment.fileUri.startsWith("http")) {
+      AttachmentHelper.getGoogleDriveDirectCdnUrl(attachment.fileUri)
+    } else null)
+
+    Dialog(
+      onDismissRequest = { showFullscreenZoom = false },
+      properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(Color.Black.copy(alpha = 0.95f))
+          .testTag("fullscreen_zoom_dialog")
+      ) {
+        if (zoomImageModel != null) {
+          AsyncImage(
+            model = ImageRequest.Builder(context)
+              .data(zoomImageModel)
+              .crossfade(true)
+              .build(),
+            contentDescription = attachment.fileName,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize().padding(16.dp)
+          )
+        }
+
+        IconButton(
+          onClick = { showFullscreenZoom = false },
+          modifier = Modifier
+            .align(Alignment.TopEnd)
+            .padding(16.dp)
+            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+        ) {
+          Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+        }
+      }
+    }
   }
 }

@@ -134,6 +134,26 @@ object AttachmentHelper {
     }
   }
 
+  fun getGoogleDriveDirectCdnUrl(url: String): String {
+    if (!url.startsWith("http")) return url
+    val fileId = extractGoogleDriveFileId(url)
+    return if (fileId != null) {
+      "https://lh3.googleusercontent.com/d/$fileId"
+    } else {
+      url
+    }
+  }
+
+  fun getGoogleDriveViewUrl(url: String): String {
+    if (!url.startsWith("http")) return url
+    val fileId = extractGoogleDriveFileId(url)
+    return if (fileId != null) {
+      "https://drive.google.com/file/d/$fileId/view?usp=sharing"
+    } else {
+      url
+    }
+  }
+
   fun getGoogleDriveDownloadUrl(url: String): String {
     if (!url.startsWith("http")) return url
     val fileId = extractGoogleDriveFileId(url)
@@ -159,7 +179,7 @@ object AttachmentHelper {
 
   /**
    * Resolves a guaranteed local File for the given attachment entity.
-   * If remote, returns cached file if available, otherwise safely downloads or generates fallback.
+   * If remote, returns cached file if available, or attempts synchronous download on background threads.
    */
   fun resolveFile(context: Context, attachment: FileAttachmentEntity): File {
     // 1. Direct storagePath check
@@ -171,7 +191,8 @@ object AttachmentHelper {
     // 2. Internal attachments directory check
     val attachDir = File(context.filesDir, "attachments").apply { mkdirs() }
     val matchingFile = attachDir.listFiles()?.firstOrNull {
-      it.name.contains(attachment.fileName, ignoreCase = true) || it.name == attachment.attachmentId
+      (it.name.contains(attachment.fileName, ignoreCase = true) || it.name.contains(attachment.attachmentId)) &&
+        !it.name.startsWith("EBL_DEMO_")
     }
     if (matchingFile != null && matchingFile.exists() && matchingFile.length() > 0) {
       return matchingFile
@@ -190,16 +211,16 @@ object AttachmentHelper {
     }
 
     // 3.5. Try cached file from remote Google Drive URL
+    val remoteCache = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
     if (attachment.fileUri.startsWith("http://") || attachment.fileUri.startsWith("https://")) {
-      val remoteCache = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
-      if (remoteCache.exists() && remoteCache.length() > 0) {
+      if (remoteCache.exists() && remoteCache.length() > 200) {
         return remoteCache
       }
 
-      // If running on a worker thread (not main UI thread), download directly
+      // If running on a worker thread, download directly
       if (android.os.Looper.myLooper() != android.os.Looper.getMainLooper()) {
         val downloaded = downloadRemoteFileSync(attachment.fileUri, remoteCache)
-        if (downloaded && remoteCache.exists() && remoteCache.length() > 0) {
+        if (downloaded && remoteCache.exists() && remoteCache.length() > 200) {
           return remoteCache
         }
       } else {
@@ -210,17 +231,10 @@ object AttachmentHelper {
       }
     }
 
-    // 4. Generate guaranteed valid sample file for viewing & downloading
-    val targetFile = File(attachDir, "EBL_${attachment.attachmentId}_${attachment.fileName}")
-    if (attachment.fileType.contains("pdf", ignoreCase = true) || attachment.fileName.endsWith(".pdf", ignoreCase = true)) {
-      generateValidPdfDocument(targetFile, attachment)
-    } else {
-      generateValidImageDocument(targetFile, attachment)
-    }
-    return targetFile
+    return remoteCache
   }
 
-  suspend fun resolveFileAsync(context: Context, attachment: FileAttachmentEntity): File =
+  suspend fun resolveFileAsync(context: Context, attachment: FileAttachmentEntity): File? =
     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
       val attachDir = File(context.filesDir, "attachments").apply { mkdirs() }
       if (attachment.storagePath.isNotBlank() && !attachment.storagePath.startsWith("http")) {
@@ -229,57 +243,92 @@ object AttachmentHelper {
       }
 
       val remoteCache = File(attachDir, "drive_${attachment.attachmentId}_${attachment.fileName}")
-      if (remoteCache.exists() && remoteCache.length() > 0) {
+      if (remoteCache.exists() && remoteCache.length() > 200) {
         return@withContext remoteCache
+      }
+
+      if (attachment.fileUri.startsWith("content://")) {
+        try {
+          val uri = Uri.parse(attachment.fileUri)
+          val copyDest = File(attachDir, "att_${attachment.attachmentId}_${attachment.fileName}")
+          context.contentResolver.openInputStream(uri)?.use { input ->
+            FileOutputStream(copyDest).use { output -> input.copyTo(output) }
+          }
+          if (copyDest.exists() && copyDest.length() > 0) return@withContext copyDest
+        } catch (_: Exception) {}
       }
 
       if (attachment.fileUri.startsWith("http://") || attachment.fileUri.startsWith("https://")) {
         val ok = downloadRemoteFileSync(attachment.fileUri, remoteCache)
-        if (ok && remoteCache.exists() && remoteCache.length() > 0) {
+        if (ok && remoteCache.exists() && remoteCache.length() > 200) {
           return@withContext remoteCache
         }
       }
 
-      return@withContext resolveFile(context, attachment)
+      val fallback = resolveFile(context, attachment)
+      if (fallback.exists() && fallback.length() > 0) fallback else null
     }
 
-  private fun downloadRemoteFileSync(urlStr: String, destFile: File): Boolean {
-    return try {
-      val targetUrl = getGoogleDriveDownloadUrl(urlStr)
-      val url = java.net.URL(targetUrl)
-      val conn = url.openConnection() as java.net.HttpURLConnection
-      conn.connectTimeout = 12000
-      conn.readTimeout = 25000
-      conn.instanceFollowRedirects = true
-      conn.setRequestProperty("User-Agent", "Mozilla/5.0 EBLSuiteApp/1.0")
+  fun downloadRemoteFileSync(urlStr: String, destFile: File): Boolean {
+    val fileId = extractGoogleDriveFileId(urlStr)
+    val isPdf = destFile.name.endsWith(".pdf", ignoreCase = true)
+    val candidateUrls = mutableListOf<String>()
 
-      var responseCode = conn.responseCode
-      var finalConn = conn
-      // Handle redirect if needed
-      if (responseCode == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
-          responseCode == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
-          responseCode == java.net.HttpURLConnection.HTTP_SEE_OTHER) {
-        val newUrl = conn.getHeaderField("Location")
-        if (!newUrl.isNullOrBlank()) {
+    if (fileId != null) {
+      if (!isPdf) {
+        candidateUrls.add("https://lh3.googleusercontent.com/d/$fileId")
+        candidateUrls.add("https://drive.google.com/thumbnail?id=$fileId&sz=w2000")
+      }
+      candidateUrls.add("https://drive.google.com/uc?export=download&id=$fileId")
+      candidateUrls.add("https://docs.google.com/uc?id=$fileId&export=download")
+    }
+    candidateUrls.add(urlStr)
+
+    for (targetUrl in candidateUrls) {
+      try {
+        val url = java.net.URL(targetUrl)
+        val conn = url.openConnection() as java.net.HttpURLConnection
+        conn.connectTimeout = 15000
+        conn.readTimeout = 30000
+        conn.instanceFollowRedirects = true
+        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36")
+
+        var responseCode = conn.responseCode
+        var finalConn = conn
+        var redirects = 0
+        while (responseCode in 300..399 && redirects < 5) {
+          redirects++
+          val newUrl = finalConn.getHeaderField("Location") ?: break
           finalConn = java.net.URL(newUrl).openConnection() as java.net.HttpURLConnection
-          finalConn.connectTimeout = 12000
-          finalConn.readTimeout = 25000
-          finalConn.setRequestProperty("User-Agent", "Mozilla/5.0 EBLSuiteApp/1.0")
+          finalConn.connectTimeout = 15000
+          finalConn.readTimeout = 30000
+          finalConn.instanceFollowRedirects = true
+          finalConn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36")
           responseCode = finalConn.responseCode
         }
-      }
 
-      if (responseCode in 200..299) {
-        finalConn.inputStream.use { input ->
-          FileOutputStream(destFile).use { output -> input.copyTo(output) }
+        if (responseCode in 200..299) {
+          val tempFile = File(destFile.parentFile, "temp_${System.currentTimeMillis()}_${destFile.name}")
+          finalConn.inputStream.use { input ->
+            FileOutputStream(tempFile).use { output -> input.copyTo(output) }
+          }
+
+          if (tempFile.exists() && tempFile.length() > 200) {
+            // Verify it is not an HTML error/auth landing page
+            val headerBytes = ByteArray(100)
+            val bytesRead = tempFile.inputStream().use { it.read(headerBytes) }
+            val headerStr = String(headerBytes, 0, bytesRead.coerceAtLeast(0)).trim().lowercase()
+            if (!headerStr.startsWith("<!doctype") && !headerStr.startsWith("<html")) {
+              tempFile.copyTo(destFile, overwrite = true)
+              tempFile.delete()
+              return true
+            }
+          }
+          tempFile.delete()
         }
-        destFile.exists() && destFile.length() > 0
-      } else {
-        false
-      }
-    } catch (_: Exception) {
-      false
+      } catch (_: Exception) {}
     }
+    return false
   }
 
   /**
@@ -289,7 +338,21 @@ object AttachmentHelper {
     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
       val file = resolveFileAsync(context, attachment)
       kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-        viewAttachmentWithFile(context, file, attachment)
+        if (file != null && file.exists() && file.length() > 0) {
+          viewAttachmentWithFile(context, file, attachment)
+        } else {
+          // If local download could not complete, open Google Drive directly in browser
+          val driveLink = getGoogleDriveViewUrl(attachment.fileUri)
+          if (driveLink.startsWith("http")) {
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(driveLink)).apply {
+              addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(browserIntent)
+            Toast.makeText(context, "Opening Google Drive file in browser...", Toast.LENGTH_SHORT).show()
+          } else {
+            Toast.makeText(context, "File could not be downloaded. Please check internet connection.", Toast.LENGTH_LONG).show()
+          }
+        }
       }
     }
   }
@@ -420,131 +483,6 @@ object AttachmentHelper {
     }
     val path = uri.path ?: ""
     return if (path.contains(".")) path.substringAfterLast('.') else "jpg"
-  }
-
-  /**
-   * Generates a valid, readable PDF document as fallback when original file bytes are remote/missing.
-   */
-  private fun generateValidPdfDocument(targetFile: File, attachment: FileAttachmentEntity) {
-    try {
-      val document = PdfDocument()
-      val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-      val page = document.startPage(pageInfo)
-      val canvas: Canvas = page.canvas
-
-      val paint = Paint().apply {
-        isAntiAlias = true
-        textSize = 14f
-        color = Color.rgb(10, 25, 47)
-      }
-      val headerPaint = Paint().apply {
-        isAntiAlias = true
-        textSize = 18f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        color = Color.rgb(10, 25, 47)
-      }
-      val subPaint = Paint().apply {
-        isAntiAlias = true
-        textSize = 12f
-        color = Color.DKGRAY
-      }
-
-      var y = 60f
-      canvas.drawText("EASTERN BANK PLC", 50f, y, headerPaint)
-      y += 24f
-      canvas.drawText("CUSTOMER DOCUMENT ARCHIVE", 50f, y, subPaint)
-      y += 40f
-
-      canvas.drawLine(50f, y, 545f, y, paint)
-      y += 30f
-
-      canvas.drawText("Document Details:", 50f, y, headerPaint)
-      y += 25f
-      canvas.drawText("File Name: ${attachment.fileName}", 50f, y, paint)
-      y += 20f
-      canvas.drawText("Category: ${attachment.category}", 50f, y, paint)
-      y += 20f
-      canvas.drawText("Customer File ID: ${attachment.fileId}", 50f, y, paint)
-      y += 20f
-      canvas.drawText("Uploaded By: ${attachment.uploadedBy}", 50f, y, paint)
-      y += 20f
-      canvas.drawText("Upload Timestamp: ${DateUtils.formatDateTime(attachment.uploadedAt)}", 50f, y, paint)
-      y += 20f
-      canvas.drawText("File Size: ${(attachment.fileSizeBytes / 1024)} KB", 50f, y, paint)
-      y += 20f
-      canvas.drawText("Security Classification: CONFIDENTIAL BANKING RECORD", 50f, y, paint)
-
-      y += 60f
-      val boxPaint = Paint().apply {
-        color = Color.rgb(240, 244, 248)
-        style = Paint.Style.FILL
-      }
-      canvas.drawRect(50f, y, 545f, y + 120f, boxPaint)
-      val notePaint = Paint().apply {
-        textSize = 11f
-        color = Color.rgb(30, 58, 138)
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
-      }
-      canvas.drawText("Official Verified EBL RM Suite Attached Document", 70f, y + 40f, notePaint)
-      canvas.drawText("This verified document record is permanently stored and synchronized", 70f, y + 65f, notePaint)
-      canvas.drawText("across Google Sheets & Mobile Banking Terminals.", 70f, y + 90f, notePaint)
-
-      document.finishPage(page)
-      FileOutputStream(targetFile).use { out -> document.writeTo(out) }
-      document.close()
-    } catch (e: Exception) {
-      e.printStackTrace()
-    }
-  }
-
-  /**
-   * Generates a valid image file as fallback when original image bytes are remote/missing.
-   */
-  private fun generateValidImageDocument(targetFile: File, attachment: FileAttachmentEntity) {
-    try {
-      val width = 800
-      val height = 600
-      val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-      val canvas = Canvas(bitmap)
-
-      // Background
-      canvas.drawColor(Color.rgb(241, 245, 249))
-
-      // Border
-      val borderPaint = Paint().apply {
-        color = Color.rgb(203, 213, 225)
-        style = Paint.Style.STROKE
-        strokeWidth = 8f
-      }
-      canvas.drawRect(20f, 20f, width - 20f, height - 20f, borderPaint)
-
-      // Texts
-      val titlePaint = Paint().apply {
-        color = Color.rgb(10, 25, 47)
-        textSize = 28f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        isAntiAlias = true
-      }
-      val textPaint = Paint().apply {
-        color = Color.rgb(51, 65, 85)
-        textSize = 20f
-        isAntiAlias = true
-      }
-
-      canvas.drawText("EBL CUSTOMER ATTACHED PHOTO", 60f, 100f, titlePaint)
-      canvas.drawText("Document: ${attachment.fileName}", 60f, 160f, textPaint)
-      canvas.drawText("Category: ${attachment.category}", 60f, 210f, textPaint)
-      canvas.drawText("File ID: ${attachment.fileId}", 60f, 260f, textPaint)
-      canvas.drawText("Uploaded By: ${attachment.uploadedBy}", 60f, 310f, textPaint)
-      canvas.drawText("Date: ${DateUtils.formatDateTime(attachment.uploadedAt)}", 60f, 360f, textPaint)
-      canvas.drawText("Status: VERIFIED SECURE ATTACHMENT", 60f, 420f, titlePaint)
-
-      FileOutputStream(targetFile).use { out ->
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
-      }
-    } catch (e: Exception) {
-      e.printStackTrace()
-    }
   }
 
   /**

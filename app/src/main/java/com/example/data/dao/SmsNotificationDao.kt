@@ -41,4 +41,7 @@ interface SmsNotificationDao {
 
   @Query("DELETE FROM sms_notifications")
   suspend fun clearAllSms()
+
+  @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND sentTimestamp = :timestamp AND messageText = :message")
+  suspend fun countMatchingSms(rmCode: String, timestamp: Long, message: String): Int
 }

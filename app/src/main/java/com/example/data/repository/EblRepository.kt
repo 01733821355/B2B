@@ -677,6 +677,28 @@ class EblRepository(
     } catch (_: Exception) {}
   }
 
+  suspend fun syncAttachmentDeletionToGoogleSheets(attachmentId: String, fileId: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "DELETE_ATTACHMENT")
+        put("attachmentId", attachmentId)
+        put("fileId", fileId)
+        put("deletedAttachmentIds", org.json.JSONArray().apply { put(attachmentId) })
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
   suspend fun uploadFileToGoogleDrive(
     file: java.io.File,
     fileName: String,
@@ -1055,6 +1077,18 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("Unauthorized."))
 
     database.fileAttachmentDao().deleteAttachment(attachmentId)
+
+    val now = DateUtils.currentDhakaMillis()
+    val currentDel = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
+    val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + attachmentId).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_attachment_ids", updatedDel, currentUser.rmCode, now)
+    )
+
+    syncAttachmentDeletionToGoogleSheets(attachmentId, fileId)
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 
@@ -1304,6 +1338,33 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("RM_PASS_UPDATED_AT_${rmCode.trim().uppercase()}", now.toString(), currentUser.rmCode, now)
     )
+
+    val formattedTime = DateUtils.formatDateTime(now)
+    val editorName = currentUser.name.ifBlank { currentUser.rmCode }
+    val smsMessage = "[EBL Alert] Dear ${existing.name} ($rmCode), your RM password was reset by ${currentUser.role} ($editorName). New Temporary Password: $newPassword. Timestamp: $formattedTime."
+    var smsStatus = "DELIVERED"
+    if (context != null && existing.mobile.isNotBlank()) {
+      val sent = SmsService.sendSms(context, existing.mobile, smsMessage)
+      smsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+    }
+    database.smsNotificationDao().insertSms(
+      SmsNotificationEntity(
+        recipientRmCode = rmCode,
+        recipientMobile = existing.mobile,
+        recipientName = existing.name,
+        triggeredByRole = currentUser.role,
+        triggeredByCode = currentUser.rmCode,
+        actionType = "PROFILE",
+        targetType = "RM_PROFILE",
+        fileId = null,
+        customerName = null,
+        messageText = smsMessage,
+        sentTimestamp = now,
+        status = smsStatus,
+        isRead = false
+      )
+    )
+
     applicationScope.launch {
       syncRmPasswordToGoogleSheets(rmCode, hash, salt)
       triggerGoogleSheetsSync()
@@ -1383,24 +1444,26 @@ class EblRepository(
 
   fun getAppCustomNameFlow(): Flow<String> {
     return database.appSettingDao().getAllSettingsFlow().map { settings ->
-      settings.find { it.settingKey == "app_custom_name" }?.settingValue ?: "RM File Management Suite"
+      settings.find {
+        it.settingKey == "app_custom_name" || it.settingKey.equals("App Name", ignoreCase = true) || it.settingKey.equals("app_name", ignoreCase = true)
+      }?.settingValue?.ifBlank { null } ?: "RM File Management Suite"
     }
   }
 
   suspend fun setAppCustomName(name: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
-    if (currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Only Mentor can configure the universal app name."))
+    if (currentUser.role != "MENTOR" && currentUser.role != "ADMIN") {
+      return@withContext Result.failure(Exception("Only Admin or Mentor can configure the universal app name."))
     }
     val cleanName = name.trim().ifBlank { "RM File Management Suite" }
-    val setting = AppSettingEntity(
-      settingKey = "app_custom_name",
-      settingValue = cleanName,
-      updatedBy = currentUser.rmCode,
-      updatedAt = DateUtils.currentDhakaMillis()
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("app_custom_name", cleanName, currentUser.rmCode, now)
     )
-    database.appSettingDao().insertOrUpdateSetting(setting)
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("App Name", cleanName, currentUser.rmCode, now)
+    )
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -1412,6 +1475,34 @@ class EblRepository(
     if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
       return@withContext Result.failure(Exception("Access denied."))
     }
+
+    val user = database.userDao().getUser(rmCode)
+    val now = DateUtils.currentDhakaMillis()
+    val formattedTime = DateUtils.formatDateTime(now)
+    val editorName = currentUser.name.ifBlank { currentUser.rmCode }
+    val smsMessage = "[EBL Alert] Dear ${user?.name ?: rmCode} ($rmCode), your RM account status was changed to '$newStatus' by ${currentUser.role} ($editorName). Timestamp: $formattedTime."
+    var smsStatus = "DELIVERED"
+    if (context != null && user != null && user.mobile.isNotBlank()) {
+      val sent = SmsService.sendSms(context, user.mobile, smsMessage)
+      smsStatus = if (sent) "DELIVERED" else "SENT_IN_APP"
+    }
+    database.smsNotificationDao().insertSms(
+      SmsNotificationEntity(
+        recipientRmCode = rmCode,
+        recipientMobile = user?.mobile ?: "",
+        recipientName = user?.name ?: rmCode,
+        triggeredByRole = currentUser.role,
+        triggeredByCode = currentUser.rmCode,
+        actionType = "PROFILE",
+        targetType = "RM_PROFILE",
+        fileId = null,
+        customerName = null,
+        messageText = smsMessage,
+        sentTimestamp = now,
+        status = smsStatus,
+        isRead = false
+      )
+    )
 
     database.userDao().updateStatus(rmCode, newStatus)
     applicationScope.launch { triggerGoogleSheetsSync() }
@@ -2214,6 +2305,10 @@ class EblRepository(
                 if (sheetAtts != null && sheetAtts.length() > 0) {
                   processSheetAttachments(sheetAtts)
                 }
+                val sheetSms = respJson.optJSONArray("smsNotifications") ?: respJson.optJSONArray("sms")
+                if (sheetSms != null && sheetSms.length() > 0) {
+                  processSheetSmsNotifications(sheetSms)
+                }
               } catch (_: Exception) {}
             }
           }
@@ -2314,8 +2409,11 @@ class EblRepository(
       val attachmentsArray = json.optJSONArray("attachments") ?: JSONArray()
       val updatedAttsCount = processSheetAttachments(attachmentsArray)
 
+      val smsArray = json.optJSONArray("smsNotifications") ?: json.optJSONArray("sms") ?: JSONArray()
+      val updatedSmsCount = processSheetSmsNotifications(smsArray)
+
       val now = DateUtils.currentDhakaMillis()
-      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s), $updatedDocsCount document(s), $updatedAttsCount attachment(s) updated."
+      val msg = "Pulled from Google Sheets: $updatedFilesCount file(s), $updatedRmsCount RM(s), $updatedSettingsCount setting(s), $updatedDocsCount document(s), $updatedAttsCount attachment(s), $updatedSmsCount notification(s) updated."
       database.appSettingDao().insertOrUpdateSyncStatus(
         currentStatus.copy(
           appsScriptUrl = activeWebAppUrl,
@@ -2500,10 +2598,23 @@ class EblRepository(
           val delList = value.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
           for (docId in delList) {
             val d = database.importantDocumentDao().getDocumentById(docId)
-            if (d != null && !d.isDeleted) {
+            if (d != null) {
               database.importantDocumentDao().softDeleteDocument(d.docId, now)
+              database.importantDocumentDao().permanentDeleteDocument(d.docId)
             }
           }
+        } else if (key.equals("deleted_chat_ids", true)) {
+          val delList = value.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
+          for (chatId in delList) {
+            database.communicationDao().deleteMessage(chatId)
+          }
+        } else if (key.equals("App Name", true) || key.equals("app_name", true) || key.equals("Application Name", true) || key.equals("app_custom_name", true)) {
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
+          )
+          database.appSettingDao().insertOrUpdateSetting(
+            AppSettingEntity("App Name", value, "GoogleSheets_Universal", now)
+          )
         } else if (!key.startsWith("CHECKLIST_") && !key.startsWith("deleted_") && !key.startsWith("app_") &&
                    !key.startsWith("PRODUCT_") && !key.startsWith("WEEK_") && !key.startsWith("REPORTING_") && !key.startsWith("PENDING_")) {
           // It's a custom preset row from Google Sheets!
@@ -2528,11 +2639,17 @@ class EblRepository(
 
   private suspend fun processSheetAttachments(sheetAttsJson: JSONArray): Int {
     var count = 0
+    val delAttsSetting = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
+    val deletedAttIds = delAttsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+    for (delId in deletedAttIds) {
+      database.fileAttachmentDao().deleteAttachment(delId)
+    }
+
     for (i in 0 until sheetAttsJson.length()) {
       val obj = sheetAttsJson.optJSONObject(i) ?: continue
       val attId = obj.optString("attachmentId").trim()
       val fileId = obj.optString("fileId").trim()
-      if (attId.isBlank() || fileId.isBlank()) continue
+      if (attId.isBlank() || fileId.isBlank() || attId.uppercase() in deletedAttIds) continue
 
       val fileName = obj.optString("fileName", "photo.jpg").trim()
       val category = obj.optString("category", "General").trim()
@@ -2577,6 +2694,35 @@ class EblRepository(
     val delDocsSetting = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
     val deletedDocIds = delDocsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
 
+    // 1. Immediately delete any local documents in deletedDocIds
+    for (delId in deletedDocIds) {
+      val d = database.importantDocumentDao().getDocumentById(delId)
+      if (d != null) {
+        database.importantDocumentDao().softDeleteDocument(d.docId, now)
+        database.importantDocumentDao().permanentDeleteDocument(d.docId)
+      }
+    }
+
+    // 2. Gather active sheet doc IDs
+    val activeSheetDocIds = HashSet<String>()
+    for (i in 0 until sheetDocsJson.length()) {
+      val obj = sheetDocsJson.optJSONObject(i) ?: continue
+      val did = obj.optString("docId").trim().uppercase()
+      if (did.isNotBlank() && did !in deletedDocIds) activeSheetDocIds.add(did)
+    }
+
+    // 3. Reconcile with local database: If sheet returned active documents, any local document marked isSynced that is no longer in sheetDocsJson should be removed!
+    if (sheetDocsJson.length() > 0) {
+      val localDocs = database.importantDocumentDao().getAllActiveDocuments()
+      for (ld in localDocs) {
+        if (ld.isSynced && ld.docId.trim().uppercase() !in activeSheetDocIds) {
+          database.importantDocumentDao().softDeleteDocument(ld.docId, now)
+          database.importantDocumentDao().permanentDeleteDocument(ld.docId)
+        }
+      }
+    }
+
+    // 4. Upsert valid active documents from Google Sheets
     for (i in 0 until sheetDocsJson.length()) {
       val obj = sheetDocsJson.optJSONObject(i) ?: continue
       val docId = obj.optString("docId").trim()
@@ -2619,6 +2765,72 @@ class EblRepository(
       )
       database.importantDocumentDao().insertDocument(entity)
       count++
+    }
+    return count
+  }
+
+  private suspend fun processSheetSmsNotifications(sheetSmsJson: JSONArray): Int {
+    var count = 0
+    val currentUser = authRepository.currentUser.value
+    val userRmCode = currentUser?.rmCode?.trim()?.uppercase() ?: ""
+    val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR"
+
+    for (i in 0 until sheetSmsJson.length()) {
+      val obj = sheetSmsJson.optJSONObject(i) ?: continue
+      val recipientRm = obj.optString("recipientRmCode").trim().uppercase()
+      val messageText = obj.optString("messageText", "").trim()
+      val sentTime = DateUtils.parseDateTime(obj.optString("sentTimestamp")) ?: DateUtils.currentDhakaMillis()
+
+      if (recipientRm.isBlank() || messageText.isBlank()) continue
+
+      // Only store/notify if it belongs to current user or user is privileged admin/mentor
+      if (recipientRm != userRmCode && !isPrivileged) {
+        continue
+      }
+
+      // Check if duplicate
+      val matchCount = database.smsNotificationDao().countMatchingSms(recipientRm, sentTime, messageText)
+      if (matchCount > 0) continue
+
+      val recipientName = obj.optString("recipientName", "").trim()
+      val recipientMobile = obj.optString("recipientMobile", "").trim()
+      val triggeredRole = obj.optString("triggeredByRole", "SYSTEM").trim()
+      val triggeredCode = obj.optString("triggeredByCode", "").trim()
+      val actionType = obj.optString("actionType", "UPDATE").trim()
+      val targetId = obj.optString("targetId", "").trim()
+      val status = obj.optString("status", "DELIVERED").trim()
+
+      val entity = SmsNotificationEntity(
+        recipientRmCode = recipientRm,
+        recipientMobile = recipientMobile,
+        recipientName = recipientName,
+        triggeredByRole = triggeredRole,
+        triggeredByCode = triggeredCode,
+        actionType = actionType,
+        targetType = "SYNC_ALERT",
+        fileId = targetId.ifBlank { null },
+        customerName = null,
+        messageText = messageText,
+        sentTimestamp = sentTime,
+        status = status,
+        isRead = false
+      )
+      database.smsNotificationDao().insertSms(entity)
+      count++
+
+      // If notification is for the current logged-in user and wasn't created by themselves, trigger device notification!
+      if (recipientRm == userRmCode && triggeredCode != userRmCode) {
+        context?.let { ctx ->
+          NotificationHelper.sendRmFileUpdateNotification(
+            context = ctx,
+            targetRmCode = recipientRm,
+            ccNumber = targetId,
+            customerName = recipientName,
+            changeDetails = messageText,
+            updatedByRole = triggeredRole
+          )
+        }
+      }
     }
     return count
   }
@@ -3208,6 +3420,46 @@ class EblRepository(
     Result.success(event)
   }
 
+  fun isEventExpired(event: com.example.data.model.TeamEventEntity): Boolean {
+    if (event.status.equals("CLOSED", ignoreCase = true) || event.status.equals("COMPLETED", ignoreCase = true) || event.status.equals("EXPIRED", ignoreCase = true)) {
+      return true
+    }
+    val targetMillis = DateUtils.parseDateTime(event.targetDate) ?: return false
+    return targetMillis < DateUtils.currentDhakaMillis()
+  }
+
+  suspend fun updateEventSettings(
+    eventId: String,
+    title: String,
+    description: String,
+    targetDate: String,
+    status: String,
+    allowedFields: String
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access Denied: Only authorized Admins can manage event settings."))
+    }
+
+    val existing = database.communicationDao().getEventById(eventId)
+      ?: return@withContext Result.failure(Exception("Event not found."))
+
+    val updated = existing.copy(
+      title = title.trim(),
+      description = description.trim(),
+      targetDate = targetDate.trim(),
+      status = status.trim(),
+      allowedFields = allowedFields.trim()
+    )
+    database.communicationDao().insertEvent(updated)
+    CoroutineScope(Dispatchers.IO).launch {
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
+    Result.success(Unit)
+  }
+
   suspend fun submitEventResponse(
     eventId: String,
     filesCount: Int,
@@ -3218,6 +3470,12 @@ class EblRepository(
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    val event = database.communicationDao().getEventById(eventId)
+    if (event != null && isEventExpired(event)) {
+      return@withContext Result.failure(Exception("এই ইভেন্টের সময়সীমা শেষ হয়েছে। ডাটা এন্ট্রি বন্ধ রয়েছে।"))
+    }
+
     val now = DateUtils.currentDhakaMillis()
     val respId = "RESP-$eventId-${user.rmCode.trim().uppercase()}"
     val resp = com.example.data.model.EventResponseEntity(
@@ -3315,7 +3573,8 @@ class EblRepository(
     fileType: String,
     fileSizeBytes: Long,
     fileUri: String,
-    storagePath: String
+    storagePath: String,
+    docDate: String? = null
   ): Result<com.example.data.model.ImportantDocumentEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
@@ -3350,6 +3609,9 @@ class EblRepository(
       }
     }
 
+    val customDateMillis = if (!docDate.isNullOrBlank()) DateUtils.parseDateTime(docDate) else null
+    val docCreationTimestamp = customDateMillis ?: (existing?.createdAt ?: now)
+
     val entity = com.example.data.model.ImportantDocumentEntity(
       docId = targetDocId,
       title = title.trim(),
@@ -3363,7 +3625,7 @@ class EblRepository(
       uploadedBy = existing?.uploadedBy ?: currentUser.rmCode,
       uploaderName = existing?.uploaderName ?: currentUser.name,
       uploaderRole = existing?.uploaderRole ?: currentUser.role,
-      createdAt = existing?.createdAt ?: now,
+      createdAt = docCreationTimestamp,
       updatedAt = now,
       isDeleted = false,
       isSynced = false
@@ -3418,6 +3680,7 @@ class EblRepository(
 
     val now = DateUtils.currentDhakaMillis()
     database.importantDocumentDao().softDeleteDocument(docId, now)
+    database.importantDocumentDao().permanentDeleteDocument(docId)
 
     // Store in persistent deleted_doc_ids setting so it never gets restored from sheet
     val currentDel = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
@@ -3434,7 +3697,6 @@ class EblRepository(
         action = "DELETE_DOC",
         fileId = docId,
         details = "Important Document '$docId' deleted by ${currentUser.role} (${currentUser.name})",
-        timestamp = now
       )
     )
 

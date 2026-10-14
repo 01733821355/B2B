@@ -101,14 +101,13 @@ fun GoogleSheetsSyncScreen(
 
   val appsScriptTemplate = """
 /**
- * EBL Sales & RM Suite - 7-Tab Multi-Device Bi-Directional Auto-Sync Web App
- * Tabs: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs
+ * EBL Sales & RM Suite - Multi-Device Bi-Directional Auto-Sync Web App
+ * Google Drive Owner Account: mdbappyhossain017@gmail.com
+ * Cloud Storage: Permanent Google Drive storage in folder 'EBL RM Suite Drive Files'
  *
- * FEATURES:
- * 1. Supports Manual Editing directly in Google Sheets without data loss!
- * 2. onEdit trigger stamps 'Manual_Sheet_Edit' to prevent auto-sync overwriting manual edits.
- * 3. doGet returns full multi-tab JSON for any connected browser or mobile app.
- * 4. Full multi-device real-time sync for RMs, Targets, Customer Files, and Universal Settings.
+ * TABS: Customer_Files, RM_Details, Universal_Settings, Audit_Trail,
+ *       Attachments, SMS_Notifications, RM_Location_Logs,
+ *       Important_Documents, Chat_And_Calls, Team_Events, Event_Submissions
  */
 
 function doGet(e) {
@@ -155,10 +154,10 @@ function saveFileToDrive(base64Data, fileName, mimeType) {
     var file = targetFolder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     var fileId = file.getId();
-    var downloadUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1200";
     var directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+    var downloadUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1200";
     var viewUrl = file.getUrl();
-    return { success: true, fileId: fileId, url: downloadUrl, directUrl: directUrl, driveUrl: viewUrl };
+    return { success: true, fileId: fileId, url: directUrl, directUrl: directUrl, downloadUrl: downloadUrl, driveUrl: viewUrl };
   } catch (err) {
     return { success: false, error: err.toString() };
   }
@@ -449,7 +448,7 @@ function doPost(e) {
       }
     }
 
-    // Handle Important Document Deletions (Immediately removes Document rows from Google Sheets)
+    // Handle Important Document Deletions (Immediately removes Document rows from Google Sheets & Drive)
     if (data.action === 'DELETE_DOC' || (data.deletedDocIds && data.deletedDocIds.length > 0)) {
       var toDeleteDocs = data.deletedDocIds || [data.docId].filter(Boolean);
       var curDocsD = docSheet.getDataRange().getValues();
@@ -458,13 +457,103 @@ function doPost(e) {
         for (var md = 0; md < toDeleteDocs.length; md++) {
           var targetDoc = String(toDeleteDocs[md] || '').trim();
           if (targetDoc && docIdVal.toLowerCase() === targetDoc.toLowerCase()) {
+            try {
+              var docUri = String(curDocsD[ddd][7] || '');
+              var dMatch = docUri.match(/\/d\/([a-zA-Z0-9_-]+)/) || docUri.match(/id=([a-zA-Z0-9_-]+)/);
+              if (dMatch && dMatch[1]) {
+                DriveApp.getFileById(dMatch[1]).setTrashed(true);
+              }
+            } catch (te) {}
             docSheet.deleteRow(ddd + 1);
             break;
           }
         }
       }
+      try {
+        var setSheetDoc = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetDoc) {
+          var sValsDoc = setSheetDoc.getDataRange().getValues();
+          var delDocRowIdx = -1;
+          var curDelDocVal = '';
+          for (var sdr = 1; sdr < sValsDoc.length; sdr++) {
+            if (String(sValsDoc[sdr][0] || '').trim().toLowerCase() === 'deleted_doc_ids') {
+              delDocRowIdx = sdr + 1;
+              curDelDocVal = String(sValsDoc[sdr][1] || '').trim();
+              break;
+            }
+          }
+          var allDelDocs = curDelDocVal ? curDelDocVal.split(',') : [];
+          toDeleteDocs.forEach(function(tdd) {
+            var clTdd = String(tdd || '').trim();
+            if (clTdd && allDelDocs.indexOf(clTdd) === -1) allDelDocs.push(clTdd);
+          });
+          var newDelDocStr = allDelDocs.join(',');
+          if (delDocRowIdx > -1) {
+            setSheetDoc.getRange(delDocRowIdx, 2).setValue(newDelDocStr);
+            setSheetDoc.getRange(delDocRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetDoc.appendRow(['deleted_doc_ids', newDelDocStr, 'Universal Deleted Important Document IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errDocDel) {}
+
       if (data.action === 'DELETE_DOC') {
-        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Document from sheet." }))
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Document from sheet and Drive." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle File Attachment Deletions (Immediately removes Attachment rows from Google Sheets & Drive)
+    if (data.action === 'DELETE_ATTACHMENT' || (data.deletedAttachmentIds && data.deletedAttachmentIds.length > 0)) {
+      var toDeleteAtts = data.deletedAttachmentIds || [data.attachmentId].filter(Boolean);
+      var curAttsD = attachSheet.getDataRange().getValues();
+      for (var da = curAttsD.length - 1; da >= 1; da--) {
+        var attIdVal = String(curAttsD[da][0] || '').trim();
+        for (var ma = 0; ma < toDeleteAtts.length; ma++) {
+          var targetAtt = String(toDeleteAtts[ma] || '').trim();
+          if (targetAtt && attIdVal.toLowerCase() === targetAtt.toLowerCase()) {
+            try {
+              var aUri = String(curAttsD[da][7] || '');
+              var aMatch = aUri.match(/\/d\/([a-zA-Z0-9_-]+)/) || aUri.match(/id=([a-zA-Z0-9_-]+)/);
+              if (aMatch && aMatch[1]) {
+                DriveApp.getFileById(aMatch[1]).setTrashed(true);
+              }
+            } catch (ate) {}
+            attachSheet.deleteRow(da + 1);
+            break;
+          }
+        }
+      }
+      try {
+        var setSheetAtt = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetAtt) {
+          var sValsAtt = setSheetAtt.getDataRange().getValues();
+          var delAttRowIdx = -1;
+          var curDelAttVal = '';
+          for (var sar = 1; sar < sValsAtt.length; sar++) {
+            if (String(sValsAtt[sar][0] || '').trim().toLowerCase() === 'deleted_attachment_ids') {
+              delAttRowIdx = sar + 1;
+              curDelAttVal = String(sValsAtt[sar][1] || '').trim();
+              break;
+            }
+          }
+          var allDelAtts = curDelAttVal ? curDelAttVal.split(',') : [];
+          toDeleteAtts.forEach(function(tda) {
+            var clTda = String(tda || '').trim();
+            if (clTda && allDelAtts.indexOf(clTda) === -1) allDelAtts.push(clTda);
+          });
+          var newDelAttStr = allDelAtts.join(',');
+          if (delAttRowIdx > -1) {
+            setSheetAtt.getRange(delAttRowIdx, 2).setValue(newDelAttStr);
+            setSheetAtt.getRange(delAttRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetAtt.appendRow(['deleted_attachment_ids', newDelAttStr, 'Universal Deleted Attachment IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errAttDel) {}
+
+      if (data.action === 'DELETE_ATTACHMENT') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Attachment from sheet and Drive." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -937,7 +1026,8 @@ function doPost(e) {
       chatMessages: extractAllSheetChat(chatSheet),
       events: extractAllSheetEvents(eventSheet),
       eventResponses: extractAllSheetResponses(respSheet),
-      attachments: extractAllSheetAttachments(attachSheet)
+      attachments: extractAllSheetAttachments(attachSheet),
+      smsNotifications: extractAllSheetSms(smsSheet)
     })).setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
@@ -959,6 +1049,7 @@ function handleFetchAllData() {
     var eventSheet = ss.getSheetByName('Team_Events');
     var respSheet = ss.getSheetByName('Event_Submissions');
     var attachSheet = ss.getSheetByName('Attachments');
+    var smsSheet = ss.getSheetByName('SMS_Notifications');
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -969,7 +1060,8 @@ function handleFetchAllData() {
       chatMessages: chatSheet ? extractAllSheetChat(chatSheet) : [],
       events: eventSheet ? extractAllSheetEvents(eventSheet) : [],
       eventResponses: respSheet ? extractAllSheetResponses(respSheet) : [],
-      attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : []
+      attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : [],
+      smsNotifications: smsSheet ? extractAllSheetSms(smsSheet) : []
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -1028,6 +1120,32 @@ function extractAllSheetDocuments(sheet) {
       uploaderRole: String(row[11] || ''),
       createdAt: String(row[12] || ''),
       updatedAt: String(row[13] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetSms(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var nid = String(row[0] || '').trim();
+    if (!nid) continue;
+    list.push({
+      notificationId: nid,
+      recipientRmCode: String(row[1] || '').trim(),
+      recipientName: String(row[2] || '').trim(),
+      recipientMobile: String(row[3] || '').trim(),
+      triggeredByRole: String(row[4] || '').trim(),
+      triggeredByCode: String(row[5] || '').trim(),
+      actionType: String(row[6] || '').trim(),
+      targetId: String(row[7] || '').trim(),
+      messageText: String(row[8] || '').trim(),
+      status: String(row[9] || 'DELIVERED').trim(),
+      sentTimestamp: String(row[10] || '').trim()
     });
   }
   return list;
@@ -1262,7 +1380,35 @@ function extractAllSheetSettings(sheet) {
       }
     }
 
-    Spacer(modifier = Modifier.height(14.dp))
+    Spacer(modifier = Modifier.height(10.dp))
+
+    // Google Drive Cloud Storage Account Card
+    Card(
+      modifier = Modifier.fillMaxWidth().testTag("google_drive_account_card"),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+      border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+    ) {
+      Row(
+        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+      ) {
+        Box(
+          modifier = Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF2563EB)),
+          contentAlignment = Alignment.Center
+        ) {
+          Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+          Text("Google Drive Cloud Storage", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = Color(0xFF1E3A8A))
+          Text("Target Account: mdbappyhossain017@gmail.com", fontSize = 11.sp, color = Color(0xFF1D4ED8), fontWeight = FontWeight.SemiBold)
+          Text("Folder: 'EBL RM Suite Drive Files' (All uploaded customer photos & documents persist permanently)", fontSize = 10.sp, color = Color(0xFF3B82F6))
+        }
+      }
+    }
+
+    Spacer(modifier = Modifier.height(10.dp))
 
     // Real-Time Continuous 2-Way Auto-Sync Card (Hands-free automatic polling every 4s)
     Card(

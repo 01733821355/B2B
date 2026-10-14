@@ -169,15 +169,21 @@ object DateUtils {
       "yyyy-MM-dd HH:mm",
       "yyyy-MM-dd'T'HH:mm:ss",
       "yyyy-MM-dd'T'HH:mm:ss.SSS",
+      "yyyy-MM-dd'T'HH:mm",
+      "dd/MM/yyyy HH:mm",
+      "dd/MM/yyyy hh:mm a",
+      "dd-MM-yyyy HH:mm",
+      "dd-MM-yyyy hh:mm a",
       "dd MMM yyyy, hh:mm a",
       "dd MMM yyyy, hh:mm:ss a",
       "dd/MM/yyyy",
+      "dd-MM-yyyy",
       "yyyy-MM-dd"
     )
     for (p in patterns) {
       try {
         val formatter = DateTimeFormatter.ofPattern(p)
-        if (p == "yyyy-MM-dd" || p == "dd/MM/yyyy") {
+        if (p == "yyyy-MM-dd" || p == "dd/MM/yyyy" || p == "dd-MM-yyyy") {
           val ld = LocalDate.parse(trimmed, formatter)
           return ld.atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
         } else {

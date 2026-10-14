@@ -416,16 +416,35 @@ object PdfReportGenerator {
     // Also copy to Downloads so user has a permanent offline copy on device
     savePdfToDownloads(context, pdfFile, pdfFile.name)
 
-    val intent = Intent(Intent.ACTION_SEND).apply {
-      type = "application/pdf"
-      putExtra(Intent.EXTRA_STREAM, uri)
-      putExtra(Intent.EXTRA_SUBJECT, "Performance / Event Summary Report (PDF)")
+    // Primary: Open directly in PDF viewer (Google Drive PDF, Adobe, Chrome)
+    val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+      setDataAndType(uri, "application/pdf")
       addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    context.startActivity(Intent.createChooser(intent, "Open or Share PDF Report").apply {
-      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    })
+
+    try {
+      val chooser = Intent.createChooser(viewIntent, "Open PDF Report with").apply {
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      context.startActivity(chooser)
+    } catch (_: Exception) {
+      // Fallback to ACTION_SEND if no direct PDF viewer is available
+      try {
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+          type = "application/pdf"
+          putExtra(Intent.EXTRA_STREAM, uri)
+          putExtra(Intent.EXTRA_SUBJECT, "Performance / Event Summary Report (PDF)")
+          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(Intent.createChooser(sendIntent, "Open or Share PDF Report").apply {
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        })
+      } catch (e2: Exception) {
+        android.widget.Toast.makeText(context, "PDF saved to Downloads folder: ${pdfFile.name}", android.widget.Toast.LENGTH_LONG).show()
+      }
+    }
   }
 
   /**
