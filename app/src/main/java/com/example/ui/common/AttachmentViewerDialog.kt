@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -19,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +41,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -231,7 +235,7 @@ fun AttachmentViewerDialog(
               modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Icon(Icons.Default.CloudDone, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(14.dp))
+              Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
               Text("Google Drive Storage (mdbappyhossain017@gmail.com)", fontSize = 10.sp, color = Color(0xFF1D4ED8), fontWeight = FontWeight.SemiBold)
             }
@@ -296,7 +300,7 @@ fun AttachmentViewerDialog(
                 )
               } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                  Icon(Icons.Default.BrokenImage, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
+                  Icon(Icons.Default.Image, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
                   Spacer(modifier = Modifier.height(6.dp))
                   Text("ছবি লোড করা যায়নি। নিচে ওপেন বাটনে ক্লিক করুন।", fontSize = 11.sp, color = Color.Gray)
                 }

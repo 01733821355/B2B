@@ -3696,6 +3696,7 @@ class EblRepository(
         role = currentUser.role,
         action = "DELETE_DOC",
         fileId = docId,
+        timestamp = System.currentTimeMillis(),
         details = "Important Document '$docId' deleted by ${currentUser.role} (${currentUser.name})",
       )
     )

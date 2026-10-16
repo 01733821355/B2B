@@ -391,6 +391,12 @@ object AttachmentHelper {
     withContext(Dispatchers.IO) {
       try {
         val sourceFile = resolveFileAsync(context, attachment)
+        if (sourceFile == null || !sourceFile.exists()) {
+          withContext(Dispatchers.Main) {
+            Toast.makeText(context, "ডকুমেন্টটি ডাউনলোড করা যায়নি বা ফাইল পাওয়া যায়নি।", Toast.LENGTH_SHORT).show()
+          }
+          return@withContext false
+        }
         val fileName = attachment.fileName.ifBlank { "Document_${System.currentTimeMillis()}" }
         val mime = attachment.fileType.ifBlank { "application/octet-stream" }
 

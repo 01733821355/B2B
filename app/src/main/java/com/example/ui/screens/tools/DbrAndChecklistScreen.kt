@@ -2354,7 +2354,6 @@ fun DocumentChecklistSenderTab(
             singleLine = true,
             modifier = Modifier
               .fillMaxWidth()
-              .onFocusChanged { if (it.isFocused) triggerSoftKeyboard() }
               .testTag("input_checklist_customer_name"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
           )
@@ -2371,7 +2370,6 @@ fun DocumentChecklistSenderTab(
             singleLine = true,
             modifier = Modifier
               .fillMaxWidth()
-              .onFocusChanged { if (it.isFocused) triggerSoftKeyboard() }
               .testTag("input_checklist_customer_mobile"),
             colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
           )
