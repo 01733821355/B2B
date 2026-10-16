@@ -242,7 +242,7 @@ function doPost(e) {
 
     // 10. Auto-create & format 'Team_Events' Tab
     var eventSheet = getOrCreateSheet(ss, 'Team_Events', [
-      'Event ID', 'Title', 'Description', 'Creator RM', 'Creator Name', 'Target Date', 'Allowed Fields', 'Status', 'Created At'
+      'Event ID', 'Title', 'Description', 'Creator RM', 'Creator Name', 'Target Date', 'Allowed Fields', 'Status', 'Created At', 'Close Time'
     ], '#7E22CE');
 
     // 11. Auto-create & format 'Event_Submissions' Tab
@@ -647,22 +647,58 @@ function doPost(e) {
       }
     }
 
-    // Handle SMS Notifications Deletion (Immediately removes SMS rows from Google Sheets)
+    // Handle SMS Notifications Deletion (Immediately removes SMS rows permanently & updates Universal_Settings)
     if (data.action === 'DELETE_SMS' || (data.deletedSmsIds && data.deletedSmsIds.length > 0)) {
       var toDeleteSms = data.deletedSmsIds || [data.smsId].filter(Boolean);
       var curSms = smsSheet.getDataRange().getValues();
+      var targetMsgTxt = data.messageText ? String(data.messageText).trim().toLowerCase() : '';
       for (var ds = curSms.length - 1; ds >= 1; ds--) {
-        var smsIdVal = String(curSms[ds][0] || '').trim();
+        var smsIdVal = String(curSms[ds][0] || '').trim().toLowerCase();
+        var smsTimeVal = String(curSms[ds][10] || '').trim().toLowerCase();
+        var smsTxtVal = String(curSms[ds][8] || '').trim().toLowerCase();
+        var matchFound = false;
         for (var n = 0; n < toDeleteSms.length; n++) {
-          var targetSms = String(toDeleteSms[n] || '').trim();
-          if (targetSms && smsIdVal.toLowerCase() === targetSms.toLowerCase()) {
-            smsSheet.deleteRow(ds + 1);
+          var targetSms = String(toDeleteSms[n] || '').trim().toLowerCase();
+          if (targetSms && (smsIdVal === targetSms || smsTimeVal === targetSms || (targetMsgTxt && smsTxtVal === targetMsgTxt))) {
+            matchFound = true;
             break;
           }
         }
+        if (matchFound) {
+          smsSheet.deleteRow(ds + 1);
+        }
       }
+      // Persist deleted SMS IDs in Universal_Settings so all other client devices purge them
+      try {
+        var setSheetSms = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetSms) {
+          var sValsSms = setSheetSms.getDataRange().getValues();
+          var delSmsRowIdx = -1;
+          var curDelSmsVal = '';
+          for (var ssr = 1; ssr < sValsSms.length; ssr++) {
+            if (String(sValsSms[ssr][0] || '').trim().toLowerCase() === 'deleted_sms_ids') {
+              delSmsRowIdx = ssr + 1;
+              curDelSmsVal = String(sValsSms[ssr][1] || '').trim();
+              break;
+            }
+          }
+          var allDelSms = curDelSmsVal ? curDelSmsVal.split(',') : [];
+          toDeleteSms.forEach(function(tds) {
+            var clTds = String(tds || '').trim();
+            if (clTds && allDelSms.indexOf(clTds) === -1) allDelSms.push(clTds);
+          });
+          var newDelSmsStr = allDelSms.join(',');
+          if (delSmsRowIdx > -1) {
+            setSheetSms.getRange(delSmsRowIdx, 2).setValue(newDelSmsStr);
+            setSheetSms.getRange(delSmsRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetSms.appendRow(['deleted_sms_ids', newDelSmsStr, 'Universal Deleted SMS IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errSmsDel) {}
+
       if (data.action === 'DELETE_SMS') {
-        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted SMS from sheet." }))
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Permanently deleted SMS row from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -671,13 +707,44 @@ function doPost(e) {
     if (data.action === 'CLEAR_SMS_FOR_RM') {
       var targetRm = String(data.rmCode || '').trim().toUpperCase();
       var curSmsClr = smsSheet.getDataRange().getValues();
+      var clearedIds = [];
       for (var dsClr = curSmsClr.length - 1; dsClr >= 1; dsClr--) {
         var rowRecipient = String(curSmsClr[dsClr][1] || '').trim().toUpperCase();
+        var rowId = String(curSmsClr[dsClr][0] || '').trim();
         if (targetRm === 'ALL' || rowRecipient === targetRm) {
+          if (rowId) clearedIds.push(rowId);
           smsSheet.deleteRow(dsClr + 1);
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Cleared SMS for " + targetRm }))
+      if (clearedIds.length > 0) {
+        try {
+          var setSheetClr = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+          if (setSheetClr) {
+            var sValsClr = setSheetClr.getDataRange().getValues();
+            var delClrRowIdx = -1;
+            var curDelClrVal = '';
+            for (var ckr = 1; ckr < sValsClr.length; ckr++) {
+              if (String(sValsClr[ckr][0] || '').trim().toLowerCase() === 'deleted_sms_ids') {
+                delClrRowIdx = ckr + 1;
+                curDelClrVal = String(sValsClr[ckr][1] || '').trim();
+                break;
+              }
+            }
+            var allDelClr = curDelClrVal ? curDelClrVal.split(',') : [];
+            clearedIds.forEach(function(cid) {
+              if (cid && allDelClr.indexOf(cid) === -1) allDelClr.push(cid);
+            });
+            var newDelClrStr = allDelClr.join(',');
+            if (delClrRowIdx > -1) {
+              setSheetClr.getRange(delClrRowIdx, 2).setValue(newDelClrStr);
+              setSheetClr.getRange(delClrRowIdx, 5).setValue(new Date().toISOString());
+            } else {
+              setSheetClr.appendRow(['deleted_sms_ids', newDelClrStr, 'Universal Deleted SMS IDs', 'App_Sync', new Date().toISOString()]);
+            }
+          }
+        } catch (errClrDel) {}
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Permanently cleared SMS for " + targetRm }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -1070,7 +1137,8 @@ function doPost(e) {
           ev.targetDate || '',
           ev.allowedFields || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS',
           ev.status || 'ACTIVE',
-          ev.createdAt || ''
+          ev.createdAt || '',
+          ev.closeTime || ''
         ];
         if (evMap[evid]) {
           eventSheet.getRange(evMap[evid], 1, 1, row.length).setValues([row]);
@@ -1289,7 +1357,8 @@ function extractAllSheetEvents(sheet) {
       targetDate: String(row[5] || ''),
       allowedFields: String(row[6] || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS'),
       status: String(row[7] || 'ACTIVE'),
-      createdAt: String(row[8] || '')
+      createdAt: String(row[8] || ''),
+      closeTime: String(row[9] || '')
     });
   }
   return list;

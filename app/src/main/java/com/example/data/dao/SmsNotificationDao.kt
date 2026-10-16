@@ -42,6 +42,12 @@ interface SmsNotificationDao {
   @Query("DELETE FROM sms_notifications")
   suspend fun clearAllSms()
 
+  @Query("SELECT * FROM sms_notifications WHERE id = :id LIMIT 1")
+  suspend fun getSmsById(id: Long): SmsNotificationEntity?
+
+  @Query("DELETE FROM sms_notifications WHERE id NOT IN (SELECT id FROM sms_notifications ORDER BY sentTimestamp DESC LIMIT 50)")
+  suspend fun pruneOldSms()
+
   @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND sentTimestamp = :timestamp AND messageText = :message")
   suspend fun countMatchingSms(rmCode: String, timestamp: Long, message: String): Int
 }

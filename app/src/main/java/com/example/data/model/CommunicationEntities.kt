@@ -41,7 +41,8 @@ data class TeamEventEntity(
   val targetDate: String, // e.g. "12/10/2026"
   val createdAt: Long,
   val status: String = "ACTIVE", // "ACTIVE", "COMPLETED"
-  val allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS" // Admin/Mentor configurable fields
+  val allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS", // Admin/Mentor configurable fields
+  val closeTime: String = "" // Event deadline / close time (e.g. "16/10/2026 06:00 PM")
 )
 
 @Entity(

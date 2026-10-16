@@ -134,8 +134,8 @@ fun CommunicationHubScreen(
   if (showCreateEventDialog) {
     CreateEventDialog(
       onDismiss = { showCreateEventDialog = false },
-      onSubmit = { title, desc, date, allowedFields ->
-        viewModel.createTeamEvent(title, desc, date, allowedFields) { success, _ ->
+      onSubmit = { title, desc, date, allowedFields, closeTime ->
+        viewModel.createTeamEvent(title, desc, date, allowedFields, closeTime) { success, _ ->
           if (success) {
             showCreateEventDialog = false
           }

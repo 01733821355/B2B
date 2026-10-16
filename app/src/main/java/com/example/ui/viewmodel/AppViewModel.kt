@@ -1311,10 +1311,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     description: String,
     targetDate: String,
     allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS",
+    closeTime: String = "",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.createTeamEvent(title, description, targetDate, allowedFields)
+      val res = eblRepository.createTeamEvent(title, description, targetDate, allowedFields, closeTime)
       res.onSuccess {
         _uiMessage.emit("✓ Event '${it.title}' created & shared with all team members!")
         onResult(true, null)
@@ -1331,10 +1332,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     targetDate: String,
     status: String,
     allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS",
+    closeTime: String = "",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.updateEventSettings(eventId, title, description, targetDate, status, allowedFields)
+      val res = eblRepository.updateEventSettings(eventId, title, description, targetDate, status, allowedFields, closeTime)
       res.onSuccess {
         _uiMessage.emit("✓ Event settings updated!")
         onResult(true, null)

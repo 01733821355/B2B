@@ -198,4 +198,23 @@ object DateUtils {
     }
     return null
   }
+
+  fun isEventExpired(closeTime: String, targetDate: String = ""): Boolean {
+    val now = currentDhakaMillis()
+    if (closeTime.isNotBlank()) {
+      val parsedClose = parseDateTime(closeTime)
+      if (parsedClose != null && parsedClose > 0L) {
+        val expiryTime = if (closeTime.trim().length <= 10) parsedClose + 86399000L else parsedClose
+        return now > expiryTime
+      }
+    }
+    if (targetDate.isNotBlank()) {
+      val parsedTarget = parseDateTime(targetDate)
+      if (parsedTarget != null && parsedTarget > 0L) {
+        val expiryTime = if (targetDate.trim().length <= 10) parsedTarget + 86399000L else parsedTarget
+        return now > expiryTime
+      }
+    }
+    return false
+  }
 }

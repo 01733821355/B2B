@@ -215,10 +215,16 @@ class EblRepository(
 
     // Store in persistent deleted_sms_ids setting
     val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
-    val updatedDel = if (currentDel.isBlank()) id.toString() else "$currentDel,$id"
+    val toAdd = mutableListOf<String>()
+    toAdd.add(id.toString())
+    if (targetSms != null && targetSms.sentTimestamp > 0L) {
+      toAdd.add(targetSms.sentTimestamp.toString())
+    }
+    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + toAdd).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
     )
+    deletedSmsIdsCache.addAll(toAdd)
 
     // Track signature so it never regenerates on Google Sheets sync
     if (targetSms != null && !targetSms.fileId.isNullOrBlank()) {
@@ -230,8 +236,12 @@ class EblRepository(
       )
     }
 
-    // Synchronize SMS deletion directly to Google Sheets
-    syncSmsDeletionToGoogleSheets(id.toString())
+    // Synchronize SMS deletion directly to Google Sheets permanently
+    targetSms?.let {
+      syncSmsDeletionToGoogleSheets(it.id.toString(), it.sentTimestamp.toString(), it.messageText)
+    } ?: syncSmsDeletionToGoogleSheets(id.toString())
+
+    database.smsNotificationDao().pruneOldSms()
   }
 
   suspend fun notifySmsDispatchedToAll(
@@ -291,6 +301,7 @@ class EblRepository(
     )
 
     database.smsNotificationDao().clearSmsForRm(cleanRm)
+    database.smsNotificationDao().pruneOldSms()
     syncClearSmsToGoogleSheets(cleanRm)
   }
 
@@ -299,7 +310,7 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     val allSms = database.smsNotificationDao().getAllSms()
     val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
-    val newDelIds = allSms.map { it.id.toString() }
+    val newDelIds = allSms.flatMap { listOf(it.id.toString(), it.sentTimestamp.toString()) }
     newDelIds.forEach { deletedSmsIdsCache.add(it) }
     val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + newDelIds).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
@@ -318,6 +329,7 @@ class EblRepository(
     )
 
     database.smsNotificationDao().clearAllSms()
+    database.smsNotificationDao().pruneOldSms()
     syncClearSmsToGoogleSheets("ALL")
   }
 
@@ -693,7 +705,7 @@ class EblRepository(
     } catch (_: Exception) {}
   }
 
-  suspend fun syncSmsDeletionToGoogleSheets(smsId: String): Unit = withContext(Dispatchers.IO) {
+  suspend fun syncSmsDeletionToGoogleSheets(smsId: String, timestamp: String = "", messageText: String = ""): Unit = withContext(Dispatchers.IO) {
     try {
       val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
       val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
@@ -701,10 +713,16 @@ class EblRepository(
       }
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
+      val delArray = org.json.JSONArray().apply {
+        put(smsId)
+        if (timestamp.isNotBlank() && timestamp != smsId) put(timestamp)
+      }
       val payload = org.json.JSONObject().apply {
         put("action", "DELETE_SMS")
         put("smsId", smsId)
-        put("deletedSmsIds", org.json.JSONArray().apply { put(smsId) })
+        put("timestamp", timestamp)
+        put("messageText", messageText)
+        put("deletedSmsIds", delArray)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -2372,6 +2390,7 @@ class EblRepository(
             put("createdAt", DateUtils.formatDateTime(ev.createdAt))
             put("status", ev.status)
             put("allowedFields", ev.allowedFields)
+            put("closeTime", ev.closeTime)
           })
         }
 
@@ -3224,6 +3243,7 @@ class EblRepository(
       val createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now
       val status = obj.optString("status", "ACTIVE").trim()
       val allowedFields = obj.optString("allowedFields", "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS").trim()
+      val closeTime = obj.optString("closeTime", "").trim()
 
       val existingEvent = database.communicationDao().getEventById(eventId)
       val entity = com.example.data.model.TeamEventEntity(
@@ -3235,7 +3255,8 @@ class EblRepository(
         targetDate = targetDate,
         createdAt = createdAt,
         status = status,
-        allowedFields = allowedFields
+        allowedFields = allowedFields,
+        closeTime = closeTime
       )
       database.communicationDao().insertEvent(entity)
       count++
@@ -3431,8 +3452,8 @@ class EblRepository(
           database.customerFileDao().updateFile(updated)
           updatedCount++
 
-          // Send SMS to RM ONLY when status, active, remarks, documents, or RM assignment were changed via a manual sheet edit!
-          if (isManualSheetEdit && (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged)) {
+          // Send SMS to RM when status, active, remarks, documents, or RM assignment were changed in Google Sheets
+          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged) {
             val targetRmUser = database.userDao().getUser(updated.assignedRmCode)
             val rmMobile = targetRmUser?.mobile ?: ""
             val rmName = targetRmUser?.name ?: updated.assignedRmCode
@@ -3444,19 +3465,19 @@ class EblRepository(
               hasRemarksChanged -> "CPV Remarks Updated"
               else -> "Pending Docs Updated"
             }
-            val smsMessage = "[EBL Alert] Dear $rmName (${updated.assignedRmCode}), customer file ${existing.fileId} ('${existing.customerName}') was updated in Google Sheets ($changeNote). Timestamp: $formattedTime. EBL Sales Suite."
+            val smsMessage = "[Eastern Bank PLC] Customer File Update: File ${existing.fileId} ('${existing.customerName}') was updated ($changeNote). Timestamp: $formattedTime. - EBL Retail Banking"
 
             val allRecentSms = database.smsNotificationDao().getAllSms()
             val deletedSmsSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
             val deletedSmsSigSet = deletedSmsSigs.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            val currentSig = "${existing.fileId}_${updated.assignedRmCode}_${if (hasRmChanged) "TRANSFER" else "UPDATE"}"
+            val currentSig = "${existing.fileId}_${updated.assignedRmCode}_${if (hasRmChanged) "TRANSFER" else "UPDATE"}_$changeNote"
             val isDeletedByUser = currentSig in deletedSmsSigSet
 
             val isDuplicate = isDeletedByUser || allRecentSms.any {
               it.recipientRmCode == updated.assignedRmCode &&
               it.fileId == existing.fileId &&
-              it.actionType == (if (hasRmChanged) "TRANSFER" else "UPDATE") &&
-              (now - it.sentTimestamp < 86400000L)
+              (it.actionType == (if (hasRmChanged) "TRANSFER" else "UPDATE") || it.messageText.contains(changeNote)) &&
+              (now - it.sentTimestamp < 15 * 60 * 1000L)
             }
             if (!isDuplicate) {
               var smsStatus = "DELIVERED"
@@ -3482,6 +3503,45 @@ class EblRepository(
                   isRead = false
                 )
               )
+              database.smsNotificationDao().pruneOldSms()
+            }
+
+            if (hasRmChanged && existing.assignedRmCode.isNotBlank()) {
+              val oldRmUser = database.userDao().getUser(existing.assignedRmCode)
+              val oldRmMobile = oldRmUser?.mobile ?: ""
+              val oldRmName = oldRmUser?.name ?: existing.assignedRmCode
+              val oldMsg = "[Eastern Bank PLC] Reassignment Notice: File ${existing.fileId} ('${existing.customerName}') previously under your code was transferred to RM $rmCode. Date: $formattedTime. - EBL Retail Banking"
+              val isOldDuplicate = allRecentSms.any {
+                it.recipientRmCode == existing.assignedRmCode &&
+                it.fileId == existing.fileId &&
+                it.actionType == "TRANSFER" &&
+                (now - it.sentTimestamp < 15 * 60 * 1000L)
+              }
+              if (!isOldDuplicate) {
+                var oldSmsStatus = "DELIVERED"
+                if (context != null && oldRmMobile.isNotBlank()) {
+                  val sentHardware = SmsService.sendSms(context, oldRmMobile, oldMsg)
+                  oldSmsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
+                }
+                database.smsNotificationDao().insertSms(
+                  SmsNotificationEntity(
+                    recipientRmCode = existing.assignedRmCode,
+                    recipientMobile = oldRmMobile,
+                    recipientName = oldRmName,
+                    triggeredByRole = "SHEETS_SYNC",
+                    triggeredByCode = "Admin_Sheets",
+                    actionType = "TRANSFER",
+                    targetType = "CUSTOMER_FILE",
+                    fileId = existing.fileId,
+                    customerName = existing.customerName,
+                    messageText = oldMsg,
+                    sentTimestamp = now,
+                    status = oldSmsStatus,
+                    isRead = false
+                  )
+                )
+                database.smsNotificationDao().pruneOldSms()
+              }
             }
 
             context?.let { ctx ->
@@ -3750,7 +3810,8 @@ class EblRepository(
     title: String,
     description: String,
     targetDate: String,
-    allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS"
+    allowedFields: String = "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS",
+    closeTime: String = ""
   ): Result<com.example.data.model.TeamEventEntity> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -3765,12 +3826,14 @@ class EblRepository(
       targetDate = targetDate.trim(),
       createdAt = now,
       status = "ACTIVE",
-      allowedFields = allowedFields
+      allowedFields = allowedFields,
+      closeTime = closeTime.trim()
     )
     database.communicationDao().insertEvent(event)
 
     // Automatically post announcement message into General Team Chat so everyone gets notified!
-    val broadcastText = "📢 NEW EVENT: '${event.title}'\nTarget Date: ${event.targetDate}\n${event.description}\n(Tap this event below to submit your details)"
+    val closeTimeText = if (event.closeTime.isNotBlank()) "\nClose Time: ${event.closeTime}" else ""
+    val broadcastText = "📢 NEW EVENT: '${event.title}'\nTarget Date: ${event.targetDate}$closeTimeText\n${event.description}\n(Tap this event below to submit your details)"
     sendChatMessage(
       messageText = broadcastText,
       recipientRmCode = null,
@@ -3787,8 +3850,7 @@ class EblRepository(
     if (event.status.equals("CLOSED", ignoreCase = true) || event.status.equals("COMPLETED", ignoreCase = true) || event.status.equals("EXPIRED", ignoreCase = true)) {
       return true
     }
-    val targetMillis = DateUtils.parseDateTime(event.targetDate) ?: return false
-    return targetMillis < DateUtils.currentDhakaMillis()
+    return DateUtils.isEventExpired(event.closeTime, event.targetDate)
   }
 
   suspend fun updateEventSettings(
@@ -3797,7 +3859,8 @@ class EblRepository(
     description: String,
     targetDate: String,
     status: String,
-    allowedFields: String
+    allowedFields: String,
+    closeTime: String = ""
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
@@ -3814,7 +3877,8 @@ class EblRepository(
       description = description.trim(),
       targetDate = targetDate.trim(),
       status = status.trim(),
-      allowedFields = allowedFields.trim()
+      allowedFields = allowedFields.trim(),
+      closeTime = if (closeTime.isNotBlank()) closeTime.trim() else existing.closeTime
     )
     database.communicationDao().insertEvent(updated)
     CoroutineScope(Dispatchers.IO).launch {

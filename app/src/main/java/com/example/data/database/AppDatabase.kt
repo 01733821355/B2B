@@ -46,7 +46,7 @@ import com.example.data.model.UserLocationLogEntity
     EventResponseEntity::class,
     ImportantDocumentEntity::class
   ],
-  version = 9,
+  version = 10,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -170,6 +170,12 @@ abstract class AppDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_9_10 = object : Migration(9, 10) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `team_events` ADD COLUMN `closeTime` TEXT NOT NULL DEFAULT ''")
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         val instance = Room.databaseBuilder(
@@ -177,7 +183,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "ebl_rm_database.db"
         )
-          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
           .fallbackToDestructiveMigration()
           .build()
         INSTANCE = instance
