@@ -269,7 +269,7 @@ object NotificationHelper {
     current.add(key)
     // Keep set bounded to last 500 keys to avoid unlimited growth
     if (current.size > 500) {
-      val trimmed = current.takeLast(300).toSet()
+      val trimmed = current.toList().takeLast(300).toSet()
       prefs.edit().putStringSet("shown_notification_keys", trimmed).apply()
     } else {
       prefs.edit().putStringSet("shown_notification_keys", current).apply()

@@ -3128,7 +3128,7 @@ class EblRepository(
                   context = ctx,
                   eventTitle = targetId.ifBlank { "Team Event" },
                   creatorName = triggeredRole,
-                  targetDate = DateUtils.formatDate(sentTime)
+                  targetDate = DateUtils.formatDateOnly(sentTime)
                 )
               } else if (actionType == "TRANSFER" || actionType == "UPDATE") {
                 NotificationHelper.sendRmFileUpdateNotification(

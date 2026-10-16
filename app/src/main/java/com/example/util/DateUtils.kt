@@ -55,6 +55,10 @@ object DateUtils {
     }
   }
 
+  fun formatDate(millis: Long?): String {
+    return formatDateOnly(millis)
+  }
+
   fun formatDateOnly(millis: Long?): String {
     if (millis == null || millis <= 0) return "N/A"
     return try {
