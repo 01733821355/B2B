@@ -145,7 +145,6 @@ fun CustomerDetailDialog(
             fileUri = saved.fileUri,
             localFile = saved.file
           )
-          Toast.makeText(context, "Photo uploaded to Google Drive successfully!", Toast.LENGTH_SHORT).show()
           showAddAttachmentModal = false
           uploadDocNameInput = ""
         } catch (e: Exception) {
@@ -179,7 +178,6 @@ fun CustomerDetailDialog(
             fileUri = saved.fileUri,
             localFile = saved.file
           )
-          Toast.makeText(context, "Document uploaded to Google Drive successfully!", Toast.LENGTH_SHORT).show()
           showAddAttachmentModal = false
           uploadDocNameInput = ""
         } catch (e: Exception) {

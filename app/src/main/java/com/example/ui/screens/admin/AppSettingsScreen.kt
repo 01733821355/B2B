@@ -316,6 +316,7 @@ fun AppSettingsScreen(
     var checklistPresetInput by remember(selectedPresetKey, savedPresetVal) { mutableStateOf(savedPresetVal) }
 
     var showAddNewCategoryDialog by remember { mutableStateOf(false) }
+    var showDeletePresetDialog by remember { mutableStateOf(false) }
     var newCategoryKeyInput by remember { mutableStateOf("") }
     var newCategoryTitleInput by remember { mutableStateOf("") }
     var newCategoryItemsInput by remember { mutableStateOf("") }
@@ -404,34 +405,81 @@ fun AppSettingsScreen(
             fontSize = 11.sp,
             color = Color.Gray
           )
-          Button(
-            onClick = {
-              val cleanVal = checklistPresetInput.trim()
-              if (selectedPresetKey == "CHECKLIST_HEADER_TEMPLATE") {
-                viewModel.updateSetting("Checklist Header", cleanVal)
-                viewModel.updateSetting("CHECKLIST_HEADER_TEMPLATE", cleanVal)
-              } else if (selectedPresetKey == "CHECKLIST_REGARDS_TEMPLATE") {
-                viewModel.updateSetting("Checklist Footer", cleanVal)
-                viewModel.updateSetting("CHECKLIST_REGARDS_TEMPLATE", cleanVal)
-              } else {
-                viewModel.savePresetRow(currentPresetObj.second, cleanVal)
-                viewModel.updateSetting(selectedPresetKey, cleanVal)
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            val isCustomCategory = selectedPresetKey.startsWith("CHECKLIST_CUSTOM_")
+            if (isCustomCategory) {
+              androidx.compose.material3.OutlinedButton(
+                onClick = { showDeletePresetDialog = true },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFDC2626)),
+                modifier = Modifier.testTag("btn_delete_checklist_preset")
+              ) {
+                Icon(Icons.Default.Delete, contentDescription = "Delete Category", modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Delete")
               }
-              // If PENDING_DOCS_LIST was updated, keep pendingDocsInput in sync
-              if (selectedPresetKey == "PENDING_DOCS_LIST") {
-                pendingDocsInput = cleanVal
-              }
-              Toast.makeText(context, "'${currentPresetObj.second}' saved & synced as row in Universal Settings!", Toast.LENGTH_SHORT).show()
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            modifier = Modifier.testTag("btn_save_checklist_preset")
-          ) {
-            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Save & Sync to Sheet")
+            }
+            Button(
+              onClick = {
+                val cleanVal = checklistPresetInput.trim()
+                if (selectedPresetKey == "CHECKLIST_HEADER_TEMPLATE") {
+                  viewModel.updateSetting("Checklist Header", cleanVal)
+                  viewModel.updateSetting("CHECKLIST_HEADER_TEMPLATE", cleanVal)
+                } else if (selectedPresetKey == "CHECKLIST_REGARDS_TEMPLATE") {
+                  viewModel.updateSetting("Checklist Footer", cleanVal)
+                  viewModel.updateSetting("CHECKLIST_REGARDS_TEMPLATE", cleanVal)
+                } else {
+                  viewModel.savePresetRow(currentPresetObj.second, cleanVal)
+                  viewModel.updateSetting(selectedPresetKey, cleanVal)
+                }
+                // If PENDING_DOCS_LIST was updated, keep pendingDocsInput in sync
+                if (selectedPresetKey == "PENDING_DOCS_LIST") {
+                  pendingDocsInput = cleanVal
+                }
+                Toast.makeText(context, "'${currentPresetObj.second}' saved & synced as row in Universal Settings!", Toast.LENGTH_SHORT).show()
+              },
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              modifier = Modifier.testTag("btn_save_checklist_preset")
+            ) {
+              Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Save & Sync to Sheet")
+            }
           }
         }
       }
+    }
+
+    // Delete Custom Preset Confirmation Dialog
+    if (showDeletePresetDialog) {
+      androidx.compose.material3.AlertDialog(
+        onDismissRequest = { showDeletePresetDialog = false },
+        title = { Text("Delete Category / Row?", fontWeight = FontWeight.Bold, color = Color(0xFFDC2626)) },
+        text = {
+          Text("আপনি কি নিশ্চিত যে '${currentPresetObj.second}' ক্যাটাগরি এবং এর সমস্ত আইটেম অ্যাপ এবং গুগল শিটের Universal Settings ট্যাব থেকে সম্পূর্ণ মুছে ফেলতে চান?")
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              viewModel.deletePresetRow(currentPresetObj.second, selectedPresetKey) { success, _ ->
+                if (success) {
+                  selectedPresetKey = checklistPresets[0].first
+                  showDeletePresetDialog = false
+                  Toast.makeText(context, "Category deleted successfully!", Toast.LENGTH_SHORT).show()
+                }
+              }
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+          ) {
+            Text("Delete Permanently")
+          }
+        },
+        dismissButton = {
+          androidx.compose.material3.TextButton(onClick = { showDeletePresetDialog = false }) {
+            Text("Cancel")
+          }
+        }
+      )
     }
 
     // Add New Custom Checklist Category Dialog

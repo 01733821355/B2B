@@ -348,9 +348,17 @@ object AttachmentHelper {
               addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(browserIntent)
-            Toast.makeText(context, "Opening Google Drive file in browser...", Toast.LENGTH_SHORT).show()
           } else {
-            Toast.makeText(context, "File could not be downloaded. Please check internet connection.", Toast.LENGTH_LONG).show()
+            val isLocalOnly = attachment.fileUri.startsWith("content://") ||
+              attachment.fileUri.startsWith("/data/") ||
+              (!attachment.fileUri.startsWith("http") && attachment.fileUri.isNotBlank()) ||
+              attachment.storagePath.startsWith("/data/")
+            val msg = if (isLocalOnly) {
+              "ফাইলটি এখনও ক্লাউডে (Google Drive) আপলোড হয়নি, এটি আপলোডকারীর নিজস্ব ডিভাইসে সংরক্ষিত ছিল। Apps Script-এ Drive পারমিশন দিয়ে ফাইলটি পুনরায় আপলোড করুন।"
+            } else {
+              "ডকুমেন্টটি ডাউনলোড করা যায়নি। অনুগ্রহ করে ইন্টারনেট সংযোগ চেক করুন।"
+            }
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
           }
         }
       }

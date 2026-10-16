@@ -299,10 +299,25 @@ fun AttachmentViewerDialog(
                     .heightIn(max = 340.dp)
                 )
               } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val isLocalOnly = attachment.fileUri.startsWith("content://") ||
+                  attachment.fileUri.startsWith("/data/") ||
+                  (!attachment.fileUri.startsWith("http") && attachment.fileUri.isNotBlank())
+                Column(
+                  horizontalAlignment = Alignment.CenterHorizontally,
+                  modifier = Modifier.padding(16.dp)
+                ) {
                   Icon(Icons.Default.Image, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(40.dp))
                   Spacer(modifier = Modifier.height(6.dp))
-                  Text("ছবি লোড করা যায়নি। নিচে ওপেন বাটনে ক্লিক করুন।", fontSize = 11.sp, color = Color.Gray)
+                  Text(
+                    text = if (isLocalOnly) {
+                      "ছবিটি অন্য ইউজারের ফোনের লোকাল স্টোরেজে ছিল, ক্লাউডে (Google Drive) নেই।"
+                    } else {
+                      "ছবি লোড করা যায়নি। নিচে ওপেন বাটনে ক্লিক করুন।"
+                    },
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                  )
                 }
               }
 

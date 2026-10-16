@@ -256,5 +256,121 @@ object NotificationHelper {
       notificationManager.notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }
+
+  fun hasNotificationBeenShown(context: Context, key: String): Boolean {
+    val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+    val shownSet = prefs.getStringSet("shown_notification_keys", emptySet()) ?: emptySet()
+    return key in shownSet
+  }
+
+  fun markNotificationShown(context: Context, key: String) {
+    val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+    val current = (prefs.getStringSet("shown_notification_keys", emptySet()) ?: emptySet()).toMutableSet()
+    current.add(key)
+    // Keep set bounded to last 500 keys to avoid unlimited growth
+    if (current.size > 500) {
+      val trimmed = current.takeLast(300).toSet()
+      prefs.edit().putStringSet("shown_notification_keys", trimmed).apply()
+    } else {
+      prefs.edit().putStringSet("shown_notification_keys", current).apply()
+    }
+  }
+
+  fun sendAdminNewFileNotification(
+    context: Context,
+    rmCode: String,
+    rmName: String,
+    fileId: String,
+    customerName: String,
+    productType: String
+  ) {
+    try {
+      createNotificationChannels(context)
+
+      // Alert tone for Admin / Mentor
+      try {
+        val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+        toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
+      } catch (_: Exception) {}
+
+      val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      }
+
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        fileId.hashCode(),
+        intent,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+      )
+
+      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+      val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle("New File: $customerName")
+        .setContentText("RM $rmName ($rmCode) created $productType file ($fileId)")
+        .setStyle(
+          NotificationCompat.BigTextStyle()
+            .bigText("New Customer File Created!\n\nCustomer: $customerName\nProduct: $productType\nFile ID: $fileId\nEntered by: RM $rmName ($rmCode)")
+        )
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setSound(soundUri)
+        .setVibrate(longArrayOf(0, 200, 100, 200, 100, 200))
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+
+      val notificationManager = NotificationManagerCompat.from(context)
+      val notificationId = (System.currentTimeMillis() % 100000).toInt() + 15
+      notificationManager.notify(notificationId, builder.build())
+    } catch (_: Exception) {}
+  }
+
+  fun sendNewEventNotification(
+    context: Context,
+    eventTitle: String,
+    creatorName: String,
+    targetDate: String
+  ) {
+    try {
+      createNotificationChannels(context)
+
+      try {
+        val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
+        toneGen.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 350)
+      } catch (_: Exception) {}
+
+      val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      }
+
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        eventTitle.hashCode(),
+        intent,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+      )
+
+      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+
+      val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_dialog_alert)
+        .setContentTitle("Team Event: $eventTitle")
+        .setContentText("Posted by $creatorName. Date: $targetDate")
+        .setStyle(
+          NotificationCompat.BigTextStyle()
+            .bigText("New Team Event Announcement!\n\nEvent: $eventTitle\nTarget Date: $targetDate\nPosted by: $creatorName")
+        )
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setSound(soundUri)
+        .setVibrate(longArrayOf(0, 150, 150, 300))
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+
+      val notificationManager = NotificationManagerCompat.from(context)
+      val notificationId = (System.currentTimeMillis() % 100000).toInt() + 20
+      notificationManager.notify(notificationId, builder.build())
+    } catch (_: Exception) {}
+  }
 }
 

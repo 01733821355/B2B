@@ -121,12 +121,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
 
-    // Automatically synchronize with Google Sheets on application launch
+    // Automatically pull latest data from Google Sheets on application launch
     // Ensures fresh installs and re-opened sessions immediately pull latest cloud data
+    // without automatically pushing local preset data to Google Sheets
     viewModelScope.launch {
       delay(800)
       try {
-        eblRepository.triggerGoogleSheetsSync()
+        eblRepository.pullDataFromGoogleSheets()
       } catch (_: Exception) {}
     }
   }
@@ -383,20 +384,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       DatabaseInitializer.initializeIfNeeded(database)
       database.auditLogDao().purgeNonAuthLogs()
+      // Requirement 3: On startup or new install, immediately pull real data from Google Sheets into the app
+      // Data flows from sheet to app ("sheet thake data app a jabe") without pushing default app presets to sheet.
+      try {
+        eblRepository.pullDataFromGoogleSheets()
+      } catch (_: Exception) {}
     }
 
-    // Continuous Real-Time Bi-Directional Auto-Sync Loop
-    // Automatically synchronizes both ways with Google Sheets in the background every 0.05 seconds (50ms) (All-Time Live)
+    // Periodic Auto-Pull Loop (Data flows from Google Sheets to App)
+    // Only pulls external changes from Google Sheets at a steady, reliable interval.
+    // Does NOT push local preset data to Google Sheets unless explicitly requested by the user via button.
     viewModelScope.launch {
       while (true) {
-        delay(50) // 0.05 second (50ms) continuous live sync interval
+        delay(15_000) // 15-second background pull interval
         if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
-            // 1. First push local updates, deletions, and RM credentials
-            eblRepository.triggerGoogleSheetsSync()
-
-            // 2. Then pull external changes from Google Sheets
             eblRepository.pullDataFromGoogleSheets()
           } catch (_: Exception) {
           } finally {
@@ -1084,6 +1087,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun deletePresetRow(presetName: String, presetKey: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.deletePresetRow(presetName, presetKey)
+      res.onSuccess {
+        _uiMessage.emit("Preset '$presetName' deleted from Universal Settings & Google Sheets.")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to delete preset: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
+  }
+
   fun updateRmProfile(
     rmCode: String,
     name: String,
@@ -1208,8 +1224,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   ) {
     viewModelScope.launch {
       val res = eblRepository.addAttachment(fileId, category, fileName, fileType, fileSizeBytes, fileUri, localFile)
-      res.onSuccess {
-        _uiMessage.emit("Attachment '$fileName' saved & uploaded to Drive.")
+      res.onSuccess { att ->
+        if (att.fileUri.startsWith("http")) {
+          _uiMessage.emit("Attachment '$fileName' Google Drive-এ সফলভাবে সেভ হয়েছে।")
+        } else {
+          _uiMessage.emit("Attachment '$fileName' লোকাল ডিভাইসে সেভ হয়েছে (ড্রাইভে আপলোড হয়নি: Apps Script-এ Drive পারমিশন অ্যালাউ করুন)।")
+        }
       }.onFailure { err ->
         _uiMessage.emit("Failed to add attachment: ${err.message}")
       }

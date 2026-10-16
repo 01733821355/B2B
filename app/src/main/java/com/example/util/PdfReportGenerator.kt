@@ -201,8 +201,19 @@ object PdfReportGenerator {
     return reportFile
   }
 
+  data class EventPdfRow(
+    val sl: Int,
+    val rmDisplay: String,
+    val customerName: String,
+    val customerMobile: String,
+    val filesCount: Int,
+    val targetDate: String,
+    val locationAndRemarks: String
+  )
+
   /**
-   * Generates a formal, printable PDF Event Result & Performance Report for Admin and Mentor
+   * Generates a formal, printable PDF Event Result & Performance Report for Admin and Mentor.
+   * Formats each customer entry into its own dedicated row with complete customer name and phone number.
    */
   fun generateEventResultPdfReport(
     context: Context,
@@ -214,9 +225,11 @@ object PdfReportGenerator {
     val document = PdfDocument()
     val pageWidth = 595 // Standard A4 points (72 dpi)
     val pageHeight = 842
-    val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-    val page = document.startPage(pageInfo)
-    val canvas: Canvas = page.canvas
+
+    var pageNumber = 1
+    var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+    var page = document.startPage(pageInfo)
+    var canvas: Canvas = page.canvas
 
     val textPaint = Paint().apply {
       isAntiAlias = true
@@ -257,6 +270,56 @@ object PdfReportGenerator {
       color = Color.LTGRAY
       strokeWidth = 0.5f
       style = Paint.Style.STROKE
+    }
+
+    val cellTextPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 8.5f
+      color = Color.rgb(30, 41, 59)
+    }
+
+    val cellBoldPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 8.5f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(15, 23, 42)
+    }
+
+    val phoneTextPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 8.5f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(30, 58, 138)
+    }
+
+    val footerPaint = Paint().apply {
+      isAntiAlias = true
+      textSize = 7.5f
+      color = Color.GRAY
+    }
+
+    fun drawFooter(c: Canvas, pNum: Int) {
+      val fY = pageHeight - 25f
+      c.drawLine(30f, fY - 10f, pageWidth - 30f, fY - 10f, borderPaint)
+      c.drawText("CONFIDENTIAL DOCUMENT — STRICTLY FOR INTERNAL BANKING USE — NOT FOR PUBLIC DISSEMINATION", 30f, fY, footerPaint)
+      c.drawText("Page $pNum", pageWidth - 70f, fY, footerPaint)
+    }
+
+    val colDividers = floatArrayOf(52f, 155f, 295f, 380f, 415f, 475f)
+
+    fun drawTableHeader(c: Canvas, headerY: Float) {
+      c.drawRect(30f, headerY, pageWidth - 30f, headerY + 20f, bgHeaderPaint)
+      c.drawText("#", 34f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("RM Name (Code)", 55f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("Customer Name", 158f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("Mobile Number", 298f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("Files", 384f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("Target Date", 418f, headerY + 13.5f, tableHeaderPaint)
+      c.drawText("Location / Remarks", 478f, headerY + 13.5f, tableHeaderPaint)
+
+      colDividers.forEach { cx ->
+        c.drawLine(cx, headerY, cx, headerY + 20f, borderPaint)
+      }
     }
 
     var y = 35f
@@ -306,87 +369,154 @@ object PdfReportGenerator {
     canvas.drawText("Total Achieved Files: $totalFiles Files", 280f, y + 48f, labelPaint)
     y += 76f
 
-    // 3. Submissions Table Header
-    canvas.drawRect(30f, y, pageWidth - 30f, y + 22f, bgHeaderPaint)
-    canvas.drawText("#", 35f, y + 14f, tableHeaderPaint)
-    canvas.drawText("RM Name (Code)", 55f, y + 14f, tableHeaderPaint)
-    canvas.drawText("Files", 175f, y + 14f, tableHeaderPaint)
-    canvas.drawText("Target Date", 215f, y + 14f, tableHeaderPaint)
-    canvas.drawText("Location", 285f, y + 14f, tableHeaderPaint)
-    canvas.drawText("Customers (Name & Phone)", 370f, y + 14f, tableHeaderPaint)
-    canvas.drawText("Remarks", 495f, y + 14f, tableHeaderPaint)
-    y += 22f
+    // 3. Build Flattened Customer Rows (1 Customer Per Row)
+    val rowList = mutableListOf<EventPdfRow>()
+    var slCounter = 1
+    responses.forEach { resp ->
+      val customers = mutableListOf<Pair<String, String>>()
+      if (resp.customerEntriesJson.isNotBlank()) {
+        try {
+          val arr = org.json.JSONArray(resp.customerEntriesJson)
+          for (ci in 0 until arr.length()) {
+            val co = arr.getJSONObject(ci)
+            val n = co.optString("name").trim()
+            val m = co.optString("mobile").trim()
+            if (n.isNotBlank() || m.isNotBlank()) {
+              customers.add(Pair(n, m))
+            }
+          }
+        } catch (_: Exception) {}
+      }
 
-    // 4. Data Rows
-    if (responses.isEmpty()) {
+      val locRem = listOf(resp.location.trim(), resp.remarks.trim())
+        .filter { it.isNotBlank() }
+        .joinToString(" • ")
+
+      if (customers.isNotEmpty()) {
+        customers.forEach { (cName, cMobile) ->
+          rowList.add(
+            EventPdfRow(
+              sl = slCounter++,
+              rmDisplay = "${resp.rmName} (${resp.rmCode})",
+              customerName = cName.ifBlank { "-" },
+              customerMobile = cMobile.ifBlank { "-" },
+              filesCount = resp.filesCount,
+              targetDate = resp.requestedDate.ifBlank { "-" },
+              locationAndRemarks = locRem.ifBlank { "-" }
+            )
+          )
+        }
+      } else {
+        // RM submitted without specific customer list
+        rowList.add(
+          EventPdfRow(
+            sl = slCounter++,
+            rmDisplay = "${resp.rmName} (${resp.rmCode})",
+            customerName = "-",
+            customerMobile = "-",
+            filesCount = resp.filesCount,
+            targetDate = resp.requestedDate.ifBlank { "-" },
+            locationAndRemarks = locRem.ifBlank { "-" }
+          )
+        )
+      }
+    }
+
+    // 4. Draw Table Header
+    drawTableHeader(canvas, y)
+    y += 20f
+
+    // 5. Draw Data Rows (One customer per row)
+    if (rowList.isEmpty()) {
       canvas.drawText("No RM submissions received yet for this event.", 40f, y + 20f, textPaint)
       y += 35f
     } else {
-      responses.forEachIndexed { index, resp ->
-        if (y > pageHeight - 70f) return@forEachIndexed
+      rowList.forEach { row ->
+        // Multi-page check
+        if (y + 24f > pageHeight - 75f) {
+          drawFooter(canvas, pageNumber)
+          document.finishPage(page)
 
-        if (index % 2 == 1) {
-          canvas.drawRect(30f, y, pageWidth - 30f, y + 26f, alternateRowPaint)
+          pageNumber++
+          pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+          page = document.startPage(pageInfo)
+          canvas = page.canvas
+
+          // Continuation banner on new page
+          canvas.drawText(customAppName.ifBlank { "RM File Management Suite" }, 30f, 32f, headerPaint)
+          canvas.drawText("EVENT RESULT & SUBMISSIONS REPORT (Contd.) — Event: ${event.title}", 30f, 46f, subHeaderPaint)
+          canvas.drawLine(30f, 54f, pageWidth - 30f, 54f, borderPaint)
+          y = 62f
+          drawTableHeader(canvas, y)
+          y += 20f
         }
-        canvas.drawRect(30f, y, pageWidth - 30f, y + 26f, borderPaint)
 
-        // Parse customer details preview
-        var custSummary = ""
-        if (resp.customerEntriesJson.isNotBlank()) {
-          try {
-            val arr = org.json.JSONArray(resp.customerEntriesJson)
-            val names = mutableListOf<String>()
-            for (ci in 0 until arr.length()) {
-              val co = arr.getJSONObject(ci)
-              val n = co.optString("name")
-              val m = co.optString("mobile")
-              names.add(if (m.isNotBlank()) "$n ($m)" else n)
-            }
-            custSummary = names.take(2).joinToString(", ")
-            if (names.size > 2) custSummary += " +${names.size - 2}"
-          } catch (_: Exception) {}
+        // Row background
+        if (row.sl % 2 == 0) {
+          canvas.drawRect(30f, y, pageWidth - 30f, y + 24f, alternateRowPaint)
         }
-        if (custSummary.isBlank()) custSummary = "-"
+        canvas.drawRect(30f, y, pageWidth - 30f, y + 24f, borderPaint)
+        colDividers.forEach { cx ->
+          canvas.drawLine(cx, y, cx, y + 24f, borderPaint)
+        }
 
-        canvas.drawText("${index + 1}", 35f, y + 16f, textPaint)
-        val rmDisplay = "${resp.rmName.take(18)} (${resp.rmCode})"
-        canvas.drawText(rmDisplay.take(22), 55f, y + 16f, textPaint)
-        canvas.drawText("${resp.filesCount}", 180f, y + 16f, textPaint)
-        canvas.drawText(resp.requestedDate.take(12).ifBlank { "-" }, 215f, y + 16f, textPaint)
-        canvas.drawText(resp.location.take(14).ifBlank { "-" }, 285f, y + 16f, textPaint)
-        canvas.drawText(custSummary.take(22), 370f, y + 16f, textPaint)
-        canvas.drawText(resp.remarks.take(16).ifBlank { "-" }, 495f, y + 16f, textPaint)
+        // Row Content
+        canvas.drawText("${row.sl}", 34f, y + 15f, cellTextPaint)
 
-        y += 26f
+        val rmShort = if (cellTextPaint.measureText(row.rmDisplay) > 98f) {
+          row.rmDisplay.take(16) + "…"
+        } else row.rmDisplay
+        canvas.drawText(rmShort, 55f, y + 15f, cellTextPaint)
+
+        // Customer Name: complete name
+        val custShort = if (cellBoldPaint.measureText(row.customerName) > 134f) {
+          row.customerName.take(24) + "…"
+        } else row.customerName
+        canvas.drawText(custShort, 158f, y + 15f, cellBoldPaint)
+
+        // Customer Mobile: complete mobile number (never truncated)
+        canvas.drawText(row.customerMobile, 298f, y + 15f, phoneTextPaint)
+
+        canvas.drawText("${row.filesCount}", 390f, y + 15f, cellTextPaint)
+        canvas.drawText(row.targetDate, 418f, y + 15f, cellTextPaint)
+
+        val locRemShort = if (cellTextPaint.measureText(row.locationAndRemarks) > 84f) {
+          row.locationAndRemarks.take(15) + "…"
+        } else row.locationAndRemarks
+        canvas.drawText(locRemShort, 478f, y + 15f, cellTextPaint)
+
+        y += 24f
       }
     }
 
-    // 5. Performance Summary Box at Bottom
+    // 6. Performance Summary Box at Bottom
+    if (y + 55f > pageHeight - 75f) {
+      drawFooter(canvas, pageNumber)
+      document.finishPage(page)
+
+      pageNumber++
+      pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, pageNumber).create()
+      page = document.startPage(pageInfo)
+      canvas = page.canvas
+      y = 40f
+    }
+
     y += 12f
-    if (y < pageHeight - 80f) {
-      canvas.drawLine(30f, y, pageWidth - 30f, y, borderPaint)
-      y += 16f
-      val boldSummary = Paint().apply {
-        isAntiAlias = true
-        textSize = 9.5f
-        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        color = Color.rgb(10, 25, 47)
-      }
-      canvas.drawText("Summary Statistics:  Participating RMs: ${responses.size}  •  Total Files Achieved: $totalFiles Files", 35f, y, boldSummary)
-      y += 14f
-      canvas.drawText("Status: ${event.status}  •  Event Description: ${event.description.take(70)}", 35f, y, textPaint)
-    }
-
-    // Footer Security Notice
-    y = pageHeight - 30f
-    val footerPaint = Paint().apply {
+    canvas.drawLine(30f, y, pageWidth - 30f, y, borderPaint)
+    y += 16f
+    val boldSummary = Paint().apply {
       isAntiAlias = true
-      textSize = 7.5f
-      color = Color.GRAY
+      textSize = 9.5f
+      typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+      color = Color.rgb(10, 25, 47)
     }
-    canvas.drawText("CONFIDENTIAL DOCUMENT — STRICTLY FOR INTERNAL BANKING USE — NOT FOR PUBLIC DISSEMINATION", 30f, y, footerPaint)
-    canvas.drawText("Page 1 of 1", pageWidth - 80f, y, footerPaint)
+    val totalCustomersListed = rowList.count { it.customerName != "-" }
+    canvas.drawText("Summary Statistics:  Participating RMs: ${responses.size}  •  Total Customers Listed: $totalCustomersListed  •  Total Files: $totalFiles Files", 35f, y, boldSummary)
+    y += 14f
+    canvas.drawText("Status: ${event.status}  •  Event Description: ${event.description.take(70)}", 35f, y, textPaint)
 
+    // Final page footer
+    drawFooter(canvas, pageNumber)
     document.finishPage(page)
 
     // Save PDF to cache directory

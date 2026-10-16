@@ -193,6 +193,19 @@ class AuthRepository(private val database: AppDatabase) {
     database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: ""
   }
 
+  suspend fun restoreSessionFromLastLogged(): UserEntity? = withContext(Dispatchers.IO) {
+    if (_currentUser.value != null) return@withContext _currentUser.value
+    val lastRm = getLastLoggedRmCode()
+    if (lastRm.isNotBlank()) {
+      val user = database.userDao().getUser(lastRm)
+      if (user != null) {
+        _currentUser.value = user
+        return@withContext user
+      }
+    }
+    null
+  }
+
   suspend fun logout() = withContext(Dispatchers.IO) {
     val user = _currentUser.value
     if (user != null) {

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.People
@@ -46,6 +47,7 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VolumeUp
 import com.example.util.PdfReportGenerator
+import com.example.util.PdfReportGenerator.EventPdfRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -55,6 +57,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -173,21 +177,46 @@ fun CommunicationHubScreen(
       onDismiss = { activeViewEventSubmissions = null },
       onCopySummary = {
         val summaryText = buildString {
-          appendLine("=== EBL ${evt.title.uppercase()} SUMMARY ===")
+          appendLine("=== EBL ${evt.title.uppercase()} RESULT SUMMARY ===")
           appendLine("Event: ${evt.title}")
           appendLine("Target Date: ${evt.targetDate}")
           appendLine("Total Submissions: ${eventResponsesList.size} RMs")
           appendLine("Total Files: ${eventResponsesList.sumOf { it.filesCount }}")
           appendLine("----------------------------------------")
-          eventResponsesList.forEachIndexed { i, r ->
-            appendLine("${i + 1}. RM: ${r.rmName} (${r.rmCode}) | Date: ${r.requestedDate} | Files: ${r.filesCount}")
-            if (r.location.isNotBlank()) appendLine("   Location: ${r.location}")
-            if (r.remarks.isNotBlank()) appendLine("   Remarks: ${r.remarks}")
-            if (r.customerEntriesJson.isNotBlank()) appendLine("   Customers: ${r.customerEntriesJson}")
+          var sl = 1
+          eventResponsesList.forEach { r ->
+            val customers = try {
+              if (r.customerEntriesJson.isNotBlank()) {
+                val arr = org.json.JSONArray(r.customerEntriesJson)
+                val list = mutableListOf<Pair<String, String>>()
+                for (ci in 0 until arr.length()) {
+                  val obj = arr.getJSONObject(ci)
+                  val n = obj.optString("name").trim()
+                  val m = obj.optString("mobile").trim()
+                  if (n.isNotBlank() || m.isNotBlank()) {
+                    list.add(Pair(n, m))
+                  }
+                }
+                list
+              } else emptyList()
+            } catch (_: Exception) { emptyList() }
+
+            if (customers.isNotEmpty()) {
+              customers.forEach { (cName, cMobile) ->
+                appendLine("${sl++}. RM: ${r.rmName} (${r.rmCode}) | Customer: $cName | Mobile: $cMobile | Files: ${r.filesCount} | Date: ${r.requestedDate}")
+                val extra = listOf(r.location, r.remarks).filter { it.isNotBlank() }.joinToString(" • ")
+                if (extra.isNotBlank()) appendLine("   Loc/Note: $extra")
+              }
+            } else {
+              appendLine("${sl++}. RM: ${r.rmName} (${r.rmCode}) | Customer: - | Mobile: - | Files: ${r.filesCount} | Date: ${r.requestedDate}")
+              val extra = listOf(r.location, r.remarks).filter { it.isNotBlank() }.joinToString(" • ")
+              if (extra.isNotBlank()) appendLine("   Loc/Note: $extra")
+            }
           }
+          appendLine("----------------------------------------")
         }
         clipboardManager.setText(AnnotatedString(summaryText))
-        Toast.makeText(context, "✓ ইভেন্ট ও কাস্টমার তালিকা ক্লিপবোর্ডে কপি হয়েছে!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "✓ ইভেন্ট ও কাস্টমার তালিকা (১ কাস্টমার ১ রো) কপি হয়েছে!", Toast.LENGTH_SHORT).show()
       },
       onDownloadPdf = {
         if (currentUser != null) {
@@ -1152,6 +1181,44 @@ fun ViewSubmissionsDialog(
 
         Spacer(modifier = Modifier.height(8.dp))
 
+        var viewMode by remember { mutableStateOf(0) } // 0 = Customer Table (১ কাস্টমার ১ রো), 1 = RM কার্ড ভিউ
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          FilterChip(
+            selected = viewMode == 0,
+            onClick = { viewMode = 0 },
+            label = { Text("কাস্টমার তালিকা (১ রো ১ জন)", fontSize = 11.sp, fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal) },
+            leadingIcon = {
+              Icon(Icons.Default.FormatListNumbered, contentDescription = null, modifier = Modifier.size(14.dp))
+            },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = EblNavyPrimary,
+              selectedLabelColor = Color.White,
+              selectedLeadingIconColor = Color.White
+            ),
+            modifier = Modifier.weight(1f).testTag("tab_event_customer_table")
+          )
+          FilterChip(
+            selected = viewMode == 1,
+            onClick = { viewMode = 1 },
+            label = { Text("RM কার্ড ভিউ", fontSize = 11.sp, fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal) },
+            leadingIcon = {
+              Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp))
+            },
+            colors = FilterChipDefaults.filterChipColors(
+              selectedContainerColor = EblNavyPrimary,
+              selectedLabelColor = Color.White,
+              selectedLeadingIconColor = Color.White
+            ),
+            modifier = Modifier.weight(1f).testTag("tab_event_rm_cards")
+          )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         // 3. Submissions Stream
         if (filteredResponses.isEmpty()) {
           Box(
@@ -1166,11 +1233,157 @@ fun ViewSubmissionsDialog(
               fontSize = 12.sp
             )
           }
-        } else {
+        } else if (viewMode == 0) {
+          // Flat 1-Customer-per-Row Table View
+          val flatCustomerList = remember(filteredResponses) {
+            val list = mutableListOf<EventPdfRow>()
+            var sl = 1
+            filteredResponses.forEach { r ->
+              val customers = mutableListOf<Pair<String, String>>()
+              if (r.customerEntriesJson.isNotBlank()) {
+                try {
+                  val arr = org.json.JSONArray(r.customerEntriesJson)
+                  for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val n = o.optString("name").trim()
+                    val m = o.optString("mobile").trim()
+                    if (n.isNotBlank() || m.isNotBlank()) {
+                      customers.add(Pair(n, m))
+                    }
+                  }
+                } catch (_: Exception) {}
+              }
+              val locRem = listOf(r.location.trim(), r.remarks.trim()).filter { it.isNotBlank() }.joinToString(" • ")
+              if (customers.isNotEmpty()) {
+                customers.forEach { (cName, cMobile) ->
+                  list.add(
+                    EventPdfRow(
+                      sl = sl++,
+                      rmDisplay = "${r.rmName} (${r.rmCode})",
+                      customerName = cName.ifBlank { "-" },
+                      customerMobile = cMobile.ifBlank { "-" },
+                      filesCount = r.filesCount,
+                      targetDate = r.requestedDate.ifBlank { "-" },
+                      locationAndRemarks = locRem.ifBlank { "-" }
+                    )
+                  )
+                }
+              } else {
+                list.add(
+                  EventPdfRow(
+                    sl = sl++,
+                    rmDisplay = "${r.rmName} (${r.rmCode})",
+                    customerName = "-",
+                    customerMobile = "-",
+                    filesCount = r.filesCount,
+                    targetDate = r.requestedDate.ifBlank { "-" },
+                    locationAndRemarks = locRem.ifBlank { "-" }
+                  )
+                )
+              }
+            }
+            list
+          }
+
           LazyColumn(
             modifier = Modifier
               .fillMaxWidth()
-              .height(300.dp),
+              .height(320.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            items(flatCustomerList, key = { it.sl }) { cItem ->
+              Card(
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .testTag("event_customer_row_${cItem.sl}")
+              ) {
+                Column(modifier = Modifier.padding(10.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Row(
+                      verticalAlignment = Alignment.CenterVertically,
+                      modifier = Modifier.weight(1f).padding(end = 6.dp)
+                    ) {
+                      Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = Color(0xFFF1F5F9),
+                        modifier = Modifier.padding(end = 6.dp)
+                      ) {
+                        Text(
+                          text = "#${cItem.sl}",
+                          fontSize = 10.sp,
+                          fontWeight = FontWeight.Bold,
+                          color = Color.DarkGray,
+                          modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                      }
+                      Text(
+                        text = cItem.customerName,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F172A)
+                      )
+                    }
+
+                    if (cItem.customerMobile != "-") {
+                      Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(0xFFDBEAFE)
+                      ) {
+                        Text(
+                          text = "📞 ${cItem.customerMobile}",
+                          fontSize = 11.sp,
+                          fontWeight = FontWeight.Bold,
+                          color = Color(0xFF1E40AF),
+                          modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                        )
+                      }
+                    }
+                  }
+
+                  Spacer(modifier = Modifier.height(4.dp))
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text(
+                      text = "RM: ${cItem.rmDisplay}",
+                      fontSize = 10.sp,
+                      color = EblNavyPrimary,
+                      fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                      text = "${cItem.filesCount} Files • Date: ${cItem.targetDate}",
+                      fontSize = 10.sp,
+                      color = Color.Gray
+                    )
+                  }
+
+                  if (cItem.locationAndRemarks != "-") {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                      text = "📍 ${cItem.locationAndRemarks}",
+                      fontSize = 10.sp,
+                      color = Color.DarkGray
+                    )
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Grouped RM Cards View
+          LazyColumn(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(320.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
             items(filteredResponses, key = { it.responseId }) { r ->
@@ -1235,7 +1448,7 @@ fun ViewSubmissionsDialog(
                     }
                   }
 
-                  // Multiple Customers Section
+                  // Multiple Customers Section - 1 Row per Customer with complete name & number
                   if (customers.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(6.dp))
                     Surface(
@@ -1243,10 +1456,40 @@ fun ViewSubmissionsDialog(
                       color = Color(0xFFEFF6FF),
                       modifier = Modifier.fillMaxWidth()
                     ) {
-                      Column(modifier = Modifier.padding(6.dp)) {
+                      Column(modifier = Modifier.padding(8.dp)) {
                         Text("👥 কাস্টমার তালিকা (${customers.size} জন):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                        Spacer(modifier = Modifier.height(4.dp))
                         customers.forEachIndexed { cIdx, cust ->
-                          Text("${cIdx + 1}. ${cust.first} • ${cust.second}", fontSize = 10.sp, color = Color(0xFF1E293B))
+                          Row(
+                            modifier = Modifier
+                              .fillMaxWidth()
+                              .padding(vertical = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                          ) {
+                            Text(
+                              text = "${cIdx + 1}. ${cust.first}",
+                              fontSize = 11.sp,
+                              fontWeight = FontWeight.SemiBold,
+                              color = Color(0xFF0F172A),
+                              modifier = Modifier.weight(1f)
+                            )
+                            if (cust.second.isNotBlank()) {
+                              Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = Color(0xFFDBEAFE),
+                                modifier = Modifier.padding(start = 6.dp)
+                              ) {
+                                Text(
+                                  text = "📞 ${cust.second}",
+                                  fontSize = 10.sp,
+                                  fontWeight = FontWeight.Bold,
+                                  color = Color(0xFF1E40AF),
+                                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                              }
+                            }
+                          }
                         }
                       }
                     }

@@ -34,6 +34,9 @@ interface AppSettingDao {
   @Query("SELECT * FROM sync_status WHERE id = 1 LIMIT 1")
   suspend fun getSyncStatus(): SyncStatusEntity?
 
+  @Query("DELETE FROM app_settings WHERE settingKey = :key")
+  suspend fun deleteSetting(key: String)
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertOrUpdateSyncStatus(syncStatus: SyncStatusEntity)
 }

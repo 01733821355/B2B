@@ -95,6 +95,8 @@ class MainActivity : FragmentActivity() {
     super.onCreate(savedInstanceState)
     window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     enableEdgeToEdge()
+    NotificationHelper.createNotificationChannels(applicationContext)
+    com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
     setContent {
       MyApplicationTheme {
         EblMainApp(viewModel = viewModel)
@@ -127,9 +129,10 @@ fun EblMainApp(viewModel: AppViewModel) {
     NotificationHelper.markPermissionAsked(context)
   }
 
-  // Prompt RM for notification permission only once
+  // Prompt RM for notification permission only once and schedule background sync worker
   LaunchedEffect(currentUser?.rmCode) {
     NotificationHelper.createNotificationChannels(context)
+    com.example.util.BackgroundSyncWorker.schedulePeriodicSync(context.applicationContext)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       if (!NotificationHelper.hasAskedPermissionOnce(context)) {
         NotificationHelper.markPermissionAsked(context)

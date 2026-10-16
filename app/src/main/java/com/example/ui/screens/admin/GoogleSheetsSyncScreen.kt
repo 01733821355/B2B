@@ -110,6 +110,16 @@ fun GoogleSheetsSyncScreen(
  *       Important_Documents, Chat_And_Calls, Team_Events, Event_Submissions
  */
 
+function authorizeDrivePermissions() {
+  // রান বাটন (Run) ক্লিক করে Google Drive পারমিশন Allow করুন
+  var folderName = "EBL RM Suite Drive Files";
+  var folders = DriveApp.getFoldersByName(folderName);
+  var targetFolder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+  targetFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  Logger.log("Google Drive Permissions Authorized Successfully! Folder: " + targetFolder.getName());
+  return "Google Drive Authorized Successfully!";
+}
+
 function doGet(e) {
   return handleFetchAllData();
 }
@@ -421,6 +431,35 @@ function doPost(e) {
           }
         }
       }
+      // Persist deleted event IDs in Universal_Settings so any mobile app immediately knows they were deleted
+      try {
+        var setSheetEvt = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetEvt) {
+          var sValsEvt = setSheetEvt.getDataRange().getValues();
+          var delEvtRowIdx = -1;
+          var curDelEvtVal = '';
+          for (var ser = 1; ser < sValsEvt.length; ser++) {
+            if (String(sValsEvt[ser][0] || '').trim().toLowerCase() === 'deleted_event_ids') {
+              delEvtRowIdx = ser + 1;
+              curDelEvtVal = String(sValsEvt[ser][1] || '').trim();
+              break;
+            }
+          }
+          var allDelEvts = curDelEvtVal ? curDelEvtVal.split(',') : [];
+          toDeleteEvts.forEach(function(tde) {
+            var clTde = String(tde || '').trim();
+            if (clTde && allDelEvts.indexOf(clTde) === -1) allDelEvts.push(clTde);
+          });
+          var newDelEvtStr = allDelEvts.join(',');
+          if (delEvtRowIdx > -1) {
+            setSheetEvt.getRange(delEvtRowIdx, 2).setValue(newDelEvtStr);
+            setSheetEvt.getRange(delEvtRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetEvt.appendRow(['deleted_event_ids', newDelEvtStr, 'Universal Deleted Event IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errEvtDel) {}
+
       if (data.action === 'DELETE_EVENT') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted Event from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -626,6 +665,63 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted SMS from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
+    }
+
+    // Handle Clearing SMS Notifications for an RM or ALL
+    if (data.action === 'CLEAR_SMS_FOR_RM') {
+      var targetRm = String(data.rmCode || '').trim().toUpperCase();
+      var curSmsClr = smsSheet.getDataRange().getValues();
+      for (var dsClr = curSmsClr.length - 1; dsClr >= 1; dsClr--) {
+        var rowRecipient = String(curSmsClr[dsClr][1] || '').trim().toUpperCase();
+        if (targetRm === 'ALL' || rowRecipient === targetRm) {
+          smsSheet.deleteRow(dsClr + 1);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Cleared SMS for " + targetRm }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Handle Universal Setting / Preset Deletion
+    if (data.action === 'DELETE_SETTING' || data.action === 'DELETE_PRESET') {
+      var setSheetDel = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+      var targetKey = String(data.settingKey || data.presetName || '').trim();
+      var altKey = String(data.presetName || '').trim();
+      if (setSheetDel && (targetKey || altKey)) {
+        var sValsDel = setSheetDel.getDataRange().getValues();
+        for (var sRow = sValsDel.length - 1; sRow >= 1; sRow--) {
+          var rowKey = String(sValsDel[sRow][0] || '').trim();
+          if (rowKey && (rowKey.toLowerCase() === targetKey.toLowerCase() || (altKey && rowKey.toLowerCase() === altKey.toLowerCase()))) {
+            setSheetDel.deleteRow(sRow + 1);
+          }
+        }
+        // Record in deleted_preset_keys so apps know it was permanently deleted
+        try {
+          var sValsDelKeys = setSheetDel.getDataRange().getValues();
+          var delPresetRowIdx = -1;
+          var curDelPresetVal = '';
+          for (var pkr = 1; pkr < sValsDelKeys.length; pkr++) {
+            if (String(sValsDelKeys[pkr][0] || '').trim().toLowerCase() === 'deleted_preset_keys') {
+              delPresetRowIdx = pkr + 1;
+              curDelPresetVal = String(sValsDelKeys[pkr][1] || '').trim();
+              break;
+            }
+          }
+          var allDelPresets = curDelPresetVal ? curDelPresetVal.split(',') : [];
+          [targetKey, altKey].forEach(function(tk) {
+            var clTk = String(tk || '').trim();
+            if (clTk && allDelPresets.indexOf(clTk) === -1) allDelPresets.push(clTk);
+          });
+          var newDelPresetStr = allDelPresets.join(',');
+          if (delPresetRowIdx > -1) {
+            setSheetDel.getRange(delPresetRowIdx, 2).setValue(newDelPresetStr);
+            setSheetDel.getRange(delPresetRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetDel.appendRow(['deleted_preset_keys', newDelPresetStr, 'Universal Deleted Setting & Preset Keys', 'App_Sync', new Date().toISOString()]);
+          }
+        } catch (errPDel) {}
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted setting row from sheet." }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     // Handle Direct RM Password Update
@@ -1798,12 +1894,12 @@ function extractAllSheetSettings(sheet) {
           border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
         ) {
           Column(modifier = Modifier.padding(12.dp)) {
-            Text("কীভাবে গুগল শিট সেটআপ করবেন (How to Setup):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
+            Text("কীভাবে গুগল শিট ও গুগল ড্রাইভ সেটআপ করবেন (Drive & Sheet Setup):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
             Spacer(modifier = Modifier.height(4.dp))
             Text("১. আপনার গুগল শিটে যান এবং Extensions > Apps Script-এ ক্লিক করুন।", fontSize = 11.sp, color = Color.DarkGray)
             Text("২. ওপরের 'Copy Script Code' বাটনে চাপ দিয়ে কোডটি কপি করে Apps Script-এ পেস্ট করুন।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৩. Deploy > New deployment সিলেক্ট করুন, Type দিন 'Web app'।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৪. 'Who has access' অপশনে 'Anyone' নির্বাচন করে Deploy চাপুন।", fontSize = 11.sp, color = Color.DarkGray)
+            Text("৩. [জরুরী] ওপরে ফাংশন ড্রপডাউন থেকে 'authorizeDrivePermissions' সিলেক্ট করে 'Run' (▶️) বাটনে চাপ দিন এবং Google Permissions 'Allow' করুন। এতে ড্রাইভে ফটো/ডকুমেন্ট সেভ করার পারমিশন চালু হবে।", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+            Text("৪. Deploy > Manage deployments > Edit > New version নির্বাচন করে 'Deploy' চাপুন ('Who has access' = 'Anyone')।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF047857))
             Text("৫. আপনার Web App URL-টি স্বয়ংক্রিয়ভাবে ডিফল্ট কনফিগার করা আছে।", fontSize = 11.sp, color = Color.DarkGray)
             Text("৬. শিটে ম্যানুয়ালি এডিট করা যাবে (onEdit স্বয়ংক্রিয়ভাবে সেভ রাখবে, কোনো ডাটা মুছে যাবে না)।", fontSize = 11.sp, color = Color(0xFF0369A1))
             Text("৭. স্বয়ংক্রিয়ভাবে তৈরি হবে ৭টি ট্যাব: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
