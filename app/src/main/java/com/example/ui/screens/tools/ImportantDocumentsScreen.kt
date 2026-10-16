@@ -415,7 +415,7 @@ fun ImportantDocumentsScreen(
         showUploadDialog = false
         documentToEdit = null
       },
-      onSave = { title, category, description, fileName, fileType, fileSizeBytes, fileUri, storagePath, docId ->
+      onSave = { title, category, description, fileName, fileType, fileSizeBytes, fileUri, storagePath, docId, docDate ->
         viewModel.saveImportantDocument(
           title = title,
           category = category,
@@ -425,7 +425,8 @@ fun ImportantDocumentsScreen(
           fileSizeBytes = fileSizeBytes,
           fileUri = fileUri,
           storagePath = storagePath,
-          docId = docId
+          docId = docId,
+          docDate = docDate
         ) { success, err ->
           if (success) {
             showUploadDialog = false
@@ -663,7 +664,8 @@ fun UploadOrEditDocDialog(
     fileSizeBytes: Long,
     fileUri: String,
     storagePath: String,
-    docId: String?
+    docId: String?,
+    docDate: String?
   ) -> Unit
 ) {
   val context = LocalContext.current
@@ -672,6 +674,12 @@ fun UploadOrEditDocDialog(
   var title by remember { mutableStateOf(existingDoc?.title ?: "") }
   var category by remember { mutableStateOf(existingDoc?.category ?: "Policies & Circulars") }
   var description by remember { mutableStateOf(existingDoc?.description ?: "") }
+  var docDate by remember {
+    mutableStateOf(
+      existingDoc?.let { DateUtils.formatDateTime(it.createdAt).substringBefore(" ") }
+        ?: DateUtils.formatDateTime(DateUtils.currentDhakaMillis()).substringBefore(" ")
+    )
+  }
 
   var selectedFileName by remember { mutableStateOf(existingDoc?.fileName ?: "") }
   var selectedFileType by remember { mutableStateOf(existingDoc?.fileType ?: "application/pdf") }
@@ -838,6 +846,19 @@ fun UploadOrEditDocDialog(
           colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
         )
 
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Document / Circular Date
+        OutlinedTextField(
+          value = docDate,
+          onValueChange = { docDate = it },
+          label = { Text("Document / Circular Date (DD/MM/YYYY) *") },
+          placeholder = { Text("e.g. 15/10/2026") },
+          modifier = Modifier.fillMaxWidth().testTag("input_doc_date"),
+          shape = RoundedCornerShape(8.dp),
+          colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)
+        )
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // File Selection Section (Picture or PDF)
@@ -946,7 +967,8 @@ fun UploadOrEditDocDialog(
             selectedFileSizeBytes,
             selectedFileUri.trim(),
             selectedStoragePath.trim(),
-            existingDoc?.docId
+            existingDoc?.docId,
+            docDate.trim()
           )
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyDark),

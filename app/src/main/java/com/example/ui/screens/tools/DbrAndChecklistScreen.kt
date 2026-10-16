@@ -22,6 +22,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
@@ -120,6 +123,7 @@ import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.AppViewModel
 import com.example.util.SmsService
+import com.example.util.AgeCalculatorHelper
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.max
@@ -150,9 +154,10 @@ data class ChecklistItem(
 fun DbrAndChecklistScreen(
   viewModel: AppViewModel,
   currentUser: UserEntity,
-  onNavigateBack: () -> Unit
+  onNavigateBack: () -> Unit,
+  initialTab: Int = 0
 ) {
-  var selectedTab by remember { mutableIntStateOf(0) }
+  var selectedTab by remember { mutableIntStateOf(initialTab) }
   val context = LocalContext.current
   val allFiles by viewModel.allFiles.collectAsState()
 
@@ -189,13 +194,13 @@ fun DbrAndChecklistScreen(
           Spacer(modifier = Modifier.width(6.dp))
           Column {
             Text(
-              text = "DBR & Document Checklist Tool",
+              text = "DBR, Checklist & Age Calculator",
               color = Color.White,
               fontSize = 17.sp,
               fontWeight = FontWeight.Bold
             )
             Text(
-              text = "Eastern Bank PLC Retail Credit Assessment",
+              text = "Eastern Bank PLC Retail Credit Assessment & Tools",
               color = EblGold,
               fontSize = 11.sp
             )
@@ -204,7 +209,7 @@ fun DbrAndChecklistScreen(
       }
     }
 
-    // Tabs: 1. DBR Calculator, 2. Document Checklist Sender
+    // Tabs: 1. DBR Calculator, 2. Document Checklist Sender, 3. Age Calculator
     TabRow(
       selectedTabIndex = selectedTab,
       containerColor = Color.White,
@@ -222,9 +227,9 @@ fun DbrAndChecklistScreen(
         onClick = { selectedTab = 0 },
         text = {
           Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(17.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("DBR Calculator", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("DBR Calc", fontWeight = FontWeight.Bold, fontSize = 12.sp)
           }
         },
         selectedContentColor = EblNavyPrimary,
@@ -236,24 +241,41 @@ fun DbrAndChecklistScreen(
         onClick = { selectedTab = 1 },
         text = {
           Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(17.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Checklist Sender", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Checklist", fontWeight = FontWeight.Bold, fontSize = 12.sp)
           }
         },
         selectedContentColor = EblNavyPrimary,
         unselectedContentColor = Color.Gray,
         modifier = Modifier.testTag("tab_checklist_sender")
       )
+      Tab(
+        selected = selectedTab == 2,
+        onClick = { selectedTab = 2 },
+        text = {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Age Calculator", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+          }
+        },
+        selectedContentColor = EblNavyPrimary,
+        unselectedContentColor = Color.Gray,
+        modifier = Modifier.testTag("tab_age_calculator")
+      )
     }
 
     // Tab Contents
-    if (selectedTab == 0) {
-      DbrCalculatorTab(currentUser = currentUser)
-    } else {
-      DocumentChecklistSenderTab(
+    when (selectedTab) {
+      0 -> DbrCalculatorTab(currentUser = currentUser)
+      1 -> DocumentChecklistSenderTab(
         currentUser = currentUser,
         viewModel = viewModel,
+        availableFiles = allFiles
+      )
+      2 -> AgeCalculatorTab(
+        currentUser = currentUser,
         availableFiles = allFiles
       )
     }
@@ -1794,46 +1816,36 @@ fun DocumentChecklistSenderTab(
             if (availableFiles.isNotEmpty()) availableFiles else defaultFallbackCustomers
           }
 
-          val serialSortedCustomers = remember(allDisplayCustomers) {
-            allDisplayCustomers.sortedWith(
-              compareBy<CustomerFileEntity> { it.serialNumber.toIntOrNull() ?: Int.MAX_VALUE }
-                .thenBy { it.customerName }
-            )
+          // User Requirement: "In chack list sender page recent customer list most recent customer sobar opre thakbe."
+          // Sort descending by latest update/creation timestamp, then serial number, so most recent customer is at the top.
+          var sortByRecentFirst by remember { mutableStateOf(true) }
+
+          val sortedCustomers = remember(allDisplayCustomers, sortByRecentFirst) {
+            val activeOnly = allDisplayCustomers.filter { !it.isDeleted }
+            if (sortByRecentFirst) {
+              activeOnly.sortedWith(
+                compareByDescending<CustomerFileEntity> { maxOf(it.updatedAt, it.createdAt) }
+                  .thenByDescending { it.serialNumber.toIntOrNull() ?: 0 }
+                  .thenByDescending { it.fileId }
+              )
+            } else {
+              activeOnly.sortedWith(
+                compareBy<CustomerFileEntity> { it.serialNumber.toIntOrNull() ?: Int.MAX_VALUE }
+                  .thenBy { it.customerName }
+              )
+            }
           }
 
           var showCustomerList by remember { mutableStateOf(false) }
-          val localView = LocalView.current
           val keyboardController = LocalSoftwareKeyboardController.current
           val searchFocusRequester = remember { FocusRequester() }
-          val searchInteractionSource = remember { MutableInteractionSource() }
 
-          val triggerSoftKeyboard = remember {
-            {
-              try {
-                searchFocusRequester.requestFocus()
-                keyboardController?.show()
-                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                localView.requestFocus()
-                imm?.showSoftInput(localView, InputMethodManager.SHOW_FORCED)
-                imm?.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0)
-              } catch (_: Exception) {}
-            }
-          }
-
-          LaunchedEffect(searchInteractionSource) {
-            searchInteractionSource.interactions.collect { interaction ->
-              if (interaction is PressInteraction.Release) {
-                triggerSoftKeyboard()
-              }
-            }
-          }
-
-          val filteredCustomers = remember(customerSearchQuery, serialSortedCustomers) {
+          val filteredCustomers = remember(customerSearchQuery, sortedCustomers) {
             if (customerSearchQuery.isBlank()) {
-              serialSortedCustomers
+              sortedCustomers
             } else {
               val q = customerSearchQuery.trim()
-              serialSortedCustomers.filter {
+              sortedCustomers.filter {
                 it.customerName.contains(q, ignoreCase = true) ||
                 it.mobile.contains(q) ||
                 it.altMobile.contains(q) ||
@@ -1935,13 +1947,10 @@ fun DocumentChecklistSenderTab(
             Spacer(modifier = Modifier.height(6.dp))
           }
 
-          // 2. Primary 1-Tap Customer List Button (Tap korle customar serial wise dekhabe)
+          // 2. Primary 1-Tap Customer List Button (Most recent customer at top)
           OutlinedButton(
             onClick = {
               showCustomerList = !showCustomerList
-              if (showCustomerList && customerSearchQuery.isNotBlank()) {
-                triggerSoftKeyboard()
-              }
             },
             modifier = Modifier
               .fillMaxWidth()
@@ -1973,7 +1982,7 @@ fun DocumentChecklistSenderTab(
                   text = if (showCustomerList)
                     "গ্রাহক তালিকা বন্ধ করুন (Hide Customer List)"
                   else
-                    "👥 গ্রাহক তালিকা দেখুন (${serialSortedCustomers.size}) - Serial Wise (১ ট্যাপে খুলুন)",
+                    "👥 সাম্প্রতিক গ্রাহক তালিকা (${sortedCustomers.size}) - সর্বশেষ সবার উপরে",
                   fontWeight = FontWeight.Bold,
                   fontSize = 11.5.sp,
                   color = EblNavyDark
@@ -1994,7 +2003,7 @@ fun DocumentChecklistSenderTab(
             }
           }
 
-          // 3. Serial-Wise Customer List & Search Section
+          // 3. Customer List & Search Section (Optimized, Zero Freeze, Smooth Scrolling)
           if (showCustomerList) {
             Spacer(modifier = Modifier.height(6.dp))
             Card(
@@ -2005,44 +2014,26 @@ fun DocumentChecklistSenderTab(
               modifier = Modifier.fillMaxWidth()
             ) {
               Column(modifier = Modifier.padding(8.dp)) {
-                // Search Bar with software keyboard trigger
+                // Search Bar with clean Compose input handling
                 OutlinedTextField(
                   value = customerSearchQuery,
                   onValueChange = { customerSearchQuery = it },
                   placeholder = {
                     Text(
-                      text = "🔍 নাম বা মোবাইল নাম্বার দিয়ে খুঁজুন (Search Customer)...",
+                      text = "🔍 নাম বা মোবাইল নাম্বার দিয়ে খুঁজুন...",
                       fontSize = 11.5.sp
                     )
                   },
                   leadingIcon = {
-                    IconButton(
-                      onClick = { triggerSoftKeyboard() },
-                      modifier = Modifier.size(30.dp)
-                    ) {
-                      Icon(Icons.Default.Search, contentDescription = "Search", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
-                    }
+                    Icon(Icons.Default.Search, contentDescription = "Search", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
                   },
                   trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                      if (customerSearchQuery.isNotBlank()) {
-                        IconButton(
-                          onClick = { customerSearchQuery = "" },
-                          modifier = Modifier.size(26.dp)
-                        ) {
-                          Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
-                        }
-                      }
+                    if (customerSearchQuery.isNotBlank()) {
                       IconButton(
-                        onClick = { triggerSoftKeyboard() },
-                        modifier = Modifier.size(30.dp).testTag("btn_toggle_soft_keyboard_in_list")
+                        onClick = { customerSearchQuery = "" },
+                        modifier = Modifier.size(26.dp)
                       ) {
-                        Icon(
-                          Icons.Default.Keyboard,
-                          contentDescription = "Show Keyboard",
-                          tint = EblNavyPrimary,
-                          modifier = Modifier.size(18.dp)
-                        )
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
                       }
                     }
                   },
@@ -2050,12 +2041,11 @@ fun DocumentChecklistSenderTab(
                   shape = RoundedCornerShape(8.dp),
                   keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Search
+                    imeAction = ImeAction.Done
                   ),
                   keyboardActions = KeyboardActions(
-                    onSearch = { keyboardController?.hide() }
+                    onDone = { keyboardController?.hide() }
                   ),
-                  interactionSource = searchInteractionSource,
                   colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = EblNavyPrimary,
                     unfocusedBorderColor = Color(0xFFCBD5E1),
@@ -2065,17 +2055,12 @@ fun DocumentChecklistSenderTab(
                   modifier = Modifier
                     .fillMaxWidth()
                     .focusRequester(searchFocusRequester)
-                    .onFocusChanged { state ->
-                      if (state.isFocused) {
-                        triggerSoftKeyboard()
-                      }
-                    }
                     .testTag("checklist_inline_customer_search")
                 )
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // List header
+                // List header with sorting toggle
                 Row(
                   modifier = Modifier
                     .fillMaxWidth()
@@ -2085,151 +2070,201 @@ fun DocumentChecklistSenderTab(
                 ) {
                   Text(
                     text = if (filteredCustomers.isEmpty())
-                      "কোনো গ্রাহক পাওয়া যায়নি (No customer found)"
+                      "কোনো গ্রাহক পাওয়া যায়নি"
                     else
-                      "গ্রাহক তালিকা (সিরিয়াল অনুযায়ী): ${filteredCustomers.size} জন",
+                      "গ্রাহক তালিকা: ${filteredCustomers.size} জন",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (filteredCustomers.isEmpty()) Color.Red else EblNavyPrimary
                   )
-                  Text(
-                    text = "ট্যাপ করলেই অটো লোড হবে",
-                    fontSize = 10.sp,
-                    color = Color(0xFF059669),
-                    fontWeight = FontWeight.SemiBold
-                  )
+                  Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = Color(0xFFEFF6FF),
+                    border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFBFDBFE)),
+                    modifier = Modifier.clickable { sortByRecentFirst = !sortByRecentFirst }
+                  ) {
+                    Text(
+                      text = if (sortByRecentFirst) "📅 সর্বশেষ সবার উপরে ⇄" else "🔢 সিরিয়াল অনুযায়ী ⇄",
+                      fontSize = 9.5.sp,
+                      color = EblNavyPrimary,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Render Customer Cards Serial-Wise
-                filteredCustomers.forEachIndexed { index, cust ->
-                  val slNumber = cust.serialNumber.ifBlank { "${index + 1}" }
-                  val isSelected = customerName == cust.customerName && customerMobile == (cust.mobile.ifBlank { cust.altMobile })
-
-                  Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = if (isSelected) Color(0xFFECFDF5) else Color.White,
-                    border = androidx.compose.foundation.BorderStroke(
-                      if (isSelected) 1.2.dp else 0.8.dp,
-                      if (isSelected) Color(0xFF10B981) else Color(0xFFE2E8F0)
-                    ),
+                // Render Customer Cards in a height-bounded scrollable container to prevent freeze
+                Box(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 350.dp)
+                ) {
+                  Column(
                     modifier = Modifier
                       .fillMaxWidth()
-                      .padding(vertical = 2.5.dp)
-                      .clickable {
-                        // AUTO-LOAD NAME AND NUMBER!
-                        customerName = cust.customerName
-                        customerMobile = if (cust.mobile.isNotBlank()) cust.mobile else cust.altMobile
-
-                        // Auto-match checklist preset if applicable
-                        val prod = cust.productType.lowercase()
-                        if (prod.contains("corporate")) {
-                          selectedPreset = "Corporate Card"
-                        } else if (prod.contains("enhance")) {
-                          selectedPreset = "Credit Card Limit Enhance"
-                        } else if (prod.contains("business")) {
-                          if ("New Credit Card (Business Person)" in presetOptions) {
-                            selectedPreset = "New Credit Card (Business Person)"
-                          }
-                        } else if (prod.contains("salaried")) {
-                          if ("New Credit Card (Salaried)" in presetOptions) {
-                            selectedPreset = "New Credit Card (Salaried)"
-                          }
-                        } else if (prod.contains("loan")) {
-                          if ("Personal / Auto / Home Loan" in presetOptions) {
-                            selectedPreset = "Personal / Auto / Home Loan"
-                          }
-                        }
-
-                        // Close customer list after selection and hide keyboard
-                        showCustomerList = false
-                        customerSearchQuery = ""
-                        keyboardController?.hide()
-                      }
+                      .verticalScroll(rememberScrollState())
                   ) {
-                    Row(
-                      modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 7.dp),
-                      horizontalArrangement = Arrangement.SpaceBetween,
-                      verticalAlignment = Alignment.CenterVertically
-                    ) {
-                      Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                      ) {
-                        // Distinct Serial Number Badge (SL 1, 2, 3...)
-                        Surface(
-                          shape = RoundedCornerShape(6.dp),
-                          color = if (isSelected) Color(0xFF059669) else EblNavyPrimary,
-                          modifier = Modifier.size(30.dp)
-                        ) {
-                          Box(contentAlignment = Alignment.Center) {
-                            Text(
-                              text = slNumber,
-                              color = Color.White,
-                              fontWeight = FontWeight.Bold,
-                              fontSize = 11.sp
-                            )
+                    val displayed = filteredCustomers.take(60)
+                    displayed.forEachIndexed { index, cust ->
+                      val slNumber = cust.serialNumber.ifBlank { "${index + 1}" }
+                      val isSelected = customerName == cust.customerName && customerMobile == (cust.mobile.ifBlank { cust.altMobile })
+                      val isMostRecent = sortByRecentFirst && index == 0
+
+                      Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isSelected) Color(0xFFECFDF5) else Color.White,
+                        border = androidx.compose.foundation.BorderStroke(
+                          if (isSelected) 1.2.dp else if (isMostRecent) 1.dp else 0.8.dp,
+                          if (isSelected) Color(0xFF10B981) else if (isMostRecent) Color(0xFF3B82F6) else Color(0xFFE2E8F0)
+                        ),
+                        modifier = Modifier
+                          .fillMaxWidth()
+                          .padding(vertical = 2.5.dp)
+                          .clickable {
+                            // Hide keyboard smoothly
+                            keyboardController?.hide()
+
+                            // AUTO-LOAD NAME AND NUMBER!
+                            customerName = cust.customerName
+                            customerMobile = if (cust.mobile.isNotBlank()) cust.mobile else cust.altMobile
+
+                            // Auto-match checklist preset if applicable
+                            val prod = cust.productType.lowercase()
+                            if (prod.contains("corporate")) {
+                              selectedPreset = "Corporate Card"
+                            } else if (prod.contains("enhance")) {
+                              selectedPreset = "Credit Card Limit Enhance"
+                            } else if (prod.contains("business")) {
+                              if ("New Credit Card (Business Person)" in presetOptions) {
+                                selectedPreset = "New Credit Card (Business Person)"
+                              }
+                            } else if (prod.contains("salaried")) {
+                              if ("New Credit Card (Salaried)" in presetOptions) {
+                                selectedPreset = "New Credit Card (Salaried)"
+                              }
+                            } else if (prod.contains("loan")) {
+                              if ("Personal / Auto / Home Loan" in presetOptions) {
+                                selectedPreset = "Personal / Auto / Home Loan"
+                              }
+                            }
+
+                            // Close customer list after selection
+                            showCustomerList = false
+                            customerSearchQuery = ""
                           }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
-                          Text(
-                            text = cust.customerName,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.5.sp,
-                            color = EblNavyDark,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                          )
-                          Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                              text = "📱 ${cust.mobile.ifBlank { cust.altMobile }}",
-                              fontSize = 10.5.sp,
-                              color = Color(0xFF059669),
-                              fontWeight = FontWeight.SemiBold
-                            )
-                            if (cust.productType.isNotBlank()) {
-                              Text(
-                                text = " • ${cust.productType}",
-                                fontSize = 9.5.sp,
-                                color = Color(0xFF64748B),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                              )
+                      ) {
+                        Row(
+                          modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                          horizontalArrangement = Arrangement.SpaceBetween,
+                          verticalAlignment = Alignment.CenterVertically
+                        ) {
+                          Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                          ) {
+                            // Distinct Serial Number Badge
+                            Surface(
+                              shape = RoundedCornerShape(6.dp),
+                              color = if (isSelected) Color(0xFF059669) else if (isMostRecent) Color(0xFF2563EB) else EblNavyPrimary,
+                              modifier = Modifier.size(30.dp)
+                            ) {
+                              Box(contentAlignment = Alignment.Center) {
+                                Text(
+                                  text = slNumber,
+                                  color = Color.White,
+                                  fontWeight = FontWeight.Bold,
+                                  fontSize = 11.sp
+                                )
+                              }
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                  text = cust.customerName,
+                                  fontWeight = FontWeight.Bold,
+                                  fontSize = 12.5.sp,
+                                  color = EblNavyDark,
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                                )
+                                if (isMostRecent) {
+                                  Spacer(modifier = Modifier.width(6.dp))
+                                  Surface(
+                                    color = Color(0xFFEFF6FF),
+                                    shape = RoundedCornerShape(4.dp)
+                                  ) {
+                                    Text(
+                                      text = "⭐ সর্বশেষ (Recent)",
+                                      fontSize = 9.sp,
+                                      fontWeight = FontWeight.Bold,
+                                      color = Color(0xFF1D4ED8),
+                                      modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                  }
+                                }
+                              }
+                              Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                  text = "📱 ${cust.mobile.ifBlank { cust.altMobile }}",
+                                  fontSize = 10.5.sp,
+                                  color = Color(0xFF059669),
+                                  fontWeight = FontWeight.SemiBold
+                                )
+                                if (cust.productType.isNotBlank()) {
+                                  Text(
+                                    text = " • ${cust.productType}",
+                                    fontSize = 9.5.sp,
+                                    color = Color(0xFF64748B),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                  )
+                                }
+                              }
+                              if (cust.companyName.isNotBlank() && cust.companyName != "N/A") {
+                                Text(
+                                  text = "🏢 ${cust.companyName}",
+                                  fontSize = 9.sp,
+                                  color = Color(0xFF94A3B8),
+                                  maxLines = 1,
+                                  overflow = TextOverflow.Ellipsis
+                                )
+                              }
                             }
                           }
-                          if (cust.companyName.isNotBlank() && cust.companyName != "N/A") {
+
+                          // Auto-load action indicator
+                          Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (isSelected) Color(0xFFD1FAE5) else Color(0xFFEFF6FF),
+                            border = androidx.compose.foundation.BorderStroke(
+                              0.8.dp,
+                              if (isSelected) Color(0xFF34D399) else Color(0xFF93C5FD)
+                            )
+                          ) {
                             Text(
-                              text = "🏢 ${cust.companyName}",
-                              fontSize = 9.sp,
-                              color = Color(0xFF94A3B8),
-                              maxLines = 1,
-                              overflow = TextOverflow.Ellipsis
+                              text = if (isSelected) "✓ লোডেড" else "অটো লোড ➔",
+                              fontSize = 9.5.sp,
+                              fontWeight = FontWeight.Bold,
+                              color = if (isSelected) Color(0xFF065F46) else EblNavyPrimary,
+                              modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                             )
                           }
                         }
                       }
+                    }
 
-                      // Auto-load action indicator
-                      Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = if (isSelected) Color(0xFFD1FAE5) else Color(0xFFEFF6FF),
-                        border = androidx.compose.foundation.BorderStroke(
-                          0.8.dp,
-                          if (isSelected) Color(0xFF34D399) else Color(0xFF93C5FD)
-                        )
-                      ) {
-                        Text(
-                          text = if (isSelected) "✓ লোডেড" else "অটো লোড ➔",
-                          fontSize = 9.5.sp,
-                          fontWeight = FontWeight.Bold,
-                          color = if (isSelected) Color(0xFF065F46) else EblNavyPrimary,
-                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                        )
-                      }
+                    if (filteredCustomers.size > 60) {
+                      Text(
+                        text = "• মোট ${filteredCustomers.size} টির মধ্যে প্রথম ৬০ টি দেখানো হয়েছে",
+                        fontSize = 10.sp,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(4.dp)
+                      )
                     }
                   }
                 }
@@ -3035,5 +3070,746 @@ fun DocumentChecklistSenderTab(
         TextButton(onClick = { showCreatePresetDialog = false }) { Text("বাতিল") }
       }
     )
+  }
+}
+
+// -------------------------------------------------------------------------------------------------
+// TAB 3: AGE CALCULATOR (Any Date Format: 25 10 1997 -> 25/10/1997, 25 10 97 -> 25/10/1997)
+// -------------------------------------------------------------------------------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AgeCalculatorTab(
+  currentUser: UserEntity,
+  availableFiles: List<CustomerFileEntity> = emptyList()
+) {
+  val context = LocalContext.current
+  val keyboardController = LocalSoftwareKeyboardController.current
+
+  // Date input state with default "25 10 1997" as requested
+  var dateInput by remember { mutableStateOf("25 10 1997") }
+  var customerNameInput by remember { mutableStateOf("") }
+  var showCustomerPicker by remember { mutableStateOf(false) }
+
+  // Calculation reference date (default = Today)
+  var asOnDateInput by remember { mutableStateOf("") }
+  var useCustomAsOn by remember { mutableStateOf(false) }
+
+  val parsedBirth = remember(dateInput) {
+    AgeCalculatorHelper.parseAnyDate(dateInput)
+  }
+
+  val parsedAsOn = remember(asOnDateInput, useCustomAsOn) {
+    if (useCustomAsOn && asOnDateInput.isNotBlank()) {
+      AgeCalculatorHelper.parseAnyDate(asOnDateInput)
+    } else null
+  }
+
+  val asOnCalendar = remember(parsedAsOn, useCustomAsOn) {
+    if (useCustomAsOn && parsedAsOn != null) {
+      java.util.Calendar.getInstance().apply {
+        set(java.util.Calendar.YEAR, parsedAsOn.year)
+        set(java.util.Calendar.MONTH, parsedAsOn.month - 1)
+        set(java.util.Calendar.DAY_OF_MONTH, parsedAsOn.day)
+        set(java.util.Calendar.HOUR_OF_DAY, 0)
+        set(java.util.Calendar.MINUTE, 0)
+        set(java.util.Calendar.SECOND, 0)
+        set(java.util.Calendar.MILLISECOND, 0)
+      }
+    } else {
+      java.util.Calendar.getInstance()
+    }
+  }
+
+  val ageResult = remember(parsedBirth, asOnCalendar) {
+    parsedBirth?.let { AgeCalculatorHelper.calculateAge(it, asOnCalendar) }
+  }
+
+  // Quick preset sample dates
+  val sampleDates = listOf(
+    "25 10 1997",
+    "25 10 97",
+    "15/08/1990",
+    "01-01-2000",
+    "25101997",
+    "২৫ ১০ ৯৭"
+  )
+
+  LazyColumn(
+    modifier = Modifier
+      .fillMaxSize()
+      .padding(horizontal = 14.dp)
+      .testTag("tab_age_calculator_content"),
+    verticalArrangement = Arrangement.spacedBy(12.dp)
+  ) {
+    item {
+      Spacer(modifier = Modifier.height(6.dp))
+      // Guidance Banner
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+      ) {
+        Row(
+          modifier = Modifier.padding(12.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Surface(
+            shape = CircleShape,
+            color = Color(0xFFDBEAFE),
+            modifier = Modifier.size(38.dp)
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                Icons.Default.CalendarToday,
+                contentDescription = null,
+                tint = EblNavyPrimary,
+                modifier = Modifier.size(20.dp)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.width(10.dp))
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              text = "Smart Age & Eligibility Calculator",
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color(0xFF1E3A8A)
+            )
+            Text(
+              text = "যেকোনো ফরম্যাটে জন্মতারিখ লিখুন: 25 10 1997 বা 25 10 97 -> স্বয়ংক্রিয়ভাবে রূপান্তর ও ব্যাংকিং যোগ্যতা হিসাব হবে।",
+              fontSize = 11.sp,
+              color = Color(0xFF2563EB)
+            )
+          }
+        }
+      }
+    }
+
+    // 1. Date Input Section
+    item {
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text(
+              text = "১. জন্মতারিখ প্রদান (Enter Birth Date)",
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+            if (dateInput.isNotBlank()) {
+              TextButton(
+                onClick = { dateInput = "" },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                modifier = Modifier.height(26.dp)
+              ) {
+                Text("Clear", fontSize = 11.sp, color = Color.Red, fontWeight = FontWeight.SemiBold)
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          OutlinedTextField(
+            value = dateInput,
+            onValueChange = { dateInput = it },
+            placeholder = { Text("যেমন: 25 10 1997 বা 25 10 97 বা 25/10/1997", fontSize = 12.sp) },
+            leadingIcon = {
+              Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
+            },
+            trailingIcon = {
+              if (dateInput.isNotBlank()) {
+                IconButton(onClick = { dateInput = "" }) {
+                  Icon(Icons.Default.Clear, contentDescription = "Clear", tint = Color.Gray, modifier = Modifier.size(16.dp))
+                }
+              }
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(8.dp),
+            keyboardOptions = KeyboardOptions(
+              keyboardType = KeyboardType.Text,
+              imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(onDone = { keyboardController?.hide() }),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedBorderColor = EblNavyPrimary,
+              unfocusedBorderColor = Color(0xFFCBD5E1),
+              focusedContainerColor = Color.White,
+              unfocusedContainerColor = Color.White
+            ),
+            modifier = Modifier
+              .fillMaxWidth()
+              .testTag("input_age_calc_dob")
+          )
+
+          Spacer(modifier = Modifier.height(6.dp))
+
+          // Live interpretation status badge
+          if (parsedBirth != null) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFECFDF5),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF6EE7B7)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = "গৃহীত জন্মতারিখ: ${parsedBirth.formattedSlash}",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.5.sp,
+                    color = Color(0xFF065F46)
+                  )
+                }
+                Text(
+                  text = "📅 ${parsedBirth.formattedPretty}",
+                  fontSize = 11.sp,
+                  color = Color(0xFF047857),
+                  modifier = Modifier.padding(start = 22.dp, top = 2.dp)
+                )
+                // If user entered a 2-digit year (e.g. 97 -> 1997)
+                if (dateInput.contains("97") || dateInput.split(Regex("[^0-9]+")).any { it.length == 2 && (it.toIntOrNull() ?: 0) > 31 }) {
+                  Text(
+                    text = "💡 ২ সংখ্যার বছর স্বয়ংক্রিয়ভাবে ${parsedBirth.year} হিসেবে ধরা হয়েছে।",
+                    fontSize = 10.sp,
+                    color = Color(0xFF0F766E),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(start = 22.dp, top = 2.dp)
+                  )
+                }
+              }
+            }
+          } else if (dateInput.isNotBlank()) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFFEF2F2),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = "সঠিক ফরম্যাটে জন্মতারিখ লিখুন (যেমন: 25 10 1997 বা 25 10 97)",
+                  fontSize = 11.5.sp,
+                  color = Color(0xFFB91C1C)
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // Quick Preset Chips (1-tap input)
+          Text(
+            text = "নমুনা ফরম্যাটে ১ ট্যাপে পরীক্ষা করুন (Tap to try):",
+            fontSize = 10.5.sp,
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
+          )
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            sampleDates.take(3).forEach { sample ->
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (dateInput == sample) EblNavyPrimary else Color(0xFFF1F5F9),
+                border = androidx.compose.foundation.BorderStroke(0.8.dp, if (dateInput == sample) EblNavyPrimary else Color(0xFFCBD5E1)),
+                modifier = Modifier
+                  .weight(1f)
+                  .clickable { dateInput = sample }
+              ) {
+                Text(
+                  text = sample,
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  textAlign = TextAlign.Center,
+                  color = if (dateInput == sample) Color.White else EblNavyDark,
+                  modifier = Modifier.padding(vertical = 6.dp)
+                )
+              }
+            }
+          }
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            sampleDates.drop(3).forEach { sample ->
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = if (dateInput == sample) EblNavyPrimary else Color(0xFFF1F5F9),
+                border = androidx.compose.foundation.BorderStroke(0.8.dp, if (dateInput == sample) EblNavyPrimary else Color(0xFFCBD5E1)),
+                modifier = Modifier
+                  .weight(1f)
+                  .clickable { dateInput = sample }
+              ) {
+                Text(
+                  text = sample,
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  textAlign = TextAlign.Center,
+                  color = if (dateInput == sample) Color.White else EblNavyDark,
+                  modifier = Modifier.padding(vertical = 6.dp)
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Optional Customer Tagging & As On Date
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Checkbox(
+                checked = useCustomAsOn,
+                onCheckedChange = { useCustomAsOn = it },
+                colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary)
+              )
+              Text("হিসাবের নির্দিষ্ট তারিখ দিন (Default: Today)", fontSize = 11.5.sp, color = Color(0xFF334155))
+            }
+          }
+
+          if (useCustomAsOn) {
+            OutlinedTextField(
+              value = asOnDateInput,
+              onValueChange = { asOnDateInput = it },
+              placeholder = { Text("যেমন: 31 12 2026", fontSize = 11.5.sp) },
+              label = { Text("হিসাবের রেফারেন্স তারিখ", fontSize = 11.sp) },
+              modifier = Modifier.fillMaxWidth(),
+              singleLine = true
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+          }
+
+          // Optional Customer Link from recent files
+          if (availableFiles.isNotEmpty()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = if (customerNameInput.isNotBlank()) "গ্রাহক: $customerNameInput" else "গ্রাহকের নাম যুক্ত করতে পারেন:",
+                fontSize = 11.sp,
+                color = if (customerNameInput.isNotBlank()) Color(0xFF047857) else Color.Gray,
+                fontWeight = FontWeight.SemiBold
+              )
+              TextButton(
+                onClick = { showCustomerPicker = !showCustomerPicker },
+                contentPadding = PaddingValues(0.dp)
+              ) {
+                Text(if (showCustomerPicker) "Hide" else "Select Customer", fontSize = 11.sp, color = EblNavyPrimary)
+              }
+            }
+
+            if (showCustomerPicker) {
+              Box(modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp)) {
+                Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                  availableFiles.take(15).forEach { cust ->
+                    Surface(
+                      modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 2.dp)
+                        .clickable {
+                          customerNameInput = cust.customerName
+                          showCustomerPicker = false
+                        },
+                      color = Color(0xFFF8FAFC),
+                      shape = RoundedCornerShape(6.dp)
+                    ) {
+                      Text(
+                        text = "👤 ${cust.customerName} (${cust.productType})",
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(6.dp)
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Age Results Section
+    if (ageResult != null) {
+      // Big Hero Age Card
+      item {
+        Card(
+          shape = RoundedCornerShape(14.dp),
+          colors = CardDefaults.cardColors(containerColor = EblNavyDark),
+          elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+        ) {
+          Column(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(16.dp)
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "বর্তমান সঠিক বয়স (Exact Age)",
+                color = EblGold,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+              )
+              Surface(
+                color = Color(0xFF1E293B),
+                shape = RoundedCornerShape(6.dp)
+              ) {
+                Text(
+                  text = "As on ${ageResult.formattedAsOnDate}",
+                  color = Color(0xFF94A3B8),
+                  fontSize = 10.sp,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Main Age Display
+            Text(
+              text = "${ageResult.years} বছর, ${ageResult.months} মাস, ${ageResult.days} দিন",
+              color = Color.White,
+              fontSize = 21.sp,
+              fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+              text = "${ageResult.years} Years, ${ageResult.months} Months, ${ageResult.days} Days",
+              color = Color(0xFFCBD5E1),
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Medium
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Next Birthday Highlight
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFF1E293B),
+              border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF334155)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(text = "🎂", fontSize = 16.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                  Text(
+                    text = "পরবর্তী জন্মদিন: আর ${ageResult.nextBirthdayMonths} মাস ${ageResult.nextBirthdayDays} দিন পর",
+                    color = Color.White,
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.Bold
+                  )
+                  Text(
+                    text = "দিনটি হবে: ${ageResult.nextBirthdayDayOfWeek}",
+                    color = EblGold,
+                    fontSize = 10.5.sp
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Banking Eligibility Assessment Card
+      item {
+        Card(
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = Color.White),
+          elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+          Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+              text = "🏦 ইবিএল ক্রেডিট ও লোন যোগ্যতা যাচাই (Credit Eligibility)",
+              fontSize = 13.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Credit Card Eligibility
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (ageResult.isEligibleCreditCard) Color(0xFFECFDF5) else Color(0xFFFEF2F2),
+              border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (ageResult.isEligibleCreditCard) Color(0xFF6EE7B7) else Color(0xFFFECACA)
+              ),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                      Icons.Default.CreditCard,
+                      contentDescription = null,
+                      tint = if (ageResult.isEligibleCreditCard) Color(0xFF059669) else Color(0xFFDC2626),
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                      text = "Credit Card (ক্রেডিট কার্ড)",
+                      fontSize = 12.5.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = if (ageResult.isEligibleCreditCard) Color(0xFF065F46) else Color(0xFF991B1B)
+                    )
+                  }
+                  Surface(
+                    color = if (ageResult.isEligibleCreditCard) Color(0xFF059669) else Color(0xFFDC2626),
+                    shape = RoundedCornerShape(4.dp)
+                  ) {
+                    Text(
+                      text = if (ageResult.isEligibleCreditCard) "✓ Eligible" else "✕ Not Eligible",
+                      color = Color.White,
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = ageResult.creditCardEligibility,
+                  fontSize = 11.sp,
+                  color = if (ageResult.isEligibleCreditCard) Color(0xFF047857) else Color(0xFFB91C1C)
+                )
+                Text(
+                  text = "• স্ট্যান্ডার্ড বয়স নীতি: ২১ থেকে ৬০ বছর (স্যালারীড) / ৬৫ বছর (বিজনেস)",
+                  fontSize = 9.5.sp,
+                  color = Color.Gray,
+                  modifier = Modifier.padding(top = 2.dp)
+                )
+              }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Retail Loan Eligibility
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (ageResult.isEligibleLoan) Color(0xFFEFF6FF) else Color(0xFFFEF2F2),
+              border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (ageResult.isEligibleLoan) Color(0xFFBFDBFE) else Color(0xFFFECACA)
+              ),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Column(modifier = Modifier.padding(10.dp)) {
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                      Icons.Default.MonetizationOn,
+                      contentDescription = null,
+                      tint = if (ageResult.isEligibleLoan) Color(0xFF2563EB) else Color(0xFFDC2626),
+                      modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                      text = "Retail Loan (ব্যক্তিগত, অটো ও হোম লোন)",
+                      fontSize = 12.5.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = if (ageResult.isEligibleLoan) Color(0xFF1E3A8A) else Color(0xFF991B1B)
+                    )
+                  }
+                  Surface(
+                    color = if (ageResult.isEligibleLoan) Color(0xFF2563EB) else Color(0xFFDC2626),
+                    shape = RoundedCornerShape(4.dp)
+                  ) {
+                    Text(
+                      text = if (ageResult.isEligibleLoan) "✓ Eligible" else "✕ Review Needed",
+                      color = Color.White,
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                  text = ageResult.loanEligibility,
+                  fontSize = 11.sp,
+                  color = if (ageResult.isEligibleLoan) Color(0xFF1D4ED8) else Color(0xFFB91C1C)
+                )
+                Text(
+                  text = "• বয়স সীমা: Personal Loan (২১-৬০), Auto Loan (২১-৬৫), Home Loan (২১-৭০)",
+                  fontSize = 9.5.sp,
+                  color = Color.Gray,
+                  modifier = Modifier.padding(top = 2.dp)
+                )
+              }
+            }
+          }
+        }
+      }
+
+      // Detailed Lifespan Statistics Card
+      item {
+        Card(
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = Color.White),
+          elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+          Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+              text = "📊 মোট অতিক্রান্ত জীবনকাল (Life Duration Stats)",
+              fontSize = 13.sp,
+              fontWeight = FontWeight.Bold,
+              color = EblNavyDark
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF8FAFC),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.weight(1f)
+              ) {
+                Column(
+                  modifier = Modifier.padding(10.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(text = "মোট দিন", fontSize = 10.sp, color = Color.Gray)
+                  Text(
+                    text = "${ageResult.totalDays}",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EblNavyPrimary
+                  )
+                }
+              }
+
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF8FAFC),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.weight(1f)
+              ) {
+                Column(
+                  modifier = Modifier.padding(10.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(text = "মোট সপ্তাহ", fontSize = 10.sp, color = Color.Gray)
+                  Text(
+                    text = "${ageResult.totalWeeks}",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EblNavyPrimary
+                  )
+                }
+              }
+
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF8FAFC),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.weight(1f)
+              ) {
+                Column(
+                  modifier = Modifier.padding(10.dp),
+                  horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                  Text(text = "মোট মাস", fontSize = 10.sp, color = Color.Gray)
+                  Text(
+                    text = "${ageResult.totalMonths}",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EblNavyPrimary
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Actions: Copy & Share Assessment
+      item {
+        val custPrefix = if (customerNameInput.isNotBlank()) "গ্রাহক: $customerNameInput\n" else ""
+        val fullReportText = "$custPrefix${ageResult.fullSummaryText}\n\nAssessed by: ${currentUser.name} (${currentUser.rmCode})"
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+          OutlinedButton(
+            onClick = {
+              val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+              val clip = ClipData.newPlainText("EBL Age Assessment", fullReportText)
+              clipboard?.setPrimaryClip(clip)
+              Toast.makeText(context, "✓ বয়স ও যোগ্যতার রিপোর্ট কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+            },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.weight(1f).height(46.dp)
+          ) {
+            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("কপি করুন", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+          }
+
+          Button(
+            onClick = {
+              try {
+                val sendIntent = Intent().apply {
+                  action = Intent.ACTION_SEND
+                  putExtra(Intent.EXTRA_TEXT, fullReportText)
+                  type = "text/plain"
+                }
+                context.startActivity(Intent.createChooser(sendIntent, "Share Age Assessment"))
+              } catch (e: Exception) {
+                Toast.makeText(context, "শেয়ার করতে সমস্যা: ${e.message}", Toast.LENGTH_SHORT).show()
+              }
+            },
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            modifier = Modifier.weight(1f).height(46.dp)
+          ) {
+            Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("শেয়ার করুন", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+          }
+        }
+        Spacer(modifier = Modifier.height(20.dp))
+      }
+    }
   }
 }

@@ -894,6 +894,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fileUri: String,
     storagePath: String,
     docId: String? = null,
+    docDate: String? = null,
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
@@ -906,7 +907,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         fileType = fileType,
         fileSizeBytes = fileSizeBytes,
         fileUri = fileUri,
-        storagePath = storagePath
+        storagePath = storagePath,
+        docDate = docDate
       )
       res.onSuccess {
         _uiMessage.emit("ডকুমেন্ট '${it.title}' সফলভাবে সেভ করা হয়েছে।")

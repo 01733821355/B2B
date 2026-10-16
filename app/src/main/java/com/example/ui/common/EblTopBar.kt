@@ -244,11 +244,11 @@ fun EblTopBar(
               modifier = Modifier.testTag("menu_communication_hub")
             )
 
-            // 2. DBR & Checklist Tool
+            // 2. DBR, Checklist & Age Calculator Tool
             DropdownMenuItem(
-              text = { Text("DBR & Checklist Tool", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+              text = { Text("DBR, Checklist & Age Calc", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
               leadingIcon = {
-                Icon(Icons.Default.Calculate, contentDescription = "DBR Tool", tint = EblGold)
+                Icon(Icons.Default.Calculate, contentDescription = "DBR & Tools", tint = EblGold)
               },
               onClick = {
                 showMenu = false
