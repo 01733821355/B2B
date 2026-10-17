@@ -1466,23 +1466,23 @@ fun DocumentChecklistSenderTab(
     }
   }
 
-  // Active state lists
-  val singleChecklistItems = remember(selectedPreset, appSettingsList) {
+  // Active state lists - Keyed strictly by selectedPreset so background settings emissions do NOT reset user selections
+  val singleChecklistItems = remember(selectedPreset) {
     mutableStateListOf<ChecklistItem>().apply {
       val items = getPresetItems(selectedPreset)
-      items.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+      items.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t, isChecked = true)) }
     }
   }
 
   // Corporate Card Two-Part state lists
-  val corporateCompanyItems = remember(defaultCorporateCompanyDocs) {
+  val corporateCompanyItems = remember {
     mutableStateListOf<ChecklistItem>().apply {
-      defaultCorporateCompanyDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t)) }
+      defaultCorporateCompanyDocs.forEachIndexed { i, t -> add(ChecklistItem(i + 1, t, isChecked = true)) }
     }
   }
-  val corporateEmployeeItems = remember(defaultCorporateEmployeeDocs) {
+  val corporateEmployeeItems = remember {
     mutableStateListOf<ChecklistItem>().apply {
-      defaultCorporateEmployeeDocs.forEachIndexed { i, t -> add(ChecklistItem(100 + i + 1, t)) }
+      defaultCorporateEmployeeDocs.forEachIndexed { i, t -> add(ChecklistItem(100 + i + 1, t, isChecked = true)) }
     }
   }
 
@@ -2386,24 +2386,137 @@ fun DocumentChecklistSenderTab(
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
           if (selectedPreset == "Corporate Card") {
-            // CORPORATE CARD: TWO SEPARATE PARTS
+            // CORPORATE CARD: MASTER SELECTION CONTROLS
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(
+                text = "Corporate Checklist Controls:",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF475569)
+              )
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFEFF6FF),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF93C5FD)),
+                  modifier = Modifier
+                    .testTag("btn_select_all_both_corporate")
+                    .clickable {
+                      corporateCompanyItems.indices.forEach { idx ->
+                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(isChecked = true)
+                      }
+                      corporateEmployeeItems.indices.forEach { idx ->
+                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(isChecked = true)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("All Select (Both)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                  }
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFFEF2F2),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFFECACA)),
+                  modifier = Modifier
+                    .testTag("btn_unselect_all_both_corporate")
+                    .clickable {
+                      corporateCompanyItems.indices.forEach { idx ->
+                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(isChecked = false)
+                      }
+                      corporateEmployeeItems.indices.forEach { idx ->
+                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(isChecked = false)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("All Unselect (Both)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                  }
+                }
+              }
+            }
+
             // Part 1: Company Documents
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Text(
-                text = "🏢 Part 1: Company Docs (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = EblNavyDark,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-              )
-              Text("কোম্পানি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
+              Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                  text = "🏢 Part 1: Company Docs (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
+                  fontSize = 13.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text("কোম্পানি ডকুমেন্টস", fontSize = 10.5.sp, color = Color.Gray)
+              }
+
+              // All Select / All Unselect for Part 1
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFEFF6FF),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF93C5FD)),
+                  modifier = Modifier
+                    .testTag("btn_select_all_corp_company")
+                    .clickable {
+                      corporateCompanyItems.indices.forEach { idx ->
+                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(isChecked = true)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("All Select", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                  }
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFFEF2F2),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFFECACA)),
+                  modifier = Modifier
+                    .testTag("btn_unselect_all_corp_company")
+                    .clickable {
+                      corporateCompanyItems.indices.forEach { idx ->
+                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(isChecked = false)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("All Unselect", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                  }
+                }
+              }
             }
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2417,7 +2530,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Checkbox(
                   checked = item.isChecked,
-                  onCheckedChange = { checked -> corporateCompanyItems[index] = item.copy(isChecked = checked) },
+                  onCheckedChange = null,
                   colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
                   modifier = Modifier.size(24.dp)
                 )
@@ -2486,17 +2599,64 @@ fun DocumentChecklistSenderTab(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Text(
-                text = "👤 Part 2: Employee Docs (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = EblNavyDark,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-              )
-              Text("এমপ্লয়ি ডকুমেন্টস", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
+              Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                  text = "👤 Part 2: Employee Docs (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
+                  fontSize = 13.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text("এমপ্লয়ি ডকুমেন্টস", fontSize = 10.5.sp, color = Color.Gray)
+              }
+
+              // All Select / All Unselect for Part 2
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFEFF6FF),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF93C5FD)),
+                  modifier = Modifier
+                    .testTag("btn_select_all_corp_employee")
+                    .clickable {
+                      corporateEmployeeItems.indices.forEach { idx ->
+                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(isChecked = true)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("All Select", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+                  }
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFFEF2F2),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFFECACA)),
+                  modifier = Modifier
+                    .testTag("btn_unselect_all_corp_employee")
+                    .clickable {
+                      corporateEmployeeItems.indices.forEach { idx ->
+                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(isChecked = false)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text("All Unselect", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                  }
+                }
+              }
             }
             Spacer(modifier = Modifier.height(6.dp))
 
@@ -2510,7 +2670,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Checkbox(
                   checked = item.isChecked,
-                  onCheckedChange = { checked -> corporateEmployeeItems[index] = item.copy(isChecked = checked) },
+                  onCheckedChange = null,
                   colors = CheckboxDefaults.colors(checkedColor = Color(0xFF059669)),
                   modifier = Modifier.size(24.dp)
                 )
@@ -2578,17 +2738,71 @@ fun DocumentChecklistSenderTab(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Text(
-                text = "$selectedPreset (${singleChecklistItems.count { it.isChecked }}/${singleChecklistItems.size})",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = EblNavyDark,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false)
-              )
-              Text("Items", fontSize = 11.sp, color = Color.Gray, maxLines = 1, softWrap = false)
+              Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                  text = "$selectedPreset (${singleChecklistItems.count { it.isChecked }}/${singleChecklistItems.size})",
+                  fontSize = 13.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark,
+                  maxLines = 1,
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                  text = if (singleChecklistItems.all { it.isChecked }) "All items selected"
+                         else if (singleChecklistItems.none { it.isChecked }) "No items selected"
+                         else "${singleChecklistItems.count { it.isChecked }} of ${singleChecklistItems.size} selected",
+                  fontSize = 10.5.sp,
+                  color = Color.Gray
+                )
+              }
+
+              // All Select / All Unselect buttons
+              Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFEFF6FF),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFF93C5FD)),
+                  modifier = Modifier
+                    .testTag("btn_select_all_single_checklist")
+                    .clickable {
+                      singleChecklistItems.indices.forEach { idx ->
+                        singleChecklistItems[idx] = singleChecklistItems[idx].copy(isChecked = true)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("All Select", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                  }
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFFEF2F2),
+                  border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFFECACA)),
+                  modifier = Modifier
+                    .testTag("btn_unselect_all_single_checklist")
+                    .clickable {
+                      singleChecklistItems.indices.forEach { idx ->
+                        singleChecklistItems[idx] = singleChecklistItems[idx].copy(isChecked = false)
+                      }
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Close, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text("All Unselect", fontSize = 10.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                  }
+                }
+              }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -2603,7 +2817,7 @@ fun DocumentChecklistSenderTab(
               ) {
                 Checkbox(
                   checked = item.isChecked,
-                  onCheckedChange = { checked -> singleChecklistItems[index] = item.copy(isChecked = checked) },
+                  onCheckedChange = null,
                   colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
                   modifier = Modifier.size(24.dp)
                 )

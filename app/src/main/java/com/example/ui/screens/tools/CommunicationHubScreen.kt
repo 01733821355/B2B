@@ -604,6 +604,9 @@ fun EventCardItem(
   val canDeleteEvent = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR" || isCreator
   var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
+  val context = androidx.compose.ui.platform.LocalContext.current
+  val isExpired = event != null && DateUtils.isEventExpired(event.closeTime, event.targetDate)
+
   if (showDeleteConfirmDialog && event != null) {
     AlertDialog(
       onDismissRequest = { showDeleteConfirmDialog = false },
@@ -637,7 +640,7 @@ fun EventCardItem(
       .testTag("event_card_${event?.eventId ?: fallbackMessage.id}"),
     shape = RoundedCornerShape(14.dp),
     colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-    border = androidx.compose.foundation.BorderStroke(1.5.dp, Color(0xFF3B82F6)),
+    border = androidx.compose.foundation.BorderStroke(1.5.dp, if (isExpired) Color(0xFFCBD5E1) else Color(0xFF3B82F6)),
     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
   ) {
     Column(modifier = Modifier.padding(14.dp)) {
@@ -649,7 +652,7 @@ fun EventCardItem(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Box(
             modifier = Modifier
-              .background(Color(0xFF2563EB), RoundedCornerShape(6.dp))
+              .background(if (isExpired) Color(0xFF64748B) else Color(0xFF2563EB), RoundedCornerShape(6.dp))
               .padding(horizontal = 6.dp, vertical = 2.dp)
           ) {
             Text("TEAM EVENT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -663,7 +666,33 @@ fun EventCardItem(
         }
 
         Row(verticalAlignment = Alignment.CenterVertically) {
-          if (targetDate.isNotBlank()) {
+          if (isExpired) {
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFFEE2E2)
+            ) {
+              Text(
+                text = "🔴 CLOSED (সময় শেষ)",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFDC2626),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          } else if (event != null && event.closeTime.isNotBlank()) {
+            Surface(
+              shape = RoundedCornerShape(10.dp),
+              color = Color(0xFFFEF3C7)
+            ) {
+              Text(
+                text = "⏳ শেষ সময়: ${event.closeTime}",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB45309),
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          } else if (targetDate.isNotBlank()) {
             Surface(
               shape = RoundedCornerShape(10.dp),
               color = Color(0xFFDCFCE7)
@@ -719,20 +748,38 @@ fun EventCardItem(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         // RM Button to submit details
-        Button(
-          onClick = {
-            if (event != null) onOpenSubmit(event)
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-          shape = RoundedCornerShape(8.dp),
-          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-          modifier = Modifier
-            .weight(1f)
-            .testTag("btn_submit_event_details")
-        ) {
-          Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(4.dp))
-          Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        if (isExpired) {
+          Button(
+            onClick = {
+              Toast.makeText(context, "এই ইভেন্টের সময়সীমা শেষ হয়েছে। নতুন এন্ট্রি বন্ধ রয়েছে।", Toast.LENGTH_LONG).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF94A3B8)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier
+              .weight(1f)
+              .testTag("btn_submit_event_closed")
+          ) {
+            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("সময় শেষ (এন্ট্রি বন্ধ)", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+          }
+        } else {
+          Button(
+            onClick = {
+              if (event != null) onOpenSubmit(event)
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier
+              .weight(1f)
+              .testTag("btn_submit_event_details")
+          ) {
+            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+          }
         }
 
         // Admin & Mentor (or creator) button to view summary table of all RMs
@@ -757,10 +804,11 @@ fun EventCardItem(
 @Composable
 fun CreateEventDialog(
   onDismiss: () -> Unit,
-  onSubmit: (String, String, String, String) -> Unit
+  onSubmit: (String, String, String, String, String) -> Unit
 ) {
   var title by remember { mutableStateOf("") }
   var targetDate by remember { mutableStateOf("") }
+  var closeTime by remember { mutableStateOf("") }
   var description by remember { mutableStateOf("") }
 
   // Allowed entry fields configurable by Creator/Admin/Mentor
@@ -794,6 +842,40 @@ fun CreateEventDialog(
           placeholder = { Text("DD/MM/YYYY") },
           modifier = Modifier.fillMaxWidth().testTag("input_event_date")
         )
+        OutlinedTextField(
+          value = closeTime,
+          onValueChange = { closeTime = it },
+          label = { Text("Event Close Time / সমাপ্তির সময়") },
+          placeholder = { Text("যেমন: 17/10/2026 06:00 PM বা 17/10/2026") },
+          supportingText = { Text("এই সময় পার হলে আর কেউ নতুন তথ্য এন্ট্রি দিতে পারবে না।", fontSize = 10.sp, color = Color(0xFFDC2626)) },
+          modifier = Modifier.fillMaxWidth().testTag("input_event_close_time")
+        )
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          AssistChip(
+            onClick = {
+              val today = DateUtils.formatDate(DateUtils.currentDhakaMillis())
+              closeTime = "$today 06:00 PM"
+            },
+            label = { Text("আজ ৬টা", fontSize = 10.sp) }
+          )
+          AssistChip(
+            onClick = {
+              val today = DateUtils.formatDate(DateUtils.currentDhakaMillis())
+              closeTime = "$today 11:59 PM"
+            },
+            label = { Text("আজ রাত ১২টা", fontSize = 10.sp) }
+          )
+          AssistChip(
+            onClick = {
+              val tmrw = DateUtils.formatDate(DateUtils.currentDhakaMillis() + 86400000L)
+              closeTime = "$tmrw 06:00 PM"
+            },
+            label = { Text("কাল ৬টা", fontSize = 10.sp) }
+          )
+        }
         OutlinedTextField(
           value = description,
           onValueChange = { description = it },
@@ -849,7 +931,7 @@ fun CreateEventDialog(
             if (allowLocation) fieldsList.add("LOCATION")
             if (allowRemarks) fieldsList.add("REMARKS")
             val allowedFieldsStr = if (fieldsList.isNotEmpty()) fieldsList.joinToString(",") else "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS"
-            onSubmit(title.trim(), description.trim(), targetDate.trim(), allowedFieldsStr)
+            onSubmit(title.trim(), description.trim(), targetDate.trim(), allowedFieldsStr, closeTime.trim())
           }
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
@@ -893,6 +975,7 @@ fun SubmitDeliveryResponseDialog(
   val customerList = remember {
     mutableStateListOf(CustomerEntryItem())
   }
+  val isExpired = DateUtils.isEventExpired(event.closeTime, event.targetDate)
 
   AlertDialog(
     onDismissRequest = onDismiss,
@@ -904,6 +987,22 @@ fun SubmitDeliveryResponseDialog(
           .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
+        if (isExpired) {
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFFEE2E2),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+          ) {
+            Row(
+              modifier = Modifier.padding(10.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("এই ইভেন্টের সময়সীমা শেষ হয়েছে। আর কোনো এন্ট্রি দেওয়া সম্ভব নয়।", color = Color(0xFFDC2626), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+          }
+        }
         if (showCustomers) {
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1019,26 +1118,29 @@ fun SubmitDeliveryResponseDialog(
     confirmButton = {
       Button(
         onClick = {
-          val cnt = filesCountText.toIntOrNull() ?: 1
-          val validCustomers = customerList.filter {
-            it.name.isNotBlank() || it.mobile.isNotBlank()
-          }
-          val customersJson = if (validCustomers.isNotEmpty()) {
-            val arr = org.json.JSONArray()
-            for (c in validCustomers) {
-              arr.put(org.json.JSONObject().apply {
-                put("name", c.name.trim())
-                put("mobile", c.mobile.trim())
-              })
+          if (!isExpired) {
+            val cnt = filesCountText.toIntOrNull() ?: 1
+            val validCustomers = customerList.filter {
+              it.name.isNotBlank() || it.mobile.isNotBlank()
             }
-            arr.toString()
-          } else ""
+            val customersJson = if (validCustomers.isNotEmpty()) {
+              val arr = org.json.JSONArray()
+              for (c in validCustomers) {
+                arr.put(org.json.JSONObject().apply {
+                  put("name", c.name.trim())
+                  put("mobile", c.mobile.trim())
+                })
+              }
+              arr.toString()
+            } else ""
 
-          onSubmit(cnt, requestedDate.trim(), location.trim(), remarks.trim(), customersJson)
+            onSubmit(cnt, requestedDate.trim(), location.trim(), remarks.trim(), customersJson)
+          }
         },
+        enabled = !isExpired,
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
       ) {
-        Text("সাবমিট করুন")
+        Text(if (isExpired) "সময়সীমা শেষ (এন্ট্রি বন্ধ)" else "সাবমিট করুন")
       }
     },
     dismissButton = {
