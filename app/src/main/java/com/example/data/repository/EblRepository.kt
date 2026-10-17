@@ -1471,11 +1471,16 @@ class EblRepository(
       }
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
+      val targetUser = database.userDao().getUser(rmCode.trim())
       val payload = org.json.JSONObject().apply {
         put("action", "UPDATE_RM_PASSWORD")
         put("rmCode", rmCode.trim().uppercase())
         put("passwordHash", passwordHash)
         put("salt", salt)
+        put("name", targetUser?.name ?: "")
+        put("mobile", targetUser?.mobile ?: "")
+        put("email", targetUser?.email ?: "")
+        put("officeAddress", targetUser?.officeAddress ?: "")
         put("updatedAt", DateUtils.formatDateTime(DateUtils.currentDhakaMillis()))
         put("spreadsheetId", currentStatus.spreadsheetId)
         put("secretKey", currentStatus.syncSecretKey)

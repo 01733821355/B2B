@@ -791,19 +791,37 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Handle Direct RM Password Update
+    // Handle Direct RM Password Update (or insert new RM row if not found in sheet)
     if (data.action === 'UPDATE_RM_PASSWORD') {
       var targetRmCode = String(data.rmCode || '').trim().toUpperCase();
       var curRmsP = rmSheet.getDataRange().getValues();
+      var foundRm = false;
       for (var pr = 1; pr < curRmsP.length; pr++) {
         if (String(curRmsP[pr][0] || '').trim().toUpperCase() === targetRmCode) {
           rmSheet.getRange(pr + 1, 11).setValue(data.passwordHash || '');
           rmSheet.getRange(pr + 1, 12).setValue(data.salt || '');
           rmSheet.getRange(pr + 1, 14).setValue(data.updatedAt || '');
+          foundRm = true;
           break;
         }
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM Password updated in sheet." }))
+      if (!foundRm && targetRmCode) {
+        rmSheet.appendRow([
+          targetRmCode,
+          data.name || 'Relationship Manager',
+          data.mobile || '',
+          data.email || '',
+          data.officeAddress || '',
+          'RM',
+          'ACTIVE',
+          15, 5, 2,
+          data.passwordHash || '',
+          data.salt || '',
+          data.updatedAt || new Date().toISOString(),
+          data.updatedAt || new Date().toISOString()
+        ]);
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM Password & Profile synchronized in sheet." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
