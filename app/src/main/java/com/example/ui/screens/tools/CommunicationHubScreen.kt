@@ -38,6 +38,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.FormatListNumbered
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.People
@@ -852,29 +853,59 @@ fun CreateEventDialog(
         )
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(4.dp)
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-          AssistChip(
-            onClick = {
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEFF6FF),
+            border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFBFDBFE)),
+            modifier = Modifier.clickable {
               val today = DateUtils.formatDate(DateUtils.currentDhakaMillis())
               closeTime = "$today 06:00 PM"
-            },
-            label = { Text("আজ ৬টা", fontSize = 10.sp) }
-          )
-          AssistChip(
-            onClick = {
+            }
+          ) {
+            Text(
+              text = "আজ ৬টা",
+              fontSize = 10.5.sp,
+              fontWeight = FontWeight.Medium,
+              color = EblNavyPrimary,
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+          }
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEFF6FF),
+            border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFBFDBFE)),
+            modifier = Modifier.clickable {
               val today = DateUtils.formatDate(DateUtils.currentDhakaMillis())
               closeTime = "$today 11:59 PM"
-            },
-            label = { Text("আজ রাত ১২টা", fontSize = 10.sp) }
-          )
-          AssistChip(
-            onClick = {
+            }
+          ) {
+            Text(
+              text = "আজ রাত ১২টা",
+              fontSize = 10.5.sp,
+              fontWeight = FontWeight.Medium,
+              color = EblNavyPrimary,
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+          }
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFEFF6FF),
+            border = androidx.compose.foundation.BorderStroke(0.8.dp, Color(0xFFBFDBFE)),
+            modifier = Modifier.clickable {
               val tmrw = DateUtils.formatDate(DateUtils.currentDhakaMillis() + 86400000L)
               closeTime = "$tmrw 06:00 PM"
-            },
-            label = { Text("কাল ৬টা", fontSize = 10.sp) }
-          )
+            }
+          ) {
+            Text(
+              text = "কাল ৬টা",
+              fontSize = 10.5.sp,
+              fontWeight = FontWeight.Medium,
+              color = EblNavyPrimary,
+              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+          }
         }
         OutlinedTextField(
           value = description,
