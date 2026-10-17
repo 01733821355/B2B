@@ -531,19 +531,23 @@ fun RmMappingScreen(
       confirmButton = {
         Button(
           onClick = {
-            if (rmCodeInput.isBlank() || nameInput.isBlank()) {
+            val cleanCode = rmCodeInput.trim().uppercase()
+            val cleanName = nameInput.trim()
+            if (cleanCode.isBlank() || cleanName.isBlank()) {
               addError = "RM Code and Name are mandatory."
               return@Button
             }
+            val finalPassword = if (initialPassInput.isBlank()) SecurityUtils.generateTemporaryPassword() else initialPassInput.trim()
             viewModel.createRm(
-              rmCode = rmCodeInput,
-              name = nameInput,
-              mobile = mobileInput,
-              email = emailInput,
-              officeAddress = addressInput,
-              initialPassword = initialPassInput
+              rmCode = cleanCode,
+              name = cleanName,
+              mobile = mobileInput.trim(),
+              email = emailInput.trim(),
+              officeAddress = addressInput.trim(),
+              initialPassword = finalPassword
             ) { success, err ->
               if (success) {
+                searchRmQuery = "" // Clear search filter so newly created RM is immediately visible
                 showAddDialog = false
               } else {
                 addError = err ?: "Failed to assign RM account."

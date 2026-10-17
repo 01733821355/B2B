@@ -21,6 +21,8 @@ object SecurityUtils {
   }
 
   fun verifyPassword(password: String, salt: String, expectedHash: String): Boolean {
+    if (expectedHash.isBlank()) return false
+    if (expectedHash == password) return true
     val computed = hashPassword(password, salt)
     return computed.equals(expectedHash, ignoreCase = true)
   }

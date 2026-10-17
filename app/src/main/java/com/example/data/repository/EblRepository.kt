@@ -1235,18 +1235,23 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
 
-    if (currentUser.role != "ADMIN") {
-      return@withContext Result.failure(Exception("Only Admin can assign new RM accounts. Mentor approves or edits."))
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Admin or Mentor can assign new RM accounts."))
     }
 
-    val cleanRmCode = rmCode.trim()
+    val cleanRmCode = rmCode.trim().uppercase()
+    if (cleanRmCode.isBlank() || name.trim().isBlank()) {
+      return@withContext Result.failure(Exception("RM Code and Name are mandatory."))
+    }
+
     if (database.userDao().getUser(cleanRmCode) != null) {
       return@withContext Result.failure(Exception("RM Code '$cleanRmCode' is already assigned to an existing account."))
     }
 
+    val effectivePassword = if (initialPassword.trim().isBlank()) SecurityUtils.generateTemporaryPassword() else initialPassword.trim()
     val now = DateUtils.currentDhakaMillis()
     val salt = SecurityUtils.generateSalt()
-    val hash = SecurityUtils.hashPassword(initialPassword.trim(), salt)
+    val hash = SecurityUtils.hashPassword(effectivePassword, salt)
 
     val newUser = UserEntity(
       rmCode = cleanRmCode,
@@ -1271,6 +1276,39 @@ class EblRepository(
         corporateCardTarget = 5,
         b2bTarget = 2,
         updatedAt = now
+      )
+    )
+
+    // Remove from deleted_rm_codes setting and in-memory cache in case previously deleted
+    try {
+      val currentDel = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
+      if (currentDel.isNotBlank()) {
+        val updatedDel = currentDel.split(",")
+          .map { it.trim().uppercase() }
+          .filter { it.isNotBlank() && it != cleanRmCode }
+          .joinToString(",")
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity("deleted_rm_codes", updatedDel, currentUser.rmCode, now)
+        )
+      }
+      deletedRmCodesCache.remove(cleanRmCode)
+
+      // Set password immunity window so background sync does not overwrite newly set password
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity("RM_PASS_UPDATED_AT_$cleanRmCode", now.toString(), currentUser.rmCode, now)
+      )
+    } catch (_: Exception) {}
+
+    // Security Audit Log
+    database.auditLogDao().insertLog(
+      AuditLogEntity(
+        logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
+        userId = currentUser.rmCode,
+        role = currentUser.role,
+        action = "RM_CREATE",
+        details = "Assigned & created new RM account ${newUser.name} ($cleanRmCode) by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }})",
+        timestamp = now,
+        rmCode = cleanRmCode
       )
     )
 
@@ -2624,23 +2662,16 @@ class EblRepository(
       if (c.isNotBlank()) sheetRmCodes.add(c)
     }
 
-    // 2. If sheet returned RM rows, remove any local custom RM that was deleted in Google Sheet
-    if (sheetRmsJson.length() > 0) {
-      val allLocalUsers = database.userDao().getAllUsers()
-      val protectedCodes = setOf("104393", "ADMIN", "MENTOR")
-      for (u in allLocalUsers) {
-        val uCode = u.rmCode.trim().uppercase()
-        if (u.role == "RM" && uCode !in protectedCodes && uCode !in sheetRmCodes) {
-          database.userDao().deleteUser(u.rmCode)
-          database.rmTargetDao().deleteTargetForRm(u.rmCode)
-          updatedCount++
-        }
+    // 2. Enforce persistent tombstone deletion ONLY for RMs explicitly deleted by Admin or Mentor
+    val delRmsSetting = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
+    val deletedCodes = (delRmsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() } + deletedRmCodesCache).toSet()
+
+    for (delCode in deletedCodes) {
+      if (delCode != "104393" && delCode != "ADMIN" && delCode != "MENTOR") {
+        database.userDao().deleteUser(delCode)
+        database.rmTargetDao().deleteTargetForRm(delCode)
       }
     }
-
-    // 3. Check persistent deleted RM codes so app never resurrects deleted RMs
-    val delRmsSetting = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
-    val deletedCodes = delRmsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
 
     for (i in 0 until sheetRmsJson.length()) {
       val obj = sheetRmsJson.optJSONObject(i) ?: continue
@@ -2663,14 +2694,21 @@ class EblRepository(
       val existing = database.userDao().getUser(code)
       if (existing != null) {
         val lastLocalPassChangeTime = database.appSettingDao().getSetting("RM_PASS_UPDATED_AT_$code")?.updatedAt ?: 0L
-        val isRecentLocalPassChange = (now - lastLocalPassChangeTime) < 180_000L // 3 minutes immunity window
+        val isRecentLocalPassChange = (now - lastLocalPassChangeTime) < 300_000L // 5 minutes immunity window
 
-        val hashToUse = if (isRecentLocalPassChange) existing.passwordHash else if (sheetHash.isNotBlank()) sheetHash else existing.passwordHash
-        val saltToUse = if (isRecentLocalPassChange) existing.salt else if (sheetSalt.isNotBlank()) sheetSalt else existing.salt
+        val hashToUse = if (isRecentLocalPassChange) existing.passwordHash
+                        else if (sheetHash.isNotBlank() && sheetSalt.isNotBlank()) sheetHash
+                        else if (sheetHash.isNotBlank()) SecurityUtils.hashPassword(sheetHash, existing.salt.ifBlank { "salt_$code" })
+                        else existing.passwordHash
+
+        val saltToUse = if (isRecentLocalPassChange) existing.salt
+                        else if (sheetSalt.isNotBlank()) sheetSalt
+                        else existing.salt
+
         val hasChanges = existing.name != name || existing.mobile != mobile ||
                          existing.email != email || existing.officeAddress != office ||
                          existing.accountStatus != status ||
-                         (!isRecentLocalPassChange && sheetHash.isNotBlank() && existing.passwordHash != sheetHash)
+                         (!isRecentLocalPassChange && sheetHash.isNotBlank() && existing.passwordHash != hashToUse)
         if (hasChanges) {
           database.userDao().updateUser(
             existing.copy(
@@ -2688,6 +2726,10 @@ class EblRepository(
       } else {
         val (finalHash, finalSalt) = if (sheetHash.isNotBlank() && sheetSalt.isNotBlank()) {
           Pair(sheetHash, sheetSalt)
+        } else if (sheetHash.isNotBlank()) {
+          // If password was entered directly in plain text in Google Sheet
+          val salt = SecurityUtils.generateSalt()
+          Pair(SecurityUtils.hashPassword(sheetHash, salt), salt)
         } else {
           val salt = SecurityUtils.generateSalt()
           Pair(SecurityUtils.hashPassword("#123456A", salt), salt)
