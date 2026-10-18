@@ -105,12 +105,13 @@ fun MentorDashboardScreen(
   ) {
     // Mentor Command Banner
     item {
+      val currentTheme = com.example.ui.theme.LocalAppTheme.current
       Card(
         modifier = Modifier
           .fillMaxWidth()
           .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1B4B))
+        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -118,7 +119,7 @@ fun MentorDashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "Operations Mentor Console",
                 fontSize = 19.sp,
@@ -128,15 +129,29 @@ fun MentorDashboardScreen(
               Text(
                 text = "Executive Oversight • Highest Authority Level (${currentUser.rmCode})",
                 fontSize = 12.sp,
-                color = EblGold
+                color = currentTheme.tertiary
+              )
+              Spacer(modifier = Modifier.height(3.dp))
+              Text(
+                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
+                fontSize = 10.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium
               )
             }
-            Icon(
-              imageVector = Icons.Default.Security,
-              contentDescription = null,
-              tint = EblGold,
-              modifier = Modifier.size(28.dp)
-            )
+            Box(
+              modifier = Modifier
+                .padding(start = 8.dp)
+                .size(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(currentTheme.secondary),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = currentTheme.id.emoji,
+                fontSize = 24.sp
+              )
+            }
           }
 
           Spacer(modifier = Modifier.height(16.dp))

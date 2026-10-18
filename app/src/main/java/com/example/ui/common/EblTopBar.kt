@@ -96,10 +96,12 @@ fun EblTopBar(
     }
   }
 
+  val currentTheme = com.example.ui.theme.LocalAppTheme.current
+
   TopAppBar(
     modifier = modifier.testTag("ebl_top_bar"),
     colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = EblNavyDark,
+      containerColor = currentTheme.primary,
       titleContentColor = Color.White,
       navigationIconContentColor = Color.White,
       actionIconContentColor = Color.White
@@ -117,19 +119,17 @@ fun EblTopBar(
           )
         }
       } else {
-        // App Monogram Badge
+        // App & Active Theme Monogram Avatar Badge
         Box(
           modifier = Modifier
             .padding(start = 12.dp)
             .size(36.dp)
-            .background(EblGold, CircleShape),
+            .background(currentTheme.secondary, CircleShape),
           contentAlignment = Alignment.Center
         ) {
-          Icon(
-            imageVector = Icons.Default.Shield,
-            contentDescription = "App Icon",
-            tint = EblNavyDark,
-            modifier = Modifier.size(20.dp)
+          Text(
+            text = currentTheme.id.emoji,
+            fontSize = 18.sp
           )
         }
       }
@@ -139,7 +139,7 @@ fun EblTopBar(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Text(
             text = appCustomName,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = Color.White,
             maxLines = 1
@@ -165,11 +165,26 @@ fun EblTopBar(
             }
           }
         }
-        Text(
-          text = "Dhaka BST: $dhakaTimeText | Operations",
-          fontSize = 10.sp,
-          color = Color.White.copy(alpha = 0.7f)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text(
+            text = "Dhaka BST: $dhakaTimeText",
+            fontSize = 10.sp,
+            color = Color.White.copy(alpha = 0.8f)
+          )
+          Spacer(modifier = Modifier.width(6.dp))
+          Surface(
+            color = Color.White.copy(alpha = 0.2f),
+            shape = RoundedCornerShape(4.dp)
+          ) {
+            Text(
+              text = "${currentTheme.id.emoji} ${currentTheme.banglaName}",
+              fontSize = 9.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color.White,
+              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+            )
+          }
+        }
       }
     },
     actions = {

@@ -8,17 +8,24 @@ import androidx.compose.ui.graphics.Color
 import org.json.JSONObject
 import java.util.Calendar
 
-enum class AppThemeId(val code: String, val displayName: String, val banglaName: String) {
-  AUTO("AUTO", "Auto (Seasonal & Day/Night)", "স্বয়ংক্রিয় (ঋতু ও দিন/রাত)"),
-  DAY("DAY", "Day / Light Mode", "দিন / হালকা মোড"),
-  NIGHT("NIGHT", "Night / Dark Mode", "রাত / ডার্ক মোড"),
-  SUMMER("SUMMER", "Summer (Boishakh & Jaishtha)", "গ্রীষ্মকাল (বৈশাখ ও জ্যৈষ্ঠ)"),
-  RAINY("RAINY", "Rainy (Asharh & Shrabon)", "বর্ষাকাল (আষাঢ় ও শ্রাবণ)"),
-  WINTER("WINTER", "Winter (Mist & Dew)", "শীতকাল (কুয়াশা ও শিশির)"),
-  PUJA("PUJA", "Sharadiya Durga Puja", "শারদীয় দুর্গোৎসব"),
-  EID("EID", "Eid Celebration", "পবিত্র ঈদ আনন্দ"),
-  LANGUAGE_DAY("LANGUAGE_DAY", "International Mother Language Day", "আন্তর্জাতিক মাতৃভাষা দিবস (২১শে ফেব্রুয়ারি)"),
-  INDEPENDENCE_DAY("INDEPENDENCE_DAY", "Independence & National Day", "মহান স্বাধীনতা ও জাতীয় দিবস (২৬শে মার্চ)")
+enum class AppThemeId(
+  val code: String,
+  val displayName: String,
+  val banglaName: String,
+  val emoji: String,
+  val motif: String,
+  val accentColor: Color
+) {
+  AUTO("AUTO", "Auto (Seasonal & Day/Night)", "স্বয়ংক্রিয় (ঋতু ও দিন/রাত)", "🌟", "স্মার্ট সিজন ও দিন-রাত্রির মেলবন্ধন", Color(0xFFF59E0B)),
+  DAY("DAY", "Day / Light Mode", "দিন / হালকা মোড", "☀️", "সতেজ কর্পোরেট নেভি ব্লু ও গোল্ড", Color(0xFF0F2C59)),
+  NIGHT("NIGHT", "Night / Dark Mode", "রাত / ডার্ক মোড", "🌙", "চোখের শান্তির জন্য গভীর নীল ও সাইবার গোল্ড", Color(0xFF1E3A8A)),
+  SUMMER("SUMMER", "Summer (Boishakh & Jaishtha)", "গ্রীষ্মকাল (বৈশাখ ও জ্যৈষ্ঠ)", "🌾", "উষ্ণ আমেজ, বৈশাখী মেলা ও সোনালী রোদ", Color(0xFFEA580C)),
+  RAINY("RAINY", "Rainy (Asharh & Shrabon)", "বর্ষাকাল (আষাঢ় ও শ্রাবণ)", "🌧️", "সতেজ বর্ষাধারা, কদম ফুল ও জলনীল আভা", Color(0xFF0891B2)),
+  WINTER("WINTER", "Winter (Mist & Dew)", "শীতকাল (কুয়াশা ও শিশির)", "❄️", "কুয়াশাচ্ছন্ন সকাল, শিশিরবিন্দু ও বরফ নীল", Color(0xFF38BDF8)),
+  PUJA("PUJA", "Sharadiya Durga Puja", "শারদীয় দুর্গোৎসব", "🪔", "কাশফুল, শিউলি ও সিঁদুর রাঙা উৎসবের আমেজ", Color(0xFFB91C1C)),
+  EID("EID", "Eid Celebration", "পবিত্র ঈদ আনন্দ", "✨", "বাঁকা চাঁদ, স্নিগ্ধ পান্না সবুজ ও খুশির ঈদ", Color(0xFF047857)),
+  LANGUAGE_DAY("LANGUAGE_DAY", "International Mother Language Day", "আন্তর্জাতিক মাতৃভাষা দিবস (২১শে ফেব্রুয়ারি)", "🏛️", "রক্তস্নাত একুশে ফেব্রুয়ারি ও শহিদ মিনার স্মারক", Color(0xFFDC2626)),
+  INDEPENDENCE_DAY("INDEPENDENCE_DAY", "Independence & National Day", "মহান স্বাধীনতা ও জাতীয় দিবস (২৬শে মার্চ)", "🇧🇩", "লাল-সবুজের গৌরবময় বাংলাদেশ", Color(0xFF006A4E))
 }
 
 data class AppThemeConfig(

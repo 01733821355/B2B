@@ -18,9 +18,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
 import com.example.ui.theme.AppThemeId
@@ -641,32 +647,154 @@ fun AppSettingsScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Active Theme Mode Selector Chips
-        Text("Active App Theme Mode (সিলেক্ট করুন):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
-        Spacer(modifier = Modifier.height(6.dp))
+        // Active Theme Mode Selector Cards with Avatars & Motifs
+        Text("Active App Theme Mode (থিম সিলেক্ট করুন):", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = EblNavyDark)
+        Spacer(modifier = Modifier.height(8.dp))
 
-        FlowRow(
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
-          verticalArrangement = Arrangement.spacedBy(6.dp),
+        Column(
+          verticalArrangement = Arrangement.spacedBy(8.dp),
           modifier = Modifier.fillMaxWidth()
         ) {
           themeOptions.forEach { t ->
             val isSelected = selectedThemeMode.equals(t.code, true)
-            androidx.compose.material3.FilterChip(
-              selected = isSelected,
-              onClick = {
-                selectedThemeMode = t.code
-                viewModel.setThemeMode(t.code)
-                Toast.makeText(context, "${t.displayName} activated!", Toast.LENGTH_SHORT).show()
-              },
-              label = {
-                Text(
-                  text = if (t == AppThemeId.AUTO) "★ ${t.displayName}" else t.displayName,
-                  fontSize = 11.sp,
-                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                )
+            val themeBase = remember(t, settings) {
+              if (t == AppThemeId.AUTO) currentSeasonal
+              else {
+                val customJson = settings.find { it.settingKey == "THEME_CUSTOM_COLORS_${t.code}" }?.settingValue
+                ThemeManager.getThemeById(t.code, customJson)
               }
-            )
+            }
+
+            Card(
+              modifier = Modifier
+                .fillMaxWidth()
+                .clickable {
+                  selectedThemeMode = t.code
+                  viewModel.setThemeMode(t.code)
+                  Toast.makeText(context, "${t.banglaName} সক্রিয় করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                }
+                .testTag("theme_card_${t.code}"),
+              shape = RoundedCornerShape(12.dp),
+              colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) themeBase.primary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+              ),
+              border = BorderStroke(
+                width = if (isSelected) 2.dp else 1.dp,
+                color = if (isSelected) t.accentColor else Color(0xFFE2E8F0)
+              )
+            ) {
+              Row(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+              ) {
+                // Theme Avatar / Illustrated Picture Design
+                Box(
+                  modifier = Modifier
+                    .size(46.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                      Brush.linearGradient(
+                        colors = listOf(themeBase.primary, themeBase.secondary)
+                      )
+                    ),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text(
+                    text = t.emoji,
+                    fontSize = 22.sp
+                  )
+                }
+
+                // Theme Info
+                Column(modifier = Modifier.weight(1f)) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  ) {
+                    Text(
+                      text = t.banglaName,
+                      fontSize = 13.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = if (isSelected) themeBase.primary else EblNavyDark
+                    )
+                    if (t == AppThemeId.AUTO) {
+                      Surface(
+                        color = Color(0xFFFEF3C7),
+                        shape = RoundedCornerShape(4.dp)
+                      ) {
+                        Text(
+                          "★ RECOMMENDED",
+                          fontSize = 8.sp,
+                          fontWeight = FontWeight.Bold,
+                          color = Color(0xFFB45309),
+                          modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                      }
+                    }
+                  }
+
+                  Text(
+                    text = t.displayName,
+                    fontSize = 11.sp,
+                    color = Color.Gray,
+                    fontWeight = FontWeight.Medium
+                  )
+
+                  Text(
+                    text = t.motif,
+                    fontSize = 10.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 1
+                  )
+
+                  Spacer(modifier = Modifier.height(4.dp))
+
+                  // Color Palette Preview Dots
+                  Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(themeBase.primary))
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(themeBase.secondary))
+                    Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(themeBase.tertiary))
+                    Surface(
+                      shape = CircleShape,
+                      color = themeBase.background,
+                      border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.5f)),
+                      modifier = Modifier.size(12.dp)
+                    ) {}
+                  }
+                }
+
+                // Selection Radio / Checkmark
+                if (isSelected) {
+                  Surface(
+                    color = t.accentColor,
+                    shape = CircleShape,
+                    modifier = Modifier.size(24.dp)
+                  ) {
+                    Box(contentAlignment = Alignment.Center) {
+                      Icon(
+                        imageVector = Icons.Default.CheckCircle,
+                        contentDescription = "Selected",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                      )
+                    }
+                  }
+                } else {
+                  Surface(
+                    color = Color.Transparent,
+                    shape = CircleShape,
+                    border = BorderStroke(1.5.dp, Color.LightGray),
+                    modifier = Modifier.size(24.dp)
+                  ) {}
+                }
+              }
+            }
           }
         }
 

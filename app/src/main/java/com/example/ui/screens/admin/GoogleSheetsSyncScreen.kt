@@ -1268,7 +1268,7 @@ function handleFetchAllData() {
     var respSheet = ss.getSheetByName('Event_Submissions');
     var attachSheet = ss.getSheetByName('Attachments');
     var smsSheet = ss.getSheetByName('SMS_Notifications');
-    var locSheet = ss.getSheetByName('Location_Logs');
+    var locSheet = ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs');
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -1492,6 +1492,8 @@ function extractAllSheetFiles(sheet) {
       remarks: String(row[offset + 12] || ''),
       cpvStatus: String(row[offset + 13] || 'Pending'),
       submissionAddress: String(row[offset + 14] || ''),
+      submissionLat: parseFloat(row[offset + 15]) || 0.0,
+      submissionLng: parseFloat(row[offset + 16]) || 0.0,
       updatedAt: String(row[offset + 17] || ''),
       updatedBy: String(row[offset + 18] || 'Sheet')
     });

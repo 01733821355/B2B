@@ -118,12 +118,13 @@ fun RmDashboardScreen(
     ) {
     // Welcome Banner Card
     item {
+      val currentTheme = com.example.ui.theme.LocalAppTheme.current
       Card(
         modifier = Modifier
           .fillMaxWidth()
           .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = EblNavyDark)
+        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -131,7 +132,7 @@ fun RmDashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "Welcome, ${user.name}",
                 fontSize = 18.sp,
@@ -141,7 +142,28 @@ fun RmDashboardScreen(
               Text(
                 text = "Assigned RM Code: ${user.rmCode} | ${user.officeAddress}",
                 fontSize = 12.sp,
-                color = EblGold
+                color = currentTheme.tertiary
+              )
+              Spacer(modifier = Modifier.height(3.dp))
+              Text(
+                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
+                fontSize = 10.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium
+              )
+            }
+
+            Box(
+              modifier = Modifier
+                .padding(start = 8.dp)
+                .size(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(currentTheme.secondary),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = currentTheme.id.emoji,
+                fontSize = 24.sp
               )
             }
           }

@@ -443,7 +443,7 @@ class EblRepository(
     }
 
     val createdTimestamp = existing?.createdAt ?: now
-    val createdBy = existing?.createdBy ?: currentUser.rmCode
+    val createdBy = if (existing == null || existing.createdBy == "SYSTEM") currentUser.rmCode else existing.createdBy
     val submittedAt = if (applicationStatus.equals("Submitted", ignoreCase = true)) {
       existing?.submittedAt ?: now
     } else existing?.submittedAt
@@ -704,6 +704,27 @@ class EblRepository(
         put("action", "DELETE_EVENT")
         put("eventId", eventId)
         put("deletedEventIds", org.json.JSONArray().apply { put(eventId) })
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncSettingDeletionToGoogleSheets(key: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "DELETE_SETTING")
+        put("settingKey", key)
+        put("presetName", key)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -1988,6 +2009,14 @@ class EblRepository(
     }
 
     database.appSettingDao().deleteSetting(key)
+    deletedPresetKeysCache.add(key)
+    deletedPresetKeysCache.add(key.uppercase())
+    val curDel = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
+    val updatedDel = if (curDel.isBlank()) key else "$curDel,$key"
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_preset_keys", updatedDel, currentUser.rmCode, DateUtils.currentDhakaMillis())
+    )
+    syncSettingDeletionToGoogleSheets(key)
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -2187,7 +2216,12 @@ class EblRepository(
 
     try {
       val allFiles = database.customerFileDao().getAllActiveFiles()
-      val filesToPush = allFiles.filter { !it.isDeleted && it.createdBy != "SYSTEM" && it.updatedBy != "SYSTEM" }.sortedWith(
+      val filesToPush = allFiles.filter {
+        !it.isDeleted &&
+        !it.fileId.startsWith("demo_", ignoreCase = true) &&
+        !(it.fileId.startsWith("cust-00", ignoreCase = true) && it.customerName.contains("Sample Customer", ignoreCase = true)) &&
+        !(it.customerName.contains("Demo Customer", ignoreCase = true))
+      }.sortedWith(
         compareBy<CustomerFileEntity> { it.serialNumber.toIntOrNull() ?: Int.MAX_VALUE }
           .thenBy { it.createdAt }
       )
@@ -3604,17 +3638,9 @@ class EblRepository(
       val custName = obj.optString("customerName", existing?.customerName ?: "Customer")
 
       if (existing != null) {
-        // CRITICAL FIX: If local file has pending un-synced edits, NEVER overwrite with sheet data!
-        // This ensures editing in app never gets reverted back to old values!
-        if (!existing.isSynced) {
-          continue
-        }
-
-        // If local file was edited recently by a user (within 30 seconds) and the sheet update did not come from Manual_Sheet_Edit,
-        // NEVER overwrite local edits with stale sheet data!
         val sheetUpdatedBy = obj.optString("updatedBy", "")
         val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
-        val wasRecentlyEditedLocally = (now - existing.updatedAt < 30_000) && (existing.updatedBy != "GoogleSheets_Sync")
+        val wasRecentlyEditedLocally = (now - existing.updatedAt < 6_000) && (existing.updatedBy != "GoogleSheets_Sync")
         if (wasRecentlyEditedLocally && !isManualSheetEdit) {
           continue
         }
@@ -3693,8 +3719,8 @@ class EblRepository(
             val isDuplicate = isDeletedByUser || allRecentSms.any {
               it.recipientRmCode == updated.assignedRmCode &&
               it.fileId == existing.fileId &&
-              (it.actionType == (if (hasRmChanged) "TRANSFER" else "UPDATE") || it.messageText.contains(changeNote)) &&
-              (now - it.sentTimestamp < 15 * 60 * 1000L)
+              it.messageText.contains(changeNote) &&
+              (now - it.sentTimestamp < 60 * 1000L)
             }
             if (!isDuplicate) {
               var smsStatus = "DELIVERED"

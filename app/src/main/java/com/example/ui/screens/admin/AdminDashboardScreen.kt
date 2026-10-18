@@ -92,12 +92,13 @@ fun AdminDashboardScreen(
   ) {
     // Executive Banner
     item {
+      val currentTheme = com.example.ui.theme.LocalAppTheme.current
       Card(
         modifier = Modifier
           .fillMaxWidth()
           .padding(16.dp),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = EblNavyDark)
+        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
       ) {
         Column(modifier = Modifier.padding(18.dp)) {
           Row(
@@ -105,7 +106,7 @@ fun AdminDashboardScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
               Text(
                 text = "Central Administration Console",
                 fontSize = 18.sp,
@@ -115,7 +116,28 @@ fun AdminDashboardScreen(
               Text(
                 text = "Signed in: ${currentUser.name} (${currentUser.role})",
                 fontSize = 12.sp,
-                color = EblGold
+                color = currentTheme.tertiary
+              )
+              Spacer(modifier = Modifier.height(3.dp))
+              Text(
+                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
+                fontSize = 10.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                fontWeight = FontWeight.Medium
+              )
+            }
+
+            Box(
+              modifier = Modifier
+                .padding(start = 8.dp)
+                .size(46.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(currentTheme.secondary),
+              contentAlignment = Alignment.Center
+            ) {
+              Text(
+                text = currentTheme.id.emoji,
+                fontSize = 24.sp
               )
             }
           }
