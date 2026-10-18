@@ -73,6 +73,6 @@ interface CustomerFileDao {
   @Query("UPDATE customer_files SET isDeleted = 1, updatedBy = :updatedBy, updatedAt = :updatedAt, isSynced = 1 WHERE fileId = :id OR ccNumber = :id")
   suspend fun markDeletedFromSheet(id: String, updatedBy: String, updatedAt: Long)
 
-  @Query("DELETE FROM customer_files WHERE fileId IN ('CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005') OR (createdBy = 'SYSTEM' AND updatedBy = 'SYSTEM')")
+  @Query("DELETE FROM customer_files WHERE fileId IN ('CUST-001', 'CUST-002', 'CUST-003', 'CUST-004', 'CUST-005') OR fileId LIKE 'DEMO%' OR fileId LIKE 'SAMPLE%' OR customerName LIKE '%Demo%' OR customerName LIKE '%Sample%' OR (createdBy = 'SYSTEM' AND updatedBy = 'SYSTEM')")
   suspend fun purgeDemoCustomerFiles()
 }

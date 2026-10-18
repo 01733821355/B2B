@@ -647,6 +647,42 @@ function doPost(e) {
       }
     }
 
+    // Handle Direct RM Live Location Ping (Immediately saves GPS coords & address to RM_Details and Location_Logs)
+    if (data.action === 'SYNC_LOCATION' || data.action === 'UPDATE_LOCATION') {
+      var targetRm = String(data.rmCode || '').trim().toUpperCase();
+      var latVal = parseFloat(data.latitude || data.lat || 0);
+      var lngVal = parseFloat(data.longitude || data.lng || 0);
+      var addrVal = String(data.address || '').trim();
+      var timeVal = String(data.timestamp || new Date().toISOString());
+
+      if (targetRm && latVal && lngVal) {
+        var curRmsL = rmSheet.getDataRange().getValues();
+        for (var rl = 1; rl < curRmsL.length; rl++) {
+          if (String(curRmsL[rl][0] || '').trim().toUpperCase() === targetRm) {
+            rmSheet.getRange(rl + 1, 15).setValue(latVal);
+            rmSheet.getRange(rl + 1, 16).setValue(lngVal);
+            rmSheet.getRange(rl + 1, 17).setValue(addrVal);
+            rmSheet.getRange(rl + 1, 18).setValue(timeVal);
+            rmSheet.getRange(rl + 1, 19).setValue(true);
+            break;
+          }
+        }
+        if (locSheet) {
+          locSheet.appendRow([
+            targetRm,
+            String(data.userName || targetRm),
+            latVal,
+            lngVal,
+            addrVal,
+            timeVal,
+            String(data.sourceAction || 'GPS_LIVE')
+          ]);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Location updated in sheet." }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Handle SMS Notifications Deletion (Immediately removes SMS rows permanently & updates Universal_Settings)
     if (data.action === 'DELETE_SMS' || (data.deletedSmsIds && data.deletedSmsIds.length > 0)) {
       var toDeleteSms = data.deletedSmsIds || [data.smsId].filter(Boolean);
@@ -1232,6 +1268,7 @@ function handleFetchAllData() {
     var respSheet = ss.getSheetByName('Event_Submissions');
     var attachSheet = ss.getSheetByName('Attachments');
     var smsSheet = ss.getSheetByName('SMS_Notifications');
+    var locSheet = ss.getSheetByName('Location_Logs');
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -1243,7 +1280,8 @@ function handleFetchAllData() {
       events: eventSheet ? extractAllSheetEvents(eventSheet) : [],
       eventResponses: respSheet ? extractAllSheetResponses(respSheet) : [],
       attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : [],
-      smsNotifications: smsSheet ? extractAllSheetSms(smsSheet) : []
+      smsNotifications: smsSheet ? extractAllSheetSms(smsSheet) : [],
+      locations: locSheet ? extractAllSheetLocations(locSheet) : []
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
@@ -1481,7 +1519,34 @@ function extractAllSheetRms(sheet) {
       passwordHash: String(row[10] || ''),
       salt: String(row[11] || ''),
       createdAt: String(row[12] || ''),
-      updatedAt: String(row[13] || '')
+      updatedAt: String(row[13] || ''),
+      lastLatitude: parseFloat(row[14]) || 0.0,
+      lastLongitude: parseFloat(row[15]) || 0.0,
+      lastLocationAddress: String(row[16] || ''),
+      lastLocationTime: String(row[17] || ''),
+      isOnline: Boolean(row[18] === true || String(row[18]).toLowerCase() === 'true')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetLocations(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  var start = Math.max(1, data.length - 100);
+  for (var r = data.length - 1; r >= start; r--) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      rmCode: String(row[0] || '').trim().toUpperCase(),
+      userName: String(row[1] || ''),
+      latitude: parseFloat(row[2]) || 0.0,
+      longitude: parseFloat(row[3]) || 0.0,
+      address: String(row[4] || ''),
+      timestamp: String(row[5] || ''),
+      sourceAction: String(row[6] || 'GPS')
     });
   }
   return list;

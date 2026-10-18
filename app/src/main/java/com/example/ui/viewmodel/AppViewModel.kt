@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import com.example.ui.theme.AppThemeConfig
+import com.example.ui.theme.ThemeManager
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -246,6 +248,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val allRms: StateFlow<List<UserEntity>> = eblRepository.getAllRmsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+  val allOfficers: StateFlow<List<UserEntity>> = eblRepository.getAllOfficersFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val allMentors: StateFlow<List<UserEntity>> = eblRepository.getAllMentorsFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
   val allUsers: StateFlow<List<UserEntity>> = eblRepository.getAllUsersFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -257,6 +265,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   val appSettings: StateFlow<List<AppSettingEntity>> = eblRepository.getAppSettingsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val selectedThemeMode: StateFlow<String> = appSettings.map { list ->
+    list.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "AUTO")
+
+  val activeThemeConfig: StateFlow<AppThemeConfig> = combine(
+    selectedThemeMode,
+    appSettings
+  ) { mode, settingsList ->
+    val effectiveMode = if (mode.equals("AUTO", true)) {
+      ThemeManager.determineSeasonalTheme().id.code
+    } else {
+      mode
+    }
+    val customKey = "THEME_CUSTOM_COLORS_${effectiveMode.uppercase()}"
+    val customJson = settingsList.find { it.settingKey == customKey }?.settingValue
+    ThemeManager.getThemeById(effectiveMode, customJson)
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeManager.DefaultDayTheme)
 
   val productTypes: StateFlow<List<String>> = appSettings.map { list ->
     val raw = list.find { it.settingKey == "PRODUCT_TYPES" }?.settingValue
@@ -396,7 +422,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Does NOT push local preset data to Google Sheets unless explicitly requested by the user via button.
     viewModelScope.launch {
       while (true) {
-        delay(15_000) // 15-second background pull interval
+        delay(4_000) // 4-second fast cross-device background pull interval
         if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
@@ -980,12 +1006,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     email: String,
     officeAddress: String,
     initialPassword: String,
+    role: String = "RM",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.createRm(rmCode, name, mobile, email, officeAddress, initialPassword)
+      val res = eblRepository.createRm(rmCode, name, mobile, email, officeAddress, initialPassword, role)
       res.onSuccess {
-        _uiMessage.emit("RM $rmCode created and activated.")
+        _uiMessage.emit("${if (role.equals("MENTOR", true)) "Mentor" else "RM"} $rmCode created and activated.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1000,16 +1027,39 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     email: String,
     officeAddress: String,
     newPassword: String? = null,
+    role: String? = null,
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
-      val res = eblRepository.updateRm(rmCode, name, mobile, email, officeAddress, newPassword)
+      val res = eblRepository.updateRm(rmCode, name, mobile, email, officeAddress, newPassword, role)
       res.onSuccess {
-        _uiMessage.emit("RM $rmCode details updated.")
+        _uiMessage.emit("Officer $rmCode details updated.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
       }
+    }
+  }
+
+  fun setThemeMode(themeCode: String) {
+    updateSetting("APP_ACTIVE_THEME", themeCode)
+  }
+
+  fun saveCustomThemeColors(themeCode: String, primaryHex: String, secondaryHex: String, tertiaryHex: String, bgHex: String, surfaceHex: String) {
+    val obj = org.json.JSONObject().apply {
+      put("primary", primaryHex)
+      put("secondary", secondaryHex)
+      put("tertiary", tertiaryHex)
+      put("background", bgHex)
+      put("surface", surfaceHex)
+    }
+    updateSetting("THEME_CUSTOM_COLORS_${themeCode.uppercase()}", obj.toString())
+  }
+
+  fun resetThemeColors(themeCode: String) {
+    viewModelScope.launch {
+      eblRepository.deleteSetting("THEME_CUSTOM_COLORS_${themeCode.uppercase()}")
+      _uiMessage.emit("Theme '$themeCode' reset to default colors.")
     }
   }
 

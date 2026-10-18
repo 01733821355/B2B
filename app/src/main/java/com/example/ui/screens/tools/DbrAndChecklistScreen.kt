@@ -1705,13 +1705,24 @@ fun DocumentChecklistSenderTab(
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f, fill = false)
             )
-            if (availableFiles.isNotEmpty()) {
+            val realFiles = remember(availableFiles) {
+              availableFiles.filter {
+                !it.isDeleted &&
+                !it.fileId.startsWith("CUST-00", ignoreCase = true) &&
+                !it.fileId.startsWith("DEMO", ignoreCase = true) &&
+                !it.fileId.startsWith("SAMPLE", ignoreCase = true) &&
+                !it.customerName.contains("Demo", ignoreCase = true) &&
+                !it.customerName.contains("Sample", ignoreCase = true) &&
+                !(it.createdBy == "SYSTEM" && it.updatedBy == "SYSTEM")
+              }
+            }
+            if (realFiles.isNotEmpty()) {
               Surface(
                 color = Color(0xFFEFF6FF),
                 shape = RoundedCornerShape(12.dp)
               ) {
                 Text(
-                  text = "${availableFiles.size} Recent Files",
+                  text = "${realFiles.size} Recent Files",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = EblNavyPrimary,
@@ -1725,95 +1736,16 @@ fun DocumentChecklistSenderTab(
 
           Spacer(modifier = Modifier.height(10.dp))
 
-          // Customer Selection from existing files (Searchable with full keyboard support & 1-tap serial list)
-          val defaultFallbackCustomers = remember {
-            listOf(
-              CustomerFileEntity(
-                fileId = "DEMO-001",
-                customerName = "Md. Kabir Hossain",
-                companyName = "Apex Footwear Ltd.",
-                officeAddress = "Gulshan-1, Dhaka",
-                mobile = "01711223344",
-                altMobile = "01811223344",
-                productType = "Credit Card",
-                applicationStatus = "Pending",
-                assignedRmCode = "Admin0",
-                serialNumber = "1",
-                createdAt = 0L,
-                updatedAt = 0L,
-                createdBy = "DEMO",
-                updatedBy = "DEMO"
-              ),
-              CustomerFileEntity(
-                fileId = "DEMO-002",
-                customerName = "Tanvir Ahmed Chowdhury",
-                companyName = "Square Pharmaceuticals",
-                officeAddress = "Uttara Sector 3, Dhaka",
-                mobile = "01819556677",
-                altMobile = "01919556677",
-                productType = "Corporate Card",
-                applicationStatus = "Pending",
-                assignedRmCode = "Admin0",
-                serialNumber = "2",
-                createdAt = 0L,
-                updatedAt = 0L,
-                createdBy = "DEMO",
-                updatedBy = "DEMO"
-              ),
-              CustomerFileEntity(
-                fileId = "DEMO-003",
-                customerName = "Nusrat Jahan",
-                companyName = "Grameenphone Ltd.",
-                officeAddress = "Bashundhara R/A, Dhaka",
-                mobile = "01912345678",
-                altMobile = "",
-                productType = "Personal / Auto / Home Loan",
-                applicationStatus = "Pending",
-                assignedRmCode = "Admin0",
-                serialNumber = "3",
-                createdAt = 0L,
-                updatedAt = 0L,
-                createdBy = "DEMO",
-                updatedBy = "DEMO"
-              ),
-              CustomerFileEntity(
-                fileId = "DEMO-004",
-                customerName = "Mohammad Rafiqul Islam",
-                companyName = "Beximco Ltd.",
-                officeAddress = "Dhanmondi 27, Dhaka",
-                mobile = "01712987654",
-                altMobile = "01612987654",
-                email = "",
-                productType = "Credit Card Limit Enhance",
-                applicationStatus = "Pending",
-                assignedRmCode = "Admin0",
-                serialNumber = "4",
-                createdAt = 0L,
-                updatedAt = 0L,
-                createdBy = "DEMO",
-                updatedBy = "DEMO"
-              ),
-              CustomerFileEntity(
-                fileId = "DEMO-005",
-                customerName = "Farhana Yasmin",
-                companyName = "Brac IT Services",
-                officeAddress = "Mohakhali, Dhaka",
-                mobile = "01611889900",
-                altMobile = "",
-                productType = "New Credit Card (Salaried)",
-                applicationStatus = "Pending",
-                assignedRmCode = "Admin0",
-                serialNumber = "5",
-                createdAt = 0L,
-                updatedAt = 0L,
-                createdBy = "DEMO",
-                updatedBy = "DEMO"
-              )
-            )
-          }
-
-          val allDisplayCustomers = remember(availableFiles, defaultFallbackCustomers) {
-            if (availableFiles.isNotEmpty()) availableFiles else defaultFallbackCustomers
+          val allDisplayCustomers = remember(availableFiles) {
+            availableFiles.filter {
+              !it.isDeleted &&
+              !it.fileId.startsWith("CUST-00", ignoreCase = true) &&
+              !it.fileId.startsWith("DEMO", ignoreCase = true) &&
+              !it.fileId.startsWith("SAMPLE", ignoreCase = true) &&
+              !it.customerName.contains("Demo", ignoreCase = true) &&
+              !it.customerName.contains("Sample", ignoreCase = true) &&
+              !(it.createdBy == "SYSTEM" && it.updatedBy == "SYSTEM")
+            }
           }
 
           // User Requirement: "In chack list sender page recent customer list most recent customer sobar opre thakbe."
@@ -1821,7 +1753,7 @@ fun DocumentChecklistSenderTab(
           var sortByRecentFirst by remember { mutableStateOf(true) }
 
           val sortedCustomers = remember(allDisplayCustomers, sortByRecentFirst) {
-            val activeOnly = allDisplayCustomers.filter { !it.isDeleted }
+            val activeOnly = allDisplayCustomers
             if (sortByRecentFirst) {
               activeOnly.sortedWith(
                 compareByDescending<CustomerFileEntity> { maxOf(it.updatedAt, it.createdAt) }
@@ -3613,8 +3545,19 @@ fun AgeCalculatorTab(
             Spacer(modifier = Modifier.height(4.dp))
           }
 
-          // Optional Customer Link from recent files
-          if (availableFiles.isNotEmpty()) {
+          // Optional Customer Link from recent files (real user data only, no demo)
+          val realAgeFiles = remember(availableFiles) {
+            availableFiles.filter {
+              !it.isDeleted &&
+              !it.fileId.startsWith("CUST-00", ignoreCase = true) &&
+              !it.fileId.startsWith("DEMO", ignoreCase = true) &&
+              !it.fileId.startsWith("SAMPLE", ignoreCase = true) &&
+              !it.customerName.contains("Demo", ignoreCase = true) &&
+              !it.customerName.contains("Sample", ignoreCase = true) &&
+              !(it.createdBy == "SYSTEM" && it.updatedBy == "SYSTEM")
+            }
+          }
+          if (realAgeFiles.isNotEmpty()) {
             Row(
               modifier = Modifier.fillMaxWidth(),
               horizontalArrangement = Arrangement.SpaceBetween,
@@ -3637,7 +3580,7 @@ fun AgeCalculatorTab(
             if (showCustomerPicker) {
               Box(modifier = Modifier.fillMaxWidth().heightIn(max = 140.dp)) {
                 Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
-                  availableFiles.take(15).forEach { cust ->
+                  realAgeFiles.take(15).forEach { cust ->
                     Surface(
                       modifier = Modifier
                         .fillMaxWidth()

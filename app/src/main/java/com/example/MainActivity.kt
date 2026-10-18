@@ -98,7 +98,8 @@ class MainActivity : FragmentActivity() {
     NotificationHelper.createNotificationChannels(applicationContext)
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
     setContent {
-      MyApplicationTheme {
+      val activeThemeConfig by viewModel.activeThemeConfig.collectAsState()
+      MyApplicationTheme(themeConfig = activeThemeConfig) {
         EblMainApp(viewModel = viewModel)
       }
     }

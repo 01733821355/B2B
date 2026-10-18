@@ -12,6 +12,9 @@ interface UserLocationLogDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertLocationLog(log: UserLocationLogEntity): Long
 
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertLocationLogs(logs: List<UserLocationLogEntity>)
+
   @Query("SELECT * FROM user_location_logs ORDER BY timestamp DESC LIMIT :limit")
   fun getRecentLocationLogsFlow(limit: Int = 100): Flow<List<UserLocationLogEntity>>
 

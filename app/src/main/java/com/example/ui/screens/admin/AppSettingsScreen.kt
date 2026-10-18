@@ -23,6 +23,9 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
+import com.example.ui.theme.AppThemeId
+import com.example.ui.theme.AppThemeConfig
+import com.example.ui.theme.ThemeManager
 import androidx.compose.ui.platform.LocalContext
 import android.content.ContextWrapper
 import android.widget.Toast
@@ -305,9 +308,42 @@ fun AppSettingsScreen(
 
     // Gather any additional custom checklist items stored in Universal Settings
     val customChecklistPresets = remember(settings) {
-      settings.filter { it.settingKey.startsWith("CHECKLIST_CUSTOM_") }.map {
-        Triple(it.settingKey, it.settingKey.removePrefix("CHECKLIST_CUSTOM_").replace("_", " "), it.settingValue)
+      val customListRaw = settings.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue ?: ""
+      val customNames = if (customListRaw.startsWith("[")) {
+        try {
+          val arr = org.json.JSONArray(customListRaw)
+          (0 until arr.length()).map { arr.getString(it).trim() }.filter { it.isNotBlank() }
+        } catch (_: Exception) {
+          customListRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        }
+      } else {
+        customListRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
       }
+
+      val presetsFromList = customNames.map { name ->
+        val cleanKey = "CHECKLIST_CUSTOM_" + name.replace("\\s+".toRegex(), "_").uppercase()
+        val legacyKey = "CHECKLIST_PRESET_" + name.replace("\\s+".toRegex(), "_").uppercase()
+        val value = settings.find { it.settingKey == name || it.settingKey == cleanKey || it.settingKey == legacyKey }?.settingValue ?: ""
+        Triple(cleanKey, name, value)
+      }
+
+      val presetsFromKeys = settings.filter {
+        (it.settingKey.startsWith("CHECKLIST_CUSTOM_") || it.settingKey.startsWith("CHECKLIST_PRESET_")) &&
+        it.settingKey != "CHECKLIST_CUSTOM_PRESETS_LIST" &&
+        it.settingKey != "CHECKLIST_CORP_COMPANY_DOCS" &&
+        it.settingKey != "CHECKLIST_CORP_EMPLOYEE_DOCS" &&
+        it.settingKey != "CHECKLIST_SALARIED_DOCS" &&
+        it.settingKey != "CHECKLIST_BUSINESS_DOCS" &&
+        it.settingKey != "CHECKLIST_LOAN_DOCS" &&
+        it.settingKey != "CHECKLIST_ENHANCE_DOCS" &&
+        it.settingKey != "CHECKLIST_HEADER_TEMPLATE" &&
+        it.settingKey != "CHECKLIST_REGARDS_TEMPLATE"
+      }.map {
+        val friendly = it.settingKey.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ")
+        Triple(it.settingKey, friendly, it.settingValue)
+      }
+
+      (presetsFromList + presetsFromKeys).distinctBy { it.second.lowercase() }
     }
     val checklistPresets = defaultChecklistPresets + customChecklistPresets
 
@@ -552,17 +588,38 @@ fun AppSettingsScreen(
 
     Spacer(modifier = Modifier.height(16.dp))
 
-    // UI Appearance, Theme Color & Typography
-    val currentColorTheme = settings.find { it.settingKey == "UI_COLOR_THEME" }?.settingValue ?: "ROYAL_NAVY"
-    val currentFontStyle = settings.find { it.settingKey == "UI_FONT_STYLE" }?.settingValue ?: "DEFAULT_SANS"
-    val currentTextScale = settings.find { it.settingKey == "UI_TEXT_SCALE" }?.settingValue ?: "STANDARD"
+    // 4. Seasonal, Festival & Day/Night Themes Management
+    val activeThemeMode = settings.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
+    var selectedThemeMode by remember(activeThemeMode) { mutableStateOf(activeThemeMode) }
 
-    var selectedColorTheme by remember(currentColorTheme) { mutableStateOf(currentColorTheme) }
-    var selectedFontStyle by remember(currentFontStyle) { mutableStateOf(currentFontStyle) }
-    var selectedTextScale by remember(currentTextScale) { mutableStateOf(currentTextScale) }
+    // Theme Customizer State
+    val themeOptions = listOf(
+      AppThemeId.AUTO,
+      AppThemeId.DAY,
+      AppThemeId.NIGHT,
+      AppThemeId.SUMMER,
+      AppThemeId.RAINY,
+      AppThemeId.WINTER,
+      AppThemeId.PUJA,
+      AppThemeId.EID,
+      AppThemeId.LANGUAGE_DAY,
+      AppThemeId.INDEPENDENCE_DAY
+    )
+
+    var themeToEdit by remember { mutableStateOf(AppThemeId.SUMMER) }
+    val currentEditBase = remember(themeToEdit, settings) {
+      val customJson = settings.find { it.settingKey == "THEME_CUSTOM_COLORS_${themeToEdit.code}" }?.settingValue
+      ThemeManager.getThemeById(themeToEdit.code, customJson)
+    }
+
+    var editPrimaryHex by remember(currentEditBase) { mutableStateOf(AppThemeConfig.colorToHex(currentEditBase.primary)) }
+    var editSecondaryHex by remember(currentEditBase) { mutableStateOf(AppThemeConfig.colorToHex(currentEditBase.secondary)) }
+    var editBgHex by remember(currentEditBase) { mutableStateOf(AppThemeConfig.colorToHex(currentEditBase.background)) }
+
+    val currentSeasonal = remember { ThemeManager.determineSeasonalTheme() }
 
     Card(
-      modifier = Modifier.fillMaxWidth(),
+      modifier = Modifier.fillMaxWidth().testTag("card_theme_settings"),
       shape = RoundedCornerShape(12.dp),
       colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
       elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -571,57 +628,181 @@ fun AppSettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("UI Appearance & Font Styling (রং ও ফন্ট শৈলী)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Text("Seasonal & Festival Themes (ঋতু ও উৎসবভিত্তিক থিম)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
         }
-        Text("Customize primary theme colors, typography styling, and reading size", fontSize = 11.sp, color = Color.Gray)
+        Text("Day/Night, Summer, Rainy, Winter, Puja, Eid, Language Day, and Independence Day with automatic seasonal switching", fontSize = 11.sp, color = Color.Gray)
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
-        // 1. Primary Theme Color Palette
-        Text("Primary Brand Color Palette:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        // Active Theme Mode Selector Chips
+        Text("Active App Theme Mode (সিলেক্ট করুন):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(6.dp))
 
-        val palettes = listOf(
-          Triple("ROYAL_NAVY", "Royal Navy", Color(0xFF0A192F)),
-          Triple("EMERALD", "Emerald Green", Color(0xFF065F46)),
-          Triple("CRIMSON", "Deep Crimson", Color(0xFF9F1239)),
-          Triple("MIDNIGHT", "Midnight Slate", Color(0xFF0F172A)),
-          Triple("SAPPHIRE", "Sapphire Indigo", Color(0xFF312E81))
-        )
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          themeOptions.forEach { t ->
+            val isSelected = selectedThemeMode.equals(t.code, true)
+            androidx.compose.material3.FilterChip(
+              selected = isSelected,
+              onClick = {
+                selectedThemeMode = t.code
+                viewModel.setThemeMode(t.code)
+                Toast.makeText(context, "${t.displayName} activated!", Toast.LENGTH_SHORT).show()
+              },
+              label = {
+                Text(
+                  text = if (t == AppThemeId.AUTO) "★ ${t.displayName}" else t.displayName,
+                  fontSize = 11.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+              }
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        // Status indicator
+        androidx.compose.material3.Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (selectedThemeMode == "AUTO") Color(0xFFF0FDF4) else Color(0xFFEFF6FF),
+          border = androidx.compose.foundation.BorderStroke(1.dp, if (selectedThemeMode == "AUTO") Color(0xFF86EFAC) else Color(0xFFBFDBFE)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(10.dp)) {
+            Text(
+              text = if (selectedThemeMode == "AUTO") "স্বয়ংক্রিয় মোড সক্রিয়: বর্তমান ঋতু অনুযায়ী '${currentSeasonal.banglaName}' (${currentSeasonal.name}) থিম চলমান।"
+                     else "ম্যানুয়াল থিম সক্রিয়: ${themeOptions.find { it.code.equals(selectedThemeMode, true) }?.displayName ?: selectedThemeMode}",
+              fontSize = 11.sp,
+              fontWeight = FontWeight.Medium,
+              color = if (selectedThemeMode == "AUTO") Color(0xFF166534) else Color(0xFF1E40AF)
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Theme Customizer & Color Editor
+        Text("Customize Theme Colors (যেকোনো থিমের নিজস্ব রং নির্ধারণ করুন):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Selector for which theme to edit
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          themeOptions.filter { it != AppThemeId.AUTO }.forEach { t ->
+            val isEditing = themeToEdit == t
+            androidx.compose.material3.SuggestionChip(
+              onClick = { themeToEdit = t },
+              label = {
+                Text(
+                  t.displayName,
+                  fontSize = 10.sp,
+                  fontWeight = if (isEditing) FontWeight.Bold else FontWeight.Normal
+                )
+              },
+              colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(
+                containerColor = if (isEditing) EblNavyPrimary.copy(alpha = 0.15f) else Color.Transparent
+              ),
+              border = if (isEditing) androidx.compose.foundation.BorderStroke(1.5.dp, EblNavyPrimary) else null
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Color Inputs for themeToEdit
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedTextField(
+            value = editPrimaryHex,
+            onValueChange = { editPrimaryHex = it },
+            label = { Text("Primary Color", fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+          )
+          OutlinedTextField(
+            value = editSecondaryHex,
+            onValueChange = { editSecondaryHex = it },
+            label = { Text("Accent Color", fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+          )
+          OutlinedTextField(
+            value = editBgHex,
+            onValueChange = { editBgHex = it },
+            label = { Text("Background", fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+          )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Live Preview Strip
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(36.dp)
+            .background(
+              AppThemeConfig.parseHexColor(editBgHex, Color(0xFFF8FAFC)),
+              shape = RoundedCornerShape(8.dp)
+            )
+            .padding(horizontal = 12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Text("Theme Preview", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = AppThemeConfig.parseHexColor(editPrimaryHex, Color.Black))
+          androidx.compose.material3.Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = AppThemeConfig.parseHexColor(editSecondaryHex, Color.DarkGray)
+          ) {
+            Text("Accent Badge", fontSize = 9.sp, color = Color.White, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          palettes.forEach { (key, label, color) ->
-            val isSelected = selectedColorTheme == key
-            androidx.compose.material3.Surface(
-              onClick = {
-                selectedColorTheme = key
-                viewModel.updateSetting("UI_COLOR_THEME", key)
-              },
-              shape = RoundedCornerShape(8.dp),
-              color = color,
-              border = if (isSelected) androidx.compose.foundation.BorderStroke(2.dp, Color(0xFFFDE047)) else null,
-              modifier = Modifier
-                .weight(1f)
-                .height(44.dp)
-            ) {
-              Box(contentAlignment = Alignment.Center) {
-                if (isSelected) {
-                  Icon(Icons.Default.Save, contentDescription = "Selected", tint = Color.White, modifier = Modifier.size(16.dp))
-                }
-              }
+          OutlinedButton(
+            onClick = {
+              viewModel.resetThemeColors(themeToEdit.code)
+              val def = ThemeManager.allDefaultThemes.find { it.id == themeToEdit } ?: ThemeManager.DefaultDayTheme
+              editPrimaryHex = AppThemeConfig.colorToHex(def.primary)
+              editSecondaryHex = AppThemeConfig.colorToHex(def.secondary)
+              editBgHex = AppThemeConfig.colorToHex(def.background)
+              Toast.makeText(context, "${themeToEdit.displayName} reset to default!", Toast.LENGTH_SHORT).show()
             }
+          ) {
+            Text("Reset Default", fontSize = 11.sp)
+          }
+
+          Button(
+            onClick = {
+              viewModel.saveCustomThemeColors(
+                themeCode = themeToEdit.code,
+                primaryHex = editPrimaryHex.trim(),
+                secondaryHex = editSecondaryHex.trim(),
+                tertiaryHex = editSecondaryHex.trim(),
+                bgHex = editBgHex.trim(),
+                surfaceHex = "#FFFFFF"
+              )
+              Toast.makeText(context, "'${themeToEdit.displayName}' colors saved & synced!", Toast.LENGTH_SHORT).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+          ) {
+            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Save Theme & Sync", fontSize = 11.sp)
           }
         }
-        Spacer(modifier = Modifier.height(4.dp))
-        Text(
-          text = "Active Theme: ${palettes.find { it.first == selectedColorTheme }?.second ?: "Royal Navy"}",
-          fontSize = 11.sp,
-          color = EblNavyPrimary,
-          fontWeight = FontWeight.Medium
-        )
 
         Spacer(modifier = Modifier.height(14.dp))
 

@@ -138,6 +138,7 @@ fun MentorUserLocationScreen(
   }
 
   val allUsers by viewModel.allUsers.collectAsState()
+  val allOfficers by viewModel.allOfficers.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val locationLogs by viewModel.recentLocationLogs.collectAsState()
 
@@ -146,22 +147,27 @@ fun MentorUserLocationScreen(
   var selectedUserForHistory by remember { mutableStateOf<UserEntity?>(null) }
   var selectedUserForMapPin by remember { mutableStateOf<UserEntity?>(null) }
 
-  // Target users to monitor: primarily RMs and system users
-  val targetUsers = remember(allUsers, allRms) {
-    if (allRms.isNotEmpty()) allRms else allUsers.filter { it.role == "RM" }
+  // Target users to monitor: all field officers (RMs and Mentors)
+  val targetUsers = remember(allUsers, allOfficers, allRms) {
+    if (allOfficers.isNotEmpty()) allOfficers else if (allRms.isNotEmpty()) allRms else allUsers.filter { it.role != "ADMIN" }
   }
 
-  val filteredUsers = remember(targetUsers, searchQuery, filterStatus) {
+  val filteredUsers = remember(targetUsers, searchQuery, filterStatus, locationLogs) {
     targetUsers.filter { u ->
+      val latestLog = locationLogs.firstOrNull { it.rmCode.equals(u.rmCode, ignoreCase = true) }
+      val effLat = u.lastLatitude ?: latestLog?.latitude
+      val effLng = u.lastLongitude ?: latestLog?.longitude
+      val effAddr = u.lastLocationAddress ?: latestLog?.address
+
       val matchesSearch = searchQuery.isBlank() ||
         u.name.contains(searchQuery, ignoreCase = true) ||
         u.rmCode.contains(searchQuery, ignoreCase = true) ||
         u.officeAddress.contains(searchQuery, ignoreCase = true) ||
-        (u.lastLocationAddress?.contains(searchQuery, ignoreCase = true) == true)
+        (effAddr?.contains(searchQuery, ignoreCase = true) == true)
 
       val matchesFilter = when (filterStatus) {
         "ONLINE" -> u.isOnline
-        "LOCATED" -> u.lastLatitude != null && u.lastLongitude != null
+        "LOCATED" -> effLat != null && effLng != null
         else -> true
       }
 
@@ -170,7 +176,10 @@ fun MentorUserLocationScreen(
   }
 
   val onlineCount = targetUsers.count { it.isOnline }
-  val withLocationCount = targetUsers.count { it.lastLatitude != null && it.lastLongitude != null }
+  val withLocationCount = targetUsers.count { u ->
+    val hasLog = locationLogs.any { it.rmCode.equals(u.rmCode, ignoreCase = true) }
+    (u.lastLatitude != null && u.lastLongitude != null) || hasLog
+  }
 
   LazyColumn(
     modifier = modifier
@@ -548,6 +557,14 @@ fun MentorUserLocationScreen(
 
           Spacer(modifier = Modifier.height(12.dp))
 
+          val latestUserLog = locationLogs.firstOrNull { it.rmCode.equals(user.rmCode, ignoreCase = true) }
+          val effectiveLat = user.lastLatitude ?: latestUserLog?.latitude
+          val effectiveLng = user.lastLongitude ?: latestUserLog?.longitude
+          val effectiveAddress = user.lastLocationAddress?.takeIf { it.isNotBlank() }
+            ?: latestUserLog?.address?.takeIf { it.isNotBlank() }
+            ?: "Location not updated yet"
+          val effectiveTime = user.lastLocationTime ?: latestUserLog?.timestamp
+
           // Location Box
           Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -566,23 +583,23 @@ fun MentorUserLocationScreen(
                 Spacer(modifier = Modifier.width(6.dp))
                 Column {
                   Text(
-                    text = user.lastLocationAddress ?: "Location not updated yet",
+                    text = effectiveAddress,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = EblNavyDark
                   )
-                  if (user.lastLatitude != null && user.lastLongitude != null) {
+                  if (effectiveLat != null && effectiveLng != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                      text = "GPS Coordinates: %.5f, %.5f".format(user.lastLatitude, user.lastLongitude),
+                      text = "GPS Coordinates: %.5f, %.5f".format(effectiveLat, effectiveLng),
                       fontSize = 11.sp,
                       color = Color.Gray
                     )
                   }
-                  if (user.lastLocationTime != null) {
+                  if (effectiveTime != null) {
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                      text = "Last Ping: ${DateUtils.formatDateTime(user.lastLocationTime)}",
+                      text = "Last Ping: ${DateUtils.formatDateTime(effectiveTime)}",
                       fontSize = 10.sp,
                       color = Color(0xFF6B7280)
                     )
@@ -602,8 +619,8 @@ fun MentorUserLocationScreen(
             // Open in Google Maps
             Button(
               onClick = {
-                val lat = user.lastLatitude ?: 23.7808
-                val lng = user.lastLongitude ?: 90.4192
+                val lat = effectiveLat ?: 23.7808
+                val lng = effectiveLng ?: 90.4192
                 LocationHelper.openGoogleMaps(context, lat, lng, "RM ${user.name} (${user.rmCode})")
               },
               colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),

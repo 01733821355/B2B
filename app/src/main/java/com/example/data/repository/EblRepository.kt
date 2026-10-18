@@ -40,6 +40,8 @@ class EblRepository(
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
   private val httpClient = OkHttpClient.Builder()
+    .connectionPool(okhttp3.ConnectionPool(10, 5, TimeUnit.MINUTES))
+    .retryOnConnectionFailure(true)
     .connectTimeout(15, TimeUnit.SECONDS)
     .readTimeout(20, TimeUnit.SECONDS)
     .build()
@@ -52,6 +54,7 @@ class EblRepository(
   val deletedChatIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedRmCodesCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedPresetKeysCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+  val deletedAttachmentIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
   init {
     applicationScope.launch {
@@ -89,6 +92,11 @@ class EblRepository(
         delPresets.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
           deletedPresetKeysCache.add(it)
           deletedPresetKeysCache.add(it.uppercase())
+        }
+        val delAtts = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
+        delAtts.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+          deletedAttachmentIdsCache.add(it)
+          deletedAttachmentIdsCache.add(it.uppercase())
         }
       } catch (_: Exception) {}
     }
@@ -1209,19 +1217,32 @@ class EblRepository(
     database.fileAttachmentDao().deleteAttachment(attachmentId)
 
     val now = DateUtils.currentDhakaMillis()
+    deletedAttachmentIdsCache.add(attachmentId)
+    deletedAttachmentIdsCache.add(attachmentId.uppercase())
     val currentDel = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
     val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + attachmentId).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_attachment_ids", updatedDel, currentUser.rmCode, now)
     )
 
-    syncAttachmentDeletionToGoogleSheets(attachmentId, fileId)
+    applicationScope.launch {
+      syncAttachmentDeletionToGoogleSheets(attachmentId, fileId)
+      triggerGoogleSheetsSync()
+    }
     Result.success(Unit)
   }
 
-  // 3. RM Management (Admin / Mentor only)
+  // 3. RM & Mentor Management (Admin / Mentor)
   fun getAllRmsFlow(): Flow<List<UserEntity>> {
     return database.userDao().getAllRmsFlow()
+  }
+
+  fun getAllOfficersFlow(): Flow<List<UserEntity>> {
+    return database.userDao().getAllOfficersFlow()
+  }
+
+  fun getAllMentorsFlow(): Flow<List<UserEntity>> {
+    return database.userDao().getAllMentorsFlow()
   }
 
   suspend fun createRm(
@@ -1230,22 +1251,24 @@ class EblRepository(
     mobile: String,
     email: String,
     officeAddress: String,
-    initialPassword: String
+    initialPassword: String,
+    role: String = "RM"
   ): Result<UserEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
 
     if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Only Admin or Mentor can assign new RM accounts."))
+      return@withContext Result.failure(Exception("Only Admin or Mentor can assign new RM or Mentor accounts."))
     }
 
     val cleanRmCode = rmCode.trim().uppercase()
+    val cleanRole = if (role.trim().equals("MENTOR", ignoreCase = true)) "MENTOR" else "RM"
     if (cleanRmCode.isBlank() || name.trim().isBlank()) {
       return@withContext Result.failure(Exception("RM Code and Name are mandatory."))
     }
 
     if (database.userDao().getUser(cleanRmCode) != null) {
-      return@withContext Result.failure(Exception("RM Code '$cleanRmCode' is already assigned to an existing account."))
+      return@withContext Result.failure(Exception("Code '$cleanRmCode' is already assigned to an existing account."))
     }
 
     val effectivePassword = if (initialPassword.trim().isBlank()) SecurityUtils.generateTemporaryPassword() else initialPassword.trim()
@@ -1256,7 +1279,7 @@ class EblRepository(
     val newUser = UserEntity(
       rmCode = cleanRmCode,
       name = name.trim(),
-      role = "RM",
+      role = cleanRole,
       passwordHash = hash,
       salt = salt,
       mobile = mobile.trim(),
@@ -1265,19 +1288,21 @@ class EblRepository(
       accountStatus = "ACTIVE",
       mustChangePassword = false,
       createdAt = now,
-      authUid = "AUTH_RM_$cleanRmCode"
+      authUid = if (cleanRole == "MENTOR") "AUTH_MENTOR_$cleanRmCode" else "AUTH_RM_$cleanRmCode"
     )
 
     database.userDao().insertUser(newUser)
-    database.rmTargetDao().insertOrUpdateTarget(
-      RmTargetEntity(
-        rmCode = cleanRmCode,
-        creditCardTarget = 15,
-        corporateCardTarget = 5,
-        b2bTarget = 2,
-        updatedAt = now
+    if (cleanRole == "RM") {
+      database.rmTargetDao().insertOrUpdateTarget(
+        RmTargetEntity(
+          rmCode = cleanRmCode,
+          creditCardTarget = 15,
+          corporateCardTarget = 5,
+          b2bTarget = 2,
+          updatedAt = now
+        )
       )
-    )
+    }
 
     // Remove from deleted_rm_codes setting and in-memory cache in case previously deleted
     try {
@@ -1305,8 +1330,8 @@ class EblRepository(
         logId = "LOG-${SecurityUtils.generateUniqueId().take(8)}",
         userId = currentUser.rmCode,
         role = currentUser.role,
-        action = "RM_CREATE",
-        details = "Assigned & created new RM account ${newUser.name} ($cleanRmCode) by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }})",
+        action = if (cleanRole == "MENTOR") "MENTOR_CREATE" else "RM_CREATE",
+        details = "Assigned & created new $cleanRole account ${newUser.name} ($cleanRmCode) by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }})",
         timestamp = now,
         rmCode = cleanRmCode
       )
@@ -1326,7 +1351,8 @@ class EblRepository(
     mobile: String,
     email: String,
     officeAddress: String,
-    newPassword: String? = null
+    newPassword: String? = null,
+    role: String? = null
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -1336,9 +1362,10 @@ class EblRepository(
     }
 
     val existing = database.userDao().getUser(rmCode)
-      ?: return@withContext Result.failure(Exception("RM user not found."))
+      ?: return@withContext Result.failure(Exception("User not found."))
 
     val targetStatus = existing.accountStatus
+    val targetRole = if (role != null && (role.equals("MENTOR", true) || role.equals("RM", true))) role.uppercase() else existing.role
 
     val updated = if (!newPassword.isNullOrBlank()) {
       val salt = SecurityUtils.generateSalt()
@@ -1348,6 +1375,7 @@ class EblRepository(
         mobile = mobile.trim(),
         email = email.trim(),
         officeAddress = officeAddress.trim(),
+        role = targetRole,
         passwordHash = hash,
         salt = salt,
         mustChangePassword = false
@@ -1358,6 +1386,7 @@ class EblRepository(
         mobile = mobile.trim(),
         email = email.trim(),
         officeAddress = officeAddress.trim(),
+        role = targetRole,
         accountStatus = targetStatus
       )
     }
@@ -1596,18 +1625,41 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity(cleanName, itemsText.trim(), currentUser.rmCode, now)
     )
-    val legacyKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val keySuffix = cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val customKey = "CHECKLIST_CUSTOM_" + keySuffix
+    val legacyKey = "CHECKLIST_PRESET_" + keySuffix
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(customKey, itemsText.trim(), currentUser.rmCode, now)
+    )
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity(legacyKey, itemsText.trim(), currentUser.rmCode, now)
     )
-    val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
-    val customList = existingCustom.split(",").map { it.trim() }.filter { it.isNotBlank() }
-    if (cleanName !in customList) {
-      val updatedList = (customList + cleanName).distinct().joinToString(",")
+
+    // Un-tombstone if was previously deleted
+    val currentDel = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
+    if (currentDel.isNotBlank()) {
+      val updatedDel = currentDel.split(",").map { it.trim() }.filter {
+        it.isNotBlank() && !it.equals(cleanName, true) && !it.equals(customKey, true) && !it.equals(legacyKey, true)
+      }.joinToString(",")
       database.appSettingDao().insertOrUpdateSetting(
-        AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedList, currentUser.rmCode, now)
+        AppSettingEntity("deleted_preset_keys", updatedDel, currentUser.rmCode, now)
       )
     }
+    deletedPresetKeysCache.remove(cleanName.uppercase())
+    deletedPresetKeysCache.remove(customKey.uppercase())
+    deletedPresetKeysCache.remove(legacyKey.uppercase())
+
+    val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
+    val customList = try {
+      val arr = org.json.JSONArray(existingCustom)
+      (0 until arr.length()).map { arr.getString(it).trim() }
+    } catch (_: Exception) {
+      existingCustom.split(",").map { it.trim() }
+    }.filter { it.isNotBlank() }
+    val updatedList = (customList + cleanName).distinct()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), currentUser.rmCode, now)
+    )
     applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
@@ -2184,6 +2236,11 @@ class EblRepository(
             put("salt", rm.salt)
             put("createdAt", DateUtils.formatDateTime(rm.createdAt))
             put("updatedAt", DateUtils.formatDateTime(target?.updatedAt ?: rm.createdAt))
+            put("lastLatitude", rm.lastLatitude ?: 0.0)
+            put("lastLongitude", rm.lastLongitude ?: 0.0)
+            put("lastLocationAddress", rm.lastLocationAddress ?: "")
+            put("lastLocationTime", if (rm.lastLocationTime != null) DateUtils.formatDateTime(rm.lastLocationTime) else "")
+            put("isOnline", rm.isOnline)
           })
         }
 
@@ -2369,6 +2426,13 @@ class EblRepository(
           deletedPresetKeys.put(it)
         }
 
+        // Gather all deleted attachment IDs so Google Sheets removes them from Attachments sheet
+        val delAttsSetting = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
+        val deletedAttachmentIds = org.json.JSONArray()
+        (delAttsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() } + deletedAttachmentIdsCache).distinct().forEach {
+          deletedAttachmentIds.put(it)
+        }
+
         // Gather all Important Documents so they are synced to Google Sheets for all RMs to view!
         val allImportantDocs = database.importantDocumentDao().getAllActiveDocuments()
         val docsArray = org.json.JSONArray()
@@ -2532,6 +2596,10 @@ class EblRepository(
                 val sheetSms = respJson.optJSONArray("smsNotifications") ?: respJson.optJSONArray("sms")
                 if (sheetSms != null && sheetSms.length() > 0) {
                   processSheetSmsNotifications(sheetSms)
+                }
+                val sheetLocations = respJson.optJSONArray("locations") ?: respJson.optJSONArray("locationLogs")
+                if (sheetLocations != null && sheetLocations.length() > 0) {
+                  processSheetLocations(sheetLocations)
                 }
               } catch (_: Exception) {}
             }
@@ -2710,9 +2778,22 @@ class EblRepository(
                         else if (sheetSalt.isNotBlank()) sheetSalt
                         else existing.salt
 
+        val sheetLat = if (obj.has("lastLatitude")) obj.optDouble("lastLatitude", 0.0) else obj.optDouble("latitude", 0.0)
+        val sheetLng = if (obj.has("lastLongitude")) obj.optDouble("lastLongitude", 0.0) else obj.optDouble("longitude", 0.0)
+        val sheetAddress = obj.optString("lastLocationAddress", obj.optString("address", "")).trim()
+        val sheetLocTimeRaw = obj.optString("lastLocationTime", obj.optString("locationTime", "")).trim()
+        val sheetLocTime = if (sheetLocTimeRaw.isNotBlank()) DateUtils.parseDateTime(sheetLocTimeRaw) else null
+        val sheetIsOnline = obj.optBoolean("isOnline", false)
+
+        val hasLocationUpdate = (sheetLat != 0.0 && sheetLat != existing.lastLatitude) ||
+                                (sheetLng != 0.0 && sheetLng != existing.lastLongitude) ||
+                                (sheetAddress.isNotBlank() && sheetAddress != existing.lastLocationAddress) ||
+                                (sheetLocTime != null && sheetLocTime != existing.lastLocationTime)
+
         val hasChanges = existing.name != name || existing.mobile != mobile ||
                          existing.email != email || existing.officeAddress != office ||
-                         existing.accountStatus != status ||
+                         existing.accountStatus != status || hasLocationUpdate ||
+                         (obj.has("isOnline") && existing.isOnline != sheetIsOnline) ||
                          (!isRecentLocalPassChange && sheetHash.isNotBlank() && existing.passwordHash != hashToUse)
         if (hasChanges) {
           database.userDao().updateUser(
@@ -2723,12 +2804,24 @@ class EblRepository(
               officeAddress = office,
               accountStatus = status,
               passwordHash = hashToUse,
-              salt = saltToUse
+              salt = saltToUse,
+              lastLatitude = if (sheetLat != 0.0) sheetLat else existing.lastLatitude,
+              lastLongitude = if (sheetLng != 0.0) sheetLng else existing.lastLongitude,
+              lastLocationAddress = if (sheetAddress.isNotBlank()) sheetAddress else existing.lastLocationAddress,
+              lastLocationTime = sheetLocTime ?: existing.lastLocationTime,
+              isOnline = if (obj.has("isOnline")) sheetIsOnline else existing.isOnline
             )
           )
           updatedCount++
         }
       } else {
+        val sheetLat = if (obj.has("lastLatitude")) obj.optDouble("lastLatitude", 0.0) else obj.optDouble("latitude", 0.0)
+        val sheetLng = if (obj.has("lastLongitude")) obj.optDouble("lastLongitude", 0.0) else obj.optDouble("longitude", 0.0)
+        val sheetAddress = obj.optString("lastLocationAddress", obj.optString("address", "")).trim()
+        val sheetLocTimeRaw = obj.optString("lastLocationTime", obj.optString("locationTime", "")).trim()
+        val sheetLocTime = if (sheetLocTimeRaw.isNotBlank()) DateUtils.parseDateTime(sheetLocTimeRaw) else null
+        val sheetIsOnline = obj.optBoolean("isOnline", false)
+
         val (finalHash, finalSalt) = if (sheetHash.isNotBlank() && sheetSalt.isNotBlank()) {
           Pair(sheetHash, sheetSalt)
         } else if (sheetHash.isNotBlank()) {
@@ -2751,7 +2844,12 @@ class EblRepository(
           accountStatus = status,
           mustChangePassword = false,
           createdAt = now,
-          authUid = "AUTH_RM_$code"
+          authUid = "AUTH_RM_$code",
+          lastLatitude = if (sheetLat != 0.0) sheetLat else null,
+          lastLongitude = if (sheetLng != 0.0) sheetLng else null,
+          lastLocationAddress = if (sheetAddress.isNotBlank()) sheetAddress else null,
+          lastLocationTime = sheetLocTime,
+          isOnline = sheetIsOnline
         )
         database.userDao().insertUser(newUser)
         updatedCount++
@@ -2891,6 +2989,21 @@ class EblRepository(
           val friendly = pKey.removePrefix("CHECKLIST_CUSTOM_").replace("_", " ")
           database.appSettingDao().deleteSetting(friendly)
         }
+      } else if (key.equals("deleted_attachment_ids", true)) {
+        val delList = value.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val currentDel = existing?.settingValue ?: ""
+        val currentList = currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val merged = (currentList + delList + deletedAttachmentIdsCache).distinct()
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity("deleted_attachment_ids", merged.joinToString(","), "GoogleSheets_Universal", now)
+        )
+        deletedAttachmentIdsCache.addAll(merged)
+        deletedAttachmentIdsCache.addAll(merged.map { it.uppercase() })
+        for (attId in merged) {
+          database.fileAttachmentDao().deleteAttachment(attId)
+          database.fileAttachmentDao().deleteAttachment(attId.uppercase())
+          database.fileAttachmentDao().deleteAttachment(attId.lowercase())
+        }
       } else {
         val delPresetsSetting = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
         val delPresetSet = (delPresetsSetting.split(",").map { it.trim().uppercase() } + deletedPresetKeysCache.map { it.uppercase() }).toSet()
@@ -2960,16 +3073,23 @@ class EblRepository(
   private suspend fun processSheetAttachments(sheetAttsJson: JSONArray): Int {
     var count = 0
     val delAttsSetting = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
-    val deletedAttIds = delAttsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+    val deletedAttIds = (delAttsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() } + deletedAttachmentIdsCache.map { it.uppercase() }).toSet()
     for (delId in deletedAttIds) {
       database.fileAttachmentDao().deleteAttachment(delId)
+      database.fileAttachmentDao().deleteAttachment(delId.lowercase())
     }
 
     for (i in 0 until sheetAttsJson.length()) {
       val obj = sheetAttsJson.optJSONObject(i) ?: continue
       val attId = obj.optString("attachmentId").trim()
       val fileId = obj.optString("fileId").trim()
-      if (attId.isBlank() || fileId.isBlank() || attId.uppercase() in deletedAttIds) continue
+      if (attId.isBlank() || fileId.isBlank() || attId.uppercase() in deletedAttIds || attId in deletedAttachmentIdsCache) {
+        if (attId.isNotBlank()) {
+          database.fileAttachmentDao().deleteAttachment(attId)
+          database.fileAttachmentDao().deleteAttachment(attId.uppercase())
+        }
+        continue
+      }
 
       val fileName = obj.optString("fileName", "photo.jpg").trim()
       val category = obj.optString("category", "General").trim()
@@ -3215,6 +3335,43 @@ class EblRepository(
             }
           }
         }
+      }
+    }
+    return count
+  }
+
+  private suspend fun processSheetLocations(sheetLocationsJson: JSONArray): Int {
+    var count = 0
+    val now = DateUtils.currentDhakaMillis()
+    for (i in 0 until sheetLocationsJson.length()) {
+      val obj = sheetLocationsJson.optJSONObject(i) ?: continue
+      val rmCode = obj.optString("rmCode").trim().uppercase()
+      if (rmCode.isBlank()) continue
+      val userName = obj.optString("userName", rmCode).trim()
+      val lat = obj.optDouble("latitude", 0.0)
+      val lng = obj.optDouble("longitude", 0.0)
+      val address = obj.optString("address", "").trim()
+      val timeStr = obj.optString("timestamp").trim()
+      val timestamp = if (timeStr.isNotBlank()) DateUtils.parseDateTime(timeStr) ?: now else now
+      val source = obj.optString("sourceAction", "GPS").trim()
+
+      if (lat != 0.0 || lng != 0.0 || address.isNotBlank()) {
+        database.userLocationLogDao().insertLocationLog(
+          com.example.data.model.UserLocationLogEntity(
+            rmCode = rmCode,
+            userName = userName,
+            latitude = lat,
+            longitude = lng,
+            address = address,
+            sourceAction = source,
+            timestamp = timestamp
+          )
+        )
+        val user = database.userDao().getUser(rmCode)
+        if (user != null && (user.lastLocationTime == null || timestamp >= user.lastLocationTime)) {
+          database.userDao().updateUserLocation(rmCode, lat, lng, address, timestamp)
+        }
+        count++
       }
     }
     return count
@@ -3789,6 +3946,7 @@ class EblRepository(
         timestamp = now
       )
     )
+    applicationScope.launch { triggerGoogleSheetsSync() }
   }
 
   fun getAllUsersFlow(): Flow<List<UserEntity>> {

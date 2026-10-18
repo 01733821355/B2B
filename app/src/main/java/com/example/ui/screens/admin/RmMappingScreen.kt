@@ -77,9 +77,12 @@ fun RmMappingScreen(
   currentUser: UserEntity,
   modifier: Modifier = Modifier
 ) {
+  val allOfficers by viewModel.allOfficers.collectAsState()
+  val allMentors by viewModel.allMentors.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val allTargets by viewModel.allTargets.collectAsState()
   var searchRmQuery by remember { mutableStateOf("") }
+  var selectedRoleTab by remember { mutableStateOf("ALL") } // ALL, RM, MENTOR
 
   var showAddDialog by remember { mutableStateOf(false) }
   var editingRm by remember { mutableStateOf<UserEntity?>(null) }
@@ -89,11 +92,20 @@ fun RmMappingScreen(
   var showExportDialog by remember { mutableStateOf(false) }
   var exportedCsvContent by remember { mutableStateOf("") }
 
-  val filteredRms = allRms.filter { rm ->
+  val sourceStaffList = remember(allOfficers, allRms, selectedRoleTab) {
+    val base = if (allOfficers.isNotEmpty()) allOfficers else allRms
+    when (selectedRoleTab) {
+      "RM" -> base.filter { it.role.equals("RM", true) }
+      "MENTOR" -> base.filter { it.role.equals("MENTOR", true) }
+      else -> base
+    }
+  }
+
+  val filteredRms = sourceStaffList.filter { rm ->
     if (searchRmQuery.isBlank()) true
     else {
       val q = searchRmQuery.lowercase()
-      rm.name.lowercase().contains(q) || rm.rmCode.lowercase().contains(q) || rm.mobile.contains(q)
+      rm.name.lowercase().contains(q) || rm.rmCode.lowercase().contains(q) || rm.mobile.contains(q) || rm.role.lowercase().contains(q)
     }
   }
 
@@ -119,7 +131,7 @@ fun RmMappingScreen(
         ) {
           Column(modifier = Modifier.weight(1f)) {
             Text(
-              text = "RM Mapping & Accounts",
+              text = "RM & Mentor Management",
               fontSize = 18.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark,
@@ -127,7 +139,7 @@ fun RmMappingScreen(
               overflow = TextOverflow.Ellipsis
             )
             Text(
-              text = "${allRms.size} Relationship Officers Registered",
+              text = "${allRms.size} RMs • ${allMentors.size} Mentors registered",
               fontSize = 11.sp,
               color = Color.Gray
             )
@@ -147,7 +159,7 @@ fun RmMappingScreen(
           }
         }
 
-        // Admin or Mentor can assign/provision new RM accounts - ALWAYS VISIBLE PROMINENT FULL-WIDTH BUTTON!
+        // Admin or Mentor can assign/provision new RM or Mentor accounts - ALWAYS VISIBLE PROMINENT FULL-WIDTH BUTTON!
         if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
           Spacer(modifier = Modifier.height(10.dp))
           Button(
@@ -161,7 +173,34 @@ fun RmMappingScreen(
           ) {
             Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("+ Add New RM Officer", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            Text("+ Add New RM / Mentor Officer", fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          val tabs = listOf(
+            Triple("ALL", "All Staff", allOfficers.size),
+            Triple("RM", "RMs", allRms.size),
+            Triple("MENTOR", "Mentors", allMentors.size)
+          )
+          tabs.forEach { (code, label, count) ->
+            val isSelected = selectedRoleTab == code
+            androidx.compose.material3.FilterChip(
+              selected = isSelected,
+              onClick = { selectedRoleTab = code },
+              label = {
+                Text(
+                  "$label ($count)",
+                  fontSize = 11.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                )
+              },
+              modifier = Modifier.weight(1f)
+            )
           }
         }
       }
@@ -211,7 +250,22 @@ fun RmMappingScreen(
                     fontWeight = FontWeight.Bold,
                     color = EblNavyDark
                   )
-                  Spacer(modifier = Modifier.width(8.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  val isMentor = rm.role.equals("MENTOR", true)
+                  androidx.compose.material3.Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isMentor) Color(0xFFF3E8FF) else Color(0xFFEFF6FF),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isMentor) Color(0xFFC084FC) else Color(0xFF93C5FD))
+                  ) {
+                    Text(
+                      text = if (isMentor) "MENTOR" else "RM",
+                      fontSize = 10.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = if (isMentor) Color(0xFF7E22CE) else Color(0xFF1D4ED8),
+                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                  }
+                  Spacer(modifier = Modifier.width(6.dp))
                   AccountStatusBadge(rm.accountStatus)
                 }
                 Spacer(modifier = Modifier.height(2.dp))
@@ -456,7 +510,7 @@ fun RmMappingScreen(
   }
 }
 
-  // Add RM Modal Dialog
+  // Add RM / Mentor Modal Dialog
   if (showAddDialog) {
     var rmCodeInput by remember { mutableStateOf("") }
     var nameInput by remember { mutableStateOf("") }
@@ -464,29 +518,47 @@ fun RmMappingScreen(
     var emailInput by remember { mutableStateOf("") }
     var addressInput by remember { mutableStateOf("") }
     var initialPassInput by remember { mutableStateOf(SecurityUtils.generateTemporaryPassword()) }
+    var roleInput by remember { mutableStateOf("RM") }
     var addError by remember { mutableStateOf<String?>(null) }
 
     AlertDialog(
       onDismissRequest = { showAddDialog = false },
-      title = { Text("Add New RM Officer", fontWeight = FontWeight.Bold) },
+      title = { Text("Add New Officer (RM / Mentor)", fontWeight = FontWeight.Bold) },
       text = {
         Column(modifier = Modifier.fillMaxWidth()) {
           if (addError != null) {
             Text(addError!!, color = Color.Red, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(6.dp))
           }
+          Text("Account Role *", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            listOf("RM" to "Relationship Manager (RM)", "MENTOR" to "Team Mentor").forEach { (rCode, rLabel) ->
+              val isSel = roleInput == rCode
+              androidx.compose.material3.FilterChip(
+                selected = isSel,
+                onClick = { roleInput = rCode },
+                label = { Text(rLabel, fontSize = 11.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal) },
+                modifier = Modifier.weight(1f)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.height(8.dp))
           VoiceInputField(
             value = rmCodeInput,
             onValueChange = { rmCodeInput = it; addError = null },
-            label = "Unique RM Code *",
-            placeholder = "e.g. 104396",
+            label = "Unique Code (RM / Mentor ID) *",
+            placeholder = "e.g. 104396 or Mentor2",
             testTag = "add_rm_code"
           )
           Spacer(modifier = Modifier.height(8.dp))
           VoiceInputField(
             value = nameInput,
             onValueChange = { nameInput = it; addError = null },
-            label = "RM Full Name *",
+            label = "Officer Full Name *",
             placeholder = "e.g. Shakil Hossain",
             testTag = "add_rm_name"
           )
@@ -521,7 +593,7 @@ fun RmMappingScreen(
             testTag = "add_rm_password"
           )
           Text(
-            text = "Notice: Assigned RM will be created as ACTIVE and immediately synced to Google Sheets in 'RM_Details' tab. The RM can log in on ANY mobile device with this RM Code and password.",
+            text = "Notice: Assigned officer will be created as ACTIVE and immediately synced to Google Sheets in 'RM_Details' tab. They can log in on ANY mobile device with this Code and password.",
             fontSize = 11.sp,
             color = Color(0xFF047857),
             modifier = Modifier.padding(top = 6.dp)
@@ -534,7 +606,7 @@ fun RmMappingScreen(
             val cleanCode = rmCodeInput.trim().uppercase()
             val cleanName = nameInput.trim()
             if (cleanCode.isBlank() || cleanName.isBlank()) {
-              addError = "RM Code and Name are mandatory."
+              addError = "Officer Code and Name are mandatory."
               return@Button
             }
             val finalPassword = if (initialPassInput.isBlank()) SecurityUtils.generateTemporaryPassword() else initialPassInput.trim()
@@ -544,13 +616,14 @@ fun RmMappingScreen(
               mobile = mobileInput.trim(),
               email = emailInput.trim(),
               officeAddress = addressInput.trim(),
-              initialPassword = finalPassword
+              initialPassword = finalPassword,
+              role = roleInput
             ) { success, err ->
               if (success) {
-                searchRmQuery = "" // Clear search filter so newly created RM is immediately visible
+                searchRmQuery = "" // Clear search filter so newly created account is immediately visible
                 showAddDialog = false
               } else {
-                addError = err ?: "Failed to assign RM account."
+                addError = err ?: "Failed to assign officer account."
               }
             }
           },
@@ -569,18 +642,37 @@ fun RmMappingScreen(
   }
 
   // Edit RM Dialog
+  // Edit Officer Dialog
   if (editingRm != null) {
     var editName by remember { mutableStateOf(editingRm!!.name) }
     var editMobile by remember { mutableStateOf(editingRm!!.mobile) }
     var editEmail by remember { mutableStateOf(editingRm!!.email) }
     var editAddress by remember { mutableStateOf(editingRm!!.officeAddress) }
+    var editRole by remember { mutableStateOf(if (editingRm!!.role.equals("MENTOR", true)) "MENTOR" else "RM") }
     var editNewPassword by remember { mutableStateOf("") }
 
     AlertDialog(
       onDismissRequest = { editingRm = null },
-      title = { Text("Edit RM: ${editingRm!!.rmCode}", fontWeight = FontWeight.Bold) },
+      title = { Text("Edit Officer: ${editingRm!!.rmCode}", fontWeight = FontWeight.Bold) },
       text = {
         Column(modifier = Modifier.fillMaxWidth()) {
+          Text("Account Role", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          ) {
+            listOf("RM" to "Relationship Manager (RM)", "MENTOR" to "Team Mentor").forEach { (rCode, rLabel) ->
+              val isSel = editRole.equals(rCode, true)
+              androidx.compose.material3.FilterChip(
+                selected = isSel,
+                onClick = { editRole = rCode },
+                label = { Text(rLabel, fontSize = 11.sp, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal) },
+                modifier = Modifier.weight(1f)
+              )
+            }
+          }
+          Spacer(modifier = Modifier.height(8.dp))
           VoiceInputField(
             value = editName,
             onValueChange = { editName = it },
@@ -634,7 +726,8 @@ fun RmMappingScreen(
               mobile = editMobile,
               email = editEmail,
               officeAddress = editAddress,
-              newPassword = editNewPassword.ifBlank { null }
+              newPassword = editNewPassword.ifBlank { null },
+              role = editRole
             ) { success, _ ->
               if (success) editingRm = null
             }
