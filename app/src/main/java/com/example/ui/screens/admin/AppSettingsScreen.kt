@@ -40,6 +40,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -591,6 +592,12 @@ fun AppSettingsScreen(
     // 4. Seasonal, Festival & Day/Night Themes Management
     val activeThemeMode = settings.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
     var selectedThemeMode by remember(activeThemeMode) { mutableStateOf(activeThemeMode) }
+
+    val currentFontStyle = settings.find { it.settingKey == "UI_FONT_STYLE" }?.settingValue ?: "DEFAULT_SANS"
+    var selectedFontStyle by remember(currentFontStyle) { mutableStateOf(currentFontStyle) }
+
+    val currentTextScale = settings.find { it.settingKey == "UI_TEXT_SCALE" }?.settingValue ?: "STANDARD"
+    var selectedTextScale by remember(currentTextScale) { mutableStateOf(currentTextScale) }
 
     // Theme Customizer State
     val themeOptions = listOf(

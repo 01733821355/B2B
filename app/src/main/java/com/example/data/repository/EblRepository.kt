@@ -1979,6 +1979,19 @@ class EblRepository(
     Result.success(Unit)
   }
 
+  suspend fun deleteSetting(key: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized."))
+
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access denied: settings can only be deleted by Admin or Mentor."))
+    }
+
+    database.appSettingDao().deleteSetting(key)
+    applicationScope.launch { triggerGoogleSheetsSync() }
+    Result.success(Unit)
+  }
+
   // 6. Google Sheets Synchronization
   fun getSyncStatusFlow(): Flow<SyncStatusEntity?> {
     return database.appSettingDao().getSyncStatusFlow()

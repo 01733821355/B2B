@@ -30,10 +30,10 @@ data class AppThemeConfig(
   val tertiary: Color,
   val background: Color,
   val surface: Color,
+  val isDark: Boolean = false,
   val onPrimary: Color = Color.White,
   val onBackground: Color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF0F172A),
-  val onSurface: Color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF0F172A),
-  val isDark: Boolean = false
+  val onSurface: Color = if (isDark) Color(0xFFE2E8F0) else Color(0xFF0F172A)
 ) {
   fun toM3ColorScheme(): ColorScheme {
     return if (isDark) {
