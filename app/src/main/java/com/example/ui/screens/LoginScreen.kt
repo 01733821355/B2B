@@ -250,6 +250,8 @@ fun LoginScreen(
         )
     )
 
+    val currentTheme = com.example.ui.theme.LocalAppTheme.current
+
     Column(
       modifier = Modifier
         .fillMaxSize()
@@ -258,19 +260,24 @@ fun LoginScreen(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center
     ) {
-      // Golden Brand Logo Icon
+      // Golden Brand Logo + Active Theme Emoji Avatar
       Box(
         modifier = Modifier
-          .size(76.dp)
-          .background(EblGold, CircleShape),
+          .size(80.dp)
+          .background(currentTheme.primary, CircleShape),
         contentAlignment = Alignment.Center
       ) {
-        Icon(
-          imageVector = Icons.Default.Shield,
-          contentDescription = null,
-          tint = EblNavyDark,
-          modifier = Modifier.size(42.dp)
-        )
+        Box(
+          modifier = Modifier
+            .size(68.dp)
+            .background(currentTheme.secondary, CircleShape),
+          contentAlignment = Alignment.Center
+        ) {
+          Text(
+            text = currentTheme.id.emoji,
+            fontSize = 32.sp
+          )
+        }
       }
 
       Spacer(modifier = Modifier.height(14.dp))
@@ -288,13 +295,30 @@ fun LoginScreen(
 
       Text(
         text = "Executive Operations & Field Force Team",
-        color = EblGold,
+        color = currentTheme.tertiary,
         fontSize = 13.sp,
         fontWeight = FontWeight.Medium,
         textAlign = TextAlign.Center
       )
 
-      Spacer(modifier = Modifier.height(24.dp))
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // Active Theme Seasonal & Picture Badge
+      Surface(
+        color = Color.White.copy(alpha = 0.18f),
+        shape = RoundedCornerShape(8.dp)
+      ) {
+        Text(
+          text = "${currentTheme.id.emoji} ${currentTheme.banglaName} • ${currentTheme.id.motif}",
+          color = Color.White.copy(alpha = 0.95f),
+          fontSize = 11.sp,
+          fontWeight = FontWeight.Medium,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+          textAlign = TextAlign.Center
+        )
+      }
+
+      Spacer(modifier = Modifier.height(20.dp))
 
       Card(
         modifier = Modifier
