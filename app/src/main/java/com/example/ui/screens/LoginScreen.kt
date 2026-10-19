@@ -305,16 +305,16 @@ fun LoginScreen(
       Spacer(modifier = Modifier.height(6.dp))
 
       // Active Theme Seasonal & Picture Badge
-      Surface(
-        color = Color.White.copy(alpha = 0.18f),
-        shape = RoundedCornerShape(8.dp)
+      Box(
+        modifier = Modifier
+          .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+          .padding(horizontal = 10.dp, vertical = 4.dp)
       ) {
         Text(
           text = "${currentTheme.id.emoji} ${currentTheme.banglaName} • ${currentTheme.id.motif}",
           color = Color.White.copy(alpha = 0.95f),
           fontSize = 11.sp,
           fontWeight = FontWeight.Medium,
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
           textAlign = TextAlign.Center
         )
       }
