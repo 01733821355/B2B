@@ -75,6 +75,7 @@ import com.example.data.model.UserEntity
 import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.CpvStatusBadge
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.FloatableRmNavButton
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
@@ -114,17 +115,23 @@ fun CustomerFileListScreen(
 
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
 
+  val isRefreshing by viewModel.isRefreshing.collectAsState()
+
   Box(
     modifier = modifier
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
   ) {
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .testTag("customer_file_list_screen")
+    EblPullRefreshBox(
+      isRefreshing = isRefreshing,
+      onRefresh = { viewModel.refreshData() }
     ) {
-    // Header & Actions
+      Column(
+        modifier = Modifier
+          .fillMaxSize()
+          .testTag("customer_file_list_screen")
+      ) {
+      // Header & Actions
     Row(
       modifier = Modifier
         .fillMaxWidth()
@@ -532,6 +539,7 @@ fun CustomerFileListScreen(
       }
     }
   }
+}
 
   // Floatable & Draggable Quick Navigation Menu for RM
   if (currentUser.role == "RM") {

@@ -89,6 +89,7 @@ import com.example.data.model.FileAttachmentEntity
 import com.example.data.model.ImportantDocumentEntity
 import com.example.data.model.UserEntity
 import com.example.ui.common.AttachmentViewerDialog
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -108,6 +109,7 @@ fun ImportantDocumentsScreen(
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   val documents by viewModel.importantDocuments.collectAsState()
+  val isRefreshing by viewModel.isRefreshing.collectAsState()
 
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
 
@@ -151,13 +153,18 @@ fun ImportantDocumentsScreen(
     }.sortedByDescending { it.updatedAt }
   }
 
-  Column(
-    modifier = modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
-      .padding(horizontal = 12.dp, vertical = 8.dp)
-      .testTag("important_documents_screen")
+  EblPullRefreshBox(
+    isRefreshing = isRefreshing,
+    onRefresh = { viewModel.refreshData() },
+    modifier = modifier.fillMaxSize()
   ) {
+    Column(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+        .testTag("important_documents_screen")
+    ) {
     // 1. Ultra-Compact Header Bar (No vertical stretching)
     Row(
       modifier = Modifier
@@ -404,6 +411,7 @@ fun ImportantDocumentsScreen(
         }
       }
     }
+  }
   }
 
   // Upload or Edit Dialog (Admin & Mentor Only)

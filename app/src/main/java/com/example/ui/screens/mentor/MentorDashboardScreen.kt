@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.KpiGridSection
 import com.example.ui.common.TimeFilterBar
 import com.example.ui.common.VoiceInputField
@@ -97,12 +98,26 @@ fun MentorDashboardScreen(
   var showEditAppNameDialog by remember { mutableStateOf(false) }
   var newAppNameInput by remember { mutableStateOf("") }
 
-  LazyColumn(
-    modifier = modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
-      .testTag("mentor_dashboard_screen")
+  val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+  LaunchedEffect(Unit) {
+    while (true) {
+      kotlinx.coroutines.delay(20_000)
+      viewModel.refreshData()
+    }
+  }
+
+  EblPullRefreshBox(
+    isRefreshing = isRefreshing,
+    onRefresh = { viewModel.refreshData() },
+    modifier = modifier.fillMaxSize()
   ) {
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .testTag("mentor_dashboard_screen")
+    ) {
     // Mentor Command Banner
     item {
       val currentTheme = com.example.ui.theme.LocalAppTheme.current
@@ -810,6 +825,7 @@ fun MentorDashboardScreen(
       Spacer(modifier = Modifier.height(28.dp))
     }
   }
+}
 
   // Universal App Name Edit Dialog
   if (showEditAppNameDialog) {

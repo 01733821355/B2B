@@ -98,6 +98,20 @@ class EblRepository(
           deletedAttachmentIdsCache.add(it)
           deletedAttachmentIdsCache.add(it.uppercase())
         }
+
+        // Auto-restore customer files that were mistakenly soft-deleted by previous GoogleSheets_Delete bug
+        val allDeleted = database.customerFileDao().getAllDeletedFiles()
+        val explicitDelFiles = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue.orEmpty()
+        val explicitDelSet = (explicitDelFiles.split(",").map { it.trim().lowercase() }.filter { it.isNotBlank() } + deletedFileIdsCache.map { it.lowercase() }).toSet()
+        for (delFile in allDeleted) {
+          if (delFile.updatedBy == "GoogleSheets_Delete") {
+            val fIdLower = delFile.fileId.trim().lowercase()
+            val ccLower = delFile.ccNumber.trim().lowercase()
+            if (fIdLower !in explicitDelSet && (ccLower.isBlank() || ccLower !in explicitDelSet)) {
+              database.customerFileDao().restoreFile(delFile.fileId, "Recovery_AutoRestore", DateUtils.currentDhakaMillis())
+            }
+          }
+        }
       } catch (_: Exception) {}
     }
   }
@@ -655,12 +669,77 @@ class EblRepository(
 
     updatePendingSyncCount()
 
-    // Automatically trigger real-time Google Sheets sync in background
+    // Automatically trigger immediate customer file sync and full background sync
     applicationScope.launch {
+      try {
+        syncCustomerFileUpsertToGoogleSheets(entity)
+      } catch (_: Exception) {}
       triggerGoogleSheetsSync()
     }
 
     Result.success(entity)
+  }
+
+  suspend fun syncCustomerFileUpsertToGoogleSheets(file: CustomerFileEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: com.example.data.model.SyncStatusEntity()
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val fObj = org.json.JSONObject().apply {
+        put("serialNumber", file.serialNumber.ifBlank { "1" })
+        put("sl", file.serialNumber.ifBlank { "1" })
+        put("ccNumber", file.ccNumber.ifBlank { file.fileId })
+        put("fileId", file.fileId)
+        put("customerName", file.customerName)
+        put("companyName", file.companyName)
+        put("officeAddress", file.officeAddress)
+        put("mobile", file.mobile)
+        put("email", file.email)
+        put("productType", file.productType)
+        put("applicationStatus", file.applicationStatus)
+        put("activeStatus", file.activeStatus)
+        put("assignedRmCode", file.assignedRmCode)
+        put("pendingDocuments", file.pendingDocuments)
+        put("remarks", file.remarks)
+        put("cpvRemarks", file.cpvRemarks)
+        put("cpvStatus", file.cpvStatus)
+        put("submissionAddress", file.submissionAddress ?: "")
+        put("submissionLat", file.submissionLatitude ?: 0.0)
+        put("submissionLng", file.submissionLongitude ?: 0.0)
+        put("updatedAt", DateUtils.formatDateTime(file.updatedAt))
+        put("updatedBy", file.updatedBy)
+      }
+
+      val filesArr = org.json.JSONArray().apply { put(fObj) }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_CUSTOMER_FILE")
+        put("file", fObj)
+        put("files", filesArr)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp ->
+        if (resp.isSuccessful) {
+          database.customerFileDao().markFileSynced(file.fileId)
+          updatePendingSyncCount()
+          database.appSettingDao().insertOrUpdateSyncStatus(
+            currentStatus.copy(
+              appsScriptUrl = activeWebAppUrl,
+              lastSyncTimestamp = DateUtils.currentDhakaMillis(),
+              lastSyncStatus = "SUCCESS",
+              lastSyncMessage = "Customer file '${file.customerName}' synchronized with Google Sheets."
+            )
+          )
+        }
+      }
+    } catch (_: Exception) {}
   }
 
   suspend fun syncFileDeletionToGoogleSheets(fileId: String, ccNumber: String?): Unit = withContext(Dispatchers.IO) {
@@ -957,6 +1036,66 @@ class EblRepository(
     } catch (_: Exception) {}
   }
 
+  suspend fun syncAttachmentUpsertToGoogleSheets(
+    att: com.example.data.model.FileAttachmentEntity,
+    fileBase64: String? = null
+  ): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val attJson = org.json.JSONObject().apply {
+        put("attachmentId", att.attachmentId)
+        put("fileId", att.fileId)
+        put("category", att.category)
+        put("fileName", att.fileName)
+        put("fileType", att.fileType)
+        put("fileSize", att.fileSizeBytes)
+        put("fileUri", att.fileUri)
+        put("storagePath", att.storagePath)
+        put("uploadedBy", att.uploadedBy)
+        put("uploadedAt", DateUtils.formatDateTime(att.uploadedAt))
+        if (!fileBase64.isNullOrBlank()) {
+          put("fileBase64", fileBase64)
+        }
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_ATTACHMENT")
+        put("attachment", attJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncSettingUpsertToGoogleSheets(key: String, value: String): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_SETTING")
+        put("settingKey", key)
+        put("settingValue", value)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
   suspend fun syncChatDeletionToGoogleSheets(chatId: String): Unit = withContext(Dispatchers.IO) {
     try {
       val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
@@ -1227,7 +1366,13 @@ class EblRepository(
     )
 
     database.fileAttachmentDao().insertAttachment(attachment)
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      val b64 = if (targetFile != null && targetFile.exists() && !finalFileUri.startsWith("http")) {
+        com.example.util.AttachmentHelper.fileToBase64(targetFile)
+      } else null
+      syncAttachmentUpsertToGoogleSheets(attachment, b64)
+      triggerGoogleSheetsSync()
+    }
     Result.success(attachment)
   }
 
@@ -1599,10 +1744,7 @@ class EblRepository(
     enhancementDocsJson: String = ""
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
-      ?: return@withContext Result.failure(Exception("Unauthorized."))
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Only Admin / Mentor can configure universal checklist templates."))
-    }
+      ?: return@withContext Result.failure(Exception("Unauthorized. Please log in first."))
     val now = DateUtils.currentDhakaMillis()
     // 1st column: "Checklist Header", 2nd column: header text
     database.appSettingDao().insertOrUpdateSetting(
@@ -1628,16 +1770,21 @@ class EblRepository(
         AppSettingEntity("CHECKLIST_ENHANCE_DOCS", enhancementDocsJson, currentUser.rmCode, now)
       )
     }
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("Checklist Header", headerTemplate)
+      syncSettingUpsertToGoogleSheets("CHECKLIST_HEADER_TEMPLATE", headerTemplate)
+      syncSettingUpsertToGoogleSheets("Checklist Footer", regardsTemplate)
+      syncSettingUpsertToGoogleSheets("CHECKLIST_REGARDS_TEMPLATE", regardsTemplate)
+      if (corporateDocsJson.isNotBlank()) syncSettingUpsertToGoogleSheets("CHECKLIST_CORP_DOCS", corporateDocsJson)
+      if (enhancementDocsJson.isNotBlank()) syncSettingUpsertToGoogleSheets("CHECKLIST_ENHANCE_DOCS", enhancementDocsJson)
+      triggerGoogleSheetsSync()
+    }
     Result.success(Unit)
   }
 
   suspend fun savePresetRow(presetName: String, itemsText: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
-      ?: return@withContext Result.failure(Exception("Unauthorized."))
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Only Admin / Mentor can configure presets."))
-    }
+      ?: return@withContext Result.failure(Exception("Unauthorized. Please log in first."))
     val cleanName = presetName.trim()
     if (cleanName.isBlank()) return@withContext Result.failure(Exception("Preset name cannot be blank."))
     val now = DateUtils.currentDhakaMillis()
@@ -1681,16 +1828,18 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), currentUser.rmCode, now)
     )
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets(cleanName, itemsText.trim())
+      syncSettingUpsertToGoogleSheets(legacyKey, itemsText.trim())
+      syncSettingUpsertToGoogleSheets("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString())
+      triggerGoogleSheetsSync()
+    }
     Result.success(Unit)
   }
 
   suspend fun deletePresetRow(presetName: String, presetKey: String): Result<Unit> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
-      ?: return@withContext Result.failure(Exception("Unauthorized."))
-    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
-      return@withContext Result.failure(Exception("Only Admin / Mentor can delete presets."))
-    }
+      ?: return@withContext Result.failure(Exception("Unauthorized. Please log in first."))
     val cleanName = presetName.trim()
     val cleanKey = presetKey.trim().uppercase()
     val legacyKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
@@ -3102,11 +3251,16 @@ class EblRepository(
               AppSettingEntity(legacyKey, value, "GoogleSheets_Universal", now)
             )
             val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
-            val customList = existingCustom.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val customList = try {
+              val arr = org.json.JSONArray(existingCustom)
+              (0 until arr.length()).map { arr.getString(it).trim() }
+            } catch (_: Exception) {
+              existingCustom.split(",").map { it.trim() }
+            }.filter { it.isNotBlank() }
             if (key !in customList) {
-              val updatedList = (customList + key).distinct().joinToString(",")
+              val updatedList = (customList + key).distinct()
               database.appSettingDao().insertOrUpdateSetting(
-                AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedList, "GoogleSheets_Universal", now)
+                AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), "GoogleSheets_Universal", now)
               )
             }
           }
@@ -3584,15 +3738,24 @@ class EblRepository(
       if (cc.isNotBlank()) sheetIds.add(cc)
     }
 
-    // 2. Detect records DELETED in Google Sheets:
-    // If the sheet returned data, any local active file that was previously synced (or created > 20s ago)
-    // and is completely missing from the sheet has been deleted by an administrator or mentor in Google Sheets!
-    if (sheetFilesJson.length() > 0) {
+    // 2. Protect local customer files & detect genuine deletions:
+    // NEVER delete an unsynced file (!localFile.isSynced), as it was recently created/edited in-app and is waiting to sync.
+    // NEVER delete a file created or updated recently.
+    // A file missing from Google Sheet is ONLY considered deleted if:
+    // - It was previously confirmed synced (isSynced == true)
+    // - Created > 24 hours ago AND updated > 2 hours ago
+    // - The sheet returned a healthy set of records (>= 3 rows) so network partial responses don't wipe local files
+    if (sheetFilesJson.length() >= 3) {
       val allLocalActive = database.customerFileDao().getAllActiveFiles()
       for (localFile in allLocalActive) {
+        // Strict protection for unsynced and recently modified local customer records!
+        if (!localFile.isSynced) continue
+        if (now - localFile.createdAt < 24 * 60 * 60 * 1000L) continue
+        if (now - localFile.updatedAt < 2 * 60 * 60 * 1000L) continue
+
         val fMatch = localFile.fileId.trim().lowercase() in sheetIds
         val ccMatch = localFile.ccNumber.isNotBlank() && localFile.ccNumber.trim().lowercase() in sheetIds
-        if (!fMatch && !ccMatch && (localFile.isSynced || now - localFile.createdAt > 10000)) {
+        if (!fMatch && !ccMatch) {
           database.customerFileDao().softDeleteFile(localFile.fileId, "GoogleSheets_Delete", now)
           database.customerFileDao().markFileSynced(localFile.fileId)
           updatedCount++

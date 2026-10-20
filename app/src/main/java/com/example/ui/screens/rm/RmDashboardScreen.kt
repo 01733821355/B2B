@@ -44,6 +44,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,6 +63,7 @@ import com.example.data.model.RmTargetEntity
 import com.example.data.model.UserEntity
 import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.FloatableRmNavButton
 import com.example.ui.common.KpiGridSection
 import com.example.ui.common.StatusDistributionChart
@@ -67,6 +73,7 @@ import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.viewmodel.KpiStats
 import com.example.util.DateUtils
+import kotlinx.coroutines.launch
 
 @Composable
 fun RmDashboardScreen(
@@ -89,9 +96,12 @@ fun RmDashboardScreen(
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   isBiometricEnabled: Boolean = false,
   onToggleBiometric: ((Boolean) -> Unit)? = null,
+  onRefresh: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
+  var isRefreshing by remember { mutableStateOf(false) }
 
   // Auto-detect and sync RM live location in background
   LaunchedEffect(Unit) {
@@ -111,11 +121,22 @@ fun RmDashboardScreen(
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background)
   ) {
-    LazyColumn(
-      modifier = Modifier
-        .fillMaxSize()
-        .testTag("rm_dashboard_screen")
+    EblPullRefreshBox(
+      isRefreshing = isRefreshing,
+      onRefresh = {
+        isRefreshing = true
+        onRefresh?.invoke()
+        coroutineScope.launch {
+          kotlinx.coroutines.delay(1000)
+          isRefreshing = false
+        }
+      }
     ) {
+      LazyColumn(
+        modifier = Modifier
+          .fillMaxSize()
+          .testTag("rm_dashboard_screen")
+      ) {
     // Welcome Banner Card
     item {
       val currentTheme = com.example.ui.theme.LocalAppTheme.current
@@ -770,6 +791,7 @@ fun RmDashboardScreen(
       Spacer(modifier = Modifier.height(36.dp))
     }
   }
+}
 
   // Floatable & Draggable Quick Nav Button for RM
   FloatableRmNavButton(

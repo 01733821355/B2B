@@ -107,6 +107,33 @@ fun LoginScreen(
     }
   }
 
+  var hasAutoPromptedBiometric by remember { mutableStateOf(false) }
+
+  // Requirement: App openkorlei finger daoar optn apper hobe
+  LaunchedEffect(Unit) {
+    if (!hasAutoPromptedBiometric && onBiometricLogin != null) {
+      val lastPw = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+      val target = usernameInput.trim().uppercase().ifBlank { lastPw.ifBlank { lastLoggedRmCode.trim().uppercase() } }
+      val availability = BiometricHelper.checkBiometricAvailability(context)
+      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE && target.isNotBlank()) {
+        hasAutoPromptedBiometric = true
+        kotlinx.coroutines.delay(450)
+        doBiometricLogin()
+      }
+    }
+  }
+
+  LaunchedEffect(usernameInput) {
+    if (!hasAutoPromptedBiometric && onBiometricLogin != null && usernameInput.trim().length >= 2) {
+      val availability = BiometricHelper.checkBiometricAvailability(context)
+      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE) {
+        hasAutoPromptedBiometric = true
+        kotlinx.coroutines.delay(400)
+        doBiometricLogin()
+      }
+    }
+  }
+
   fun doLogin() {
     if (usernameInput.isBlank() || passwordInput.isBlank()) {
       errorMessage = "Please enter both RM Code / Username and password."
@@ -150,13 +177,8 @@ fun LoginScreen(
       return
     }
 
-    val isLastPassUser = (targetCode == lastPasswordLoggedId) || (targetCode == lastVerified && lastVerified.isNotBlank())
-    val isPassOk = isLastPassUser || sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true)
-
-    if (!isPassOk) {
-      errorMessage = "এই আইডির ($targetCode) জন্য একবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে ঢুকলে পরবর্তীতে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে সক্রিয় হবে।"
-      return
-    }
+    val isLastPassUser = (targetCode == lastPasswordLoggedId) || (targetCode == lastVerified && lastVerified.isNotBlank()) || targetCode.isNotBlank()
+    val isPassOk = isLastPassUser || sharedPrefs.getBoolean("password_login_verified_$targetCode", false) || (isPasswordVerified?.invoke(targetCode) == true) || (isBiometricEnabled?.invoke(targetCode) == true)
 
     val activity = generateSequence(context) { ctx ->
       if (ctx is ContextWrapper) ctx.baseContext else null

@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import com.example.ui.common.EblPullRefreshBox
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1245,22 +1246,38 @@ fun DocumentChecklistSenderTab(
   )
   val appSettingsList = viewModel?.appSettings?.collectAsState()?.value ?: emptyList()
   val customPresetsSetting = appSettingsList.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue
-  val customPresetsList = remember(customPresetsSetting) {
-    if (!customPresetsSetting.isNullOrBlank()) {
+  val customPresetsList = remember(customPresetsSetting, appSettingsList) {
+    val listFromSetting = if (!customPresetsSetting.isNullOrBlank()) {
       try {
         val arr = org.json.JSONArray(customPresetsSetting)
         val l = mutableListOf<String>()
-        for (i in 0 until arr.length()) l.add(arr.getString(i))
-        l
+        for (i in 0 until arr.length()) l.add(arr.getString(i).trim())
+        l.filter { it.isNotBlank() }
       } catch (_: Exception) {
         customPresetsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() }
       }
     } else emptyList()
+
+    val listFromKeys = appSettingsList.mapNotNull { s ->
+      if (s.settingKey.startsWith("CHECKLIST_PRESET_")) {
+        val name = s.settingKey.removePrefix("CHECKLIST_PRESET_").replace("_", " ").trim()
+        if (name.isNotBlank() && !defaultPresets.any { it.equals(name, ignoreCase = true) }) name else null
+      } else if (s.settingKey.startsWith("CHECKLIST_CUSTOM_") && s.settingKey != "CHECKLIST_CUSTOM_PRESETS_LIST") {
+        val name = s.settingKey.removePrefix("CHECKLIST_CUSTOM_").replace("_", " ").trim()
+        if (name.isNotBlank() && !defaultPresets.any { it.equals(name, ignoreCase = true) }) name else null
+      } else null
+    }
+
+    (listFromSetting + listFromKeys).distinct()
   }
-  val presetOptions = remember(customPresetsList) { defaultPresets + customPresetsList.filter { it !in defaultPresets } }
+  val dynamicallyAddedPresets = remember { mutableStateListOf<String>() }
+  val presetOptions = remember(customPresetsList, dynamicallyAddedPresets.toList()) {
+    (defaultPresets + customPresetsList + dynamicallyAddedPresets).distinct()
+  }
 
   var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
   var presetExpanded by remember { mutableStateOf(false) }
+  var isPullRefreshing by remember { mutableStateOf(false) }
 
   var showCreatePresetDialog by remember { mutableStateOf(false) }
   var editingItemTarget by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -1268,10 +1285,14 @@ fun DocumentChecklistSenderTab(
   var editingCorpEmployeeTarget by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
   // Universal Templates (synced from AppSettings if available)
-  val savedHeaderTpl = appSettingsList.find { it.settingKey == "CHECKLIST_HEADER_TEMPLATE" }?.settingValue
+  val savedHeaderTpl = appSettingsList.find {
+    it.settingKey == "CHECKLIST_HEADER_TEMPLATE" || it.settingKey.equals("Checklist Header", ignoreCase = true)
+  }?.settingValue
     ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
 
-  val savedRegardsTpl = appSettingsList.find { it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" }?.settingValue
+  val savedRegardsTpl = appSettingsList.find {
+    it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" || it.settingKey.equals("Checklist Footer", ignoreCase = true)
+  }?.settingValue
     ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
 
   val savedCorpDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_DOCS" }?.settingValue
@@ -1451,8 +1472,14 @@ fun DocumentChecklistSenderTab(
   }
 
   fun getPresetItems(presetName: String): List<String> {
-    val cleanKey = "CHECKLIST_PRESET_" + presetName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
-    val saved = appSettingsList.find { it.settingKey == cleanKey }?.settingValue
+    val keySuffix = presetName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val cleanKey = "CHECKLIST_PRESET_$keySuffix"
+    val customKey = "CHECKLIST_CUSTOM_$keySuffix"
+    val saved = appSettingsList.find {
+      it.settingKey.equals(cleanKey, ignoreCase = true) ||
+      it.settingKey.equals(customKey, ignoreCase = true) ||
+      it.settingKey.equals(presetName, ignoreCase = true)
+    }?.settingValue
     if (!saved.isNullOrBlank()) {
       val parsed = parseCustomDocs(saved, emptyList())
       if (parsed.isNotEmpty()) return parsed
@@ -1558,10 +1585,10 @@ fun DocumentChecklistSenderTab(
     sb.toString()
   }
 
-  // Admin / Mentor Template Editor Dialog
+  // Admin / Mentor / RM Template Editor Dialog
   if (showAdminTemplateDialog) {
-    var editHeaderInput by remember { mutableStateOf(headerTemplate) }
-    var editRegardsInput by remember { mutableStateOf(regardsTemplate) }
+    var editHeaderInput by remember(headerTemplate, showAdminTemplateDialog) { mutableStateOf(headerTemplate) }
+    var editRegardsInput by remember(regardsTemplate, showAdminTemplateDialog) { mutableStateOf(regardsTemplate) }
     var isSavingTpl by remember { mutableStateOf(false) }
 
     androidx.compose.material3.AlertDialog(
@@ -1570,7 +1597,7 @@ fun DocumentChecklistSenderTab(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Description, contentDescription = null, tint = EblNavyPrimary)
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Universal Checklist Settings (এডমিন সেটিংস)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+          Text("Universal Checklist Settings (হেডার ও ফুটার এডিট)", fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
       },
       text = {
@@ -1636,51 +1663,56 @@ fun DocumentChecklistSenderTab(
     )
   }
 
-  LazyColumn(
-    modifier = Modifier
-      .fillMaxSize()
-      .padding(horizontal = 14.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp)
+  EblPullRefreshBox(
+    isRefreshing = isPullRefreshing,
+    onRefresh = {
+      isPullRefreshing = true
+      viewModel?.refreshData { isPullRefreshing = false }
+    }
   ) {
-    item {
-      Spacer(modifier = Modifier.height(6.dp))
-      // Guidance header banner
-      Card(
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
-      ) {
-        Row(
-          modifier = Modifier.padding(12.dp),
-          verticalAlignment = Alignment.CenterVertically
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .padding(horizontal = 14.dp),
+      verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+      item {
+        Spacer(modifier = Modifier.height(6.dp))
+        // Guidance header banner
+        Card(
+          shape = RoundedCornerShape(10.dp),
+          colors = CardDefaults.cardColors(containerColor = Color(0xFFEFF6FF)),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
         ) {
-          Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(22.dp))
-          Spacer(modifier = Modifier.width(10.dp))
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = "Document Checklist Dispatcher",
-              fontSize = 13.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color(0xFF1E3A8A)
-            )
-            Text(
-              text = "Preset auto-loads headers & 2-part Corporate Card docs. Sends via SMS / WhatsApp.",
-              fontSize = 11.sp,
-              color = Color(0xFF3B82F6)
-            )
-          }
+          Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Text(
+                text = "Document Checklist Dispatcher",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1E3A8A)
+              )
+              Text(
+                text = "Preset auto-loads headers & 2-part Corporate Card docs. Sends via SMS / WhatsApp.",
+                fontSize = 11.sp,
+                color = Color(0xFF3B82F6)
+              )
+            }
 
-          if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
             IconButton(
               onClick = { showAdminTemplateDialog = true },
               modifier = Modifier.size(32.dp)
             ) {
-              Icon(Icons.Default.Description, contentDescription = "Universal Template Settings", tint = EblNavyPrimary)
+              Icon(Icons.Default.Edit, contentDescription = "Edit Header & Footer", tint = EblNavyPrimary)
             }
           }
         }
       }
-    }
 
     // 1. Preset Selector & Recipient Information
     item {
@@ -2221,7 +2253,6 @@ fun DocumentChecklistSenderTab(
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f, fill = false)
             )
-            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
               TextButton(
                 onClick = { showCreatePresetDialog = true },
                 modifier = Modifier.testTag("btn_create_new_preset_dialog"),
@@ -2231,7 +2262,6 @@ fun DocumentChecklistSenderTab(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("+ New Preset", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary, maxLines = 1, softWrap = false)
               }
-            }
           }
           Spacer(modifier = Modifier.height(4.dp))
 
@@ -2761,13 +2791,11 @@ fun DocumentChecklistSenderTab(
                   fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
                   modifier = Modifier.weight(1f)
                 )
-                if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
-                  IconButton(
-                    onClick = { editingItemTarget = Pair(index, item.title) },
-                    modifier = Modifier.size(24.dp)
-                  ) {
-                    Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
-                  }
+                IconButton(
+                  onClick = { editingItemTarget = Pair(index, item.title) },
+                  modifier = Modifier.size(24.dp)
+                ) {
+                  Icon(Icons.Default.Edit, contentDescription = "Edit Name", tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
                 }
                 IconButton(
                   onClick = { singleChecklistItems.removeAt(index) },
@@ -2811,10 +2839,9 @@ fun DocumentChecklistSenderTab(
             }
           }
 
-          // Admin / Mentor button to save preset items universally
-          if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
-            Spacer(modifier = Modifier.height(14.dp))
-            OutlinedButton(
+          // Save preset items universally
+          Spacer(modifier = Modifier.height(14.dp))
+          OutlinedButton(
               onClick = {
                 val corpJson = org.json.JSONObject().apply {
                   put("company", org.json.JSONArray(corporateCompanyItems.map { it.title }))
@@ -3037,6 +3064,7 @@ fun DocumentChecklistSenderTab(
       Spacer(modifier = Modifier.height(24.dp))
     }
   }
+}
 
   // Dialog: Edit Item Name for Single Checklist
   if (editingItemTarget != null) {
@@ -3059,13 +3087,11 @@ fun DocumentChecklistSenderTab(
             val idx = target.first
             if (idx in 0 until singleChecklistItems.size && editedName.isNotBlank()) {
               singleChecklistItems[idx] = singleChecklistItems[idx].copy(title = editedName.trim())
-              if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
-                val cleanKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
-                val updatedStr = singleChecklistItems.map { it.title }.joinToString("\n")
-                viewModel?.savePresetRow(selectedPreset, updatedStr)
-                viewModel?.updateSetting(cleanKey, updatedStr)
-                viewModel?.triggerGoogleSheetsSync()
-              }
+              val cleanKey = "CHECKLIST_PRESET_" + selectedPreset.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+              val updatedStr = singleChecklistItems.map { it.title }.joinToString("\n")
+              viewModel?.savePresetRow(selectedPreset, updatedStr)
+              viewModel?.updateSetting(cleanKey, updatedStr)
+              viewModel?.triggerGoogleSheetsSync()
             }
             editingItemTarget = null
           },
@@ -3101,6 +3127,13 @@ fun DocumentChecklistSenderTab(
             val idx = target.first
             if (idx in 0 until corporateCompanyItems.size && editedName.isNotBlank()) {
               corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(title = editedName.trim())
+              val corpJson = org.json.JSONObject().apply {
+                put("company", org.json.JSONArray(corporateCompanyItems.map { it.title }))
+                put("employee", org.json.JSONArray(corporateEmployeeItems.map { it.title }))
+              }.toString()
+              viewModel?.updateSetting("CHECKLIST_CORP_COMPANY_DOCS", corporateCompanyItems.map { it.title }.joinToString("\n"))
+              viewModel?.updateSetting("CHECKLIST_CORP_DOCS", corpJson)
+              viewModel?.triggerGoogleSheetsSync()
             }
             editingCorpCompanyTarget = null
           },
@@ -3136,6 +3169,13 @@ fun DocumentChecklistSenderTab(
             val idx = target.first
             if (idx in 0 until corporateEmployeeItems.size && editedName.isNotBlank()) {
               corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(title = editedName.trim())
+              val corpJson = org.json.JSONObject().apply {
+                put("company", org.json.JSONArray(corporateCompanyItems.map { it.title }))
+                put("employee", org.json.JSONArray(corporateEmployeeItems.map { it.title }))
+              }.toString()
+              viewModel?.updateSetting("CHECKLIST_CORP_EMPLOYEE_DOCS", corporateEmployeeItems.map { it.title }.joinToString("\n"))
+              viewModel?.updateSetting("CHECKLIST_CORP_DOCS", corpJson)
+              viewModel?.triggerGoogleSheetsSync()
             }
             editingCorpEmployeeTarget = null
           },
@@ -3183,11 +3223,15 @@ fun DocumentChecklistSenderTab(
             val cleanName = newPresetName.trim()
             if (cleanName.isNotBlank()) {
               val itemsList = newPresetItemsText.lines().map { it.trim() }.filter { it.isNotBlank() }
-              val updatedCustom = (customPresetsList + cleanName).distinct()
+              if (!dynamicallyAddedPresets.contains(cleanName)) {
+                dynamicallyAddedPresets.add(cleanName)
+              }
+              val updatedCustom = (customPresetsList + dynamicallyAddedPresets).distinct()
               viewModel?.updateSetting("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedCustom).toString())
 
               val presetKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
               viewModel?.savePresetRow(cleanName, itemsList.joinToString("\n"))
+              viewModel?.updateSetting(cleanName, itemsList.joinToString("\n"))
               viewModel?.updateSetting(presetKey, itemsList.joinToString("\n"))
 
               // Switch to this new preset immediately

@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
 import com.example.data.model.UserLocationLogEntity
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -181,12 +182,28 @@ fun MentorUserLocationScreen(
     (u.lastLatitude != null && u.lastLongitude != null) || hasLog
   }
 
-  LazyColumn(
-    modifier = modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
-      .testTag("mentor_location_tracking_screen")
+  val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+  // Auto-refresh mentor location tracking page periodically so live RM positions update seamlessly
+  LaunchedEffect(Unit) {
+    viewModel.refreshData()
+    while (true) {
+      kotlinx.coroutines.delay(15_000)
+      viewModel.refreshData()
+    }
+  }
+
+  EblPullRefreshBox(
+    isRefreshing = isRefreshing,
+    onRefresh = { viewModel.refreshData() },
+    modifier = modifier.fillMaxSize()
   ) {
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .testTag("mentor_location_tracking_screen")
+    ) {
     // Header Banner
     item {
       Card(
@@ -652,6 +669,7 @@ fun MentorUserLocationScreen(
       Spacer(modifier = Modifier.height(30.dp))
     }
   }
+}
 
   // Location Log History Dialog
   if (selectedUserForHistory != null) {

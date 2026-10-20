@@ -866,7 +866,8 @@ function doPost(e) {
     }
 
     // Upsert Customer Files (ONLY files sent by app - NEVER overwrite manual sheet edits)
-    if (data.files && data.files.length > 0) {
+    var filesToProcess = data.files || (data.file ? [data.file] : []);
+    if (filesToProcess && filesToProcess.length > 0) {
       var fileExistingData = fileSheet.getDataRange().getValues();
       var headers = fileExistingData.length > 0 ? fileExistingData[0].map(function(h) { return String(h || '').trim().toLowerCase(); }) : [];
       var hasSlCol = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial');
@@ -884,7 +885,7 @@ function doPost(e) {
         }
       }
 
-      data.files.forEach(function(f, index) {
+      filesToProcess.forEach(function(f, index) {
         var fId = String(f.fileId || '').trim();
         var cc = String(f.ccNumber || '').trim();
         var sl = String(f.serialNumber || f.sl || (index + 1)).trim();
@@ -936,6 +937,13 @@ function doPost(e) {
           }
         }
       });
+
+      if (data.action === 'UPSERT_CUSTOMER_FILE') {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Customer file upserted to sheet."
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
     }
 
     // Upsert RM Details (Sync RMs with passwords and targets across all mobile apps)

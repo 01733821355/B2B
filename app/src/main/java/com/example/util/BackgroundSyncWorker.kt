@@ -30,6 +30,15 @@ class BackgroundSyncWorker(
       // Pull latest cloud updates from Google Sheets in the background even if the app is closed!
       // This checks for new file updates, team events, or incoming SMS and triggers notifications.
       eblRepository.pullDataFromGoogleSheets()
+
+      val lastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: ""
+      if (lastRm.isNotBlank() && LocationHelper.hasLocationPermission(appContext)) {
+        try {
+          val loc = LocationHelper.getCurrentLocation(appContext)
+          eblRepository.updateUserLocation(lastRm, loc.latitude, loc.longitude, loc.address, "BACKGROUND_WORKER_BEACON")
+        } catch (_: Exception) {}
+      }
+
       Result.success()
     } catch (_: Exception) {
       Result.retry()

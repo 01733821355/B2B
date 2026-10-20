@@ -130,6 +130,35 @@ fun EblMainApp(viewModel: AppViewModel) {
     NotificationHelper.markPermissionAsked(context)
   }
 
+  val locationPermissionLauncher = rememberLauncherForActivityResult(
+    ActivityResultContracts.RequestMultiplePermissions()
+  ) { perms ->
+    val fine = perms[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+    val coarse = perms[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+    if (fine || coarse) {
+      scope.launch {
+        try {
+          val loc = com.example.util.LocationHelper.getCurrentLocation(context)
+          currentUser?.let { u ->
+            viewModel.updateUserLocation(u.rmCode, loc.latitude, loc.longitude, loc.address, "STARTUP_GPS_BEACON")
+          }
+        } catch (_: Exception) {}
+      }
+    }
+  }
+
+  // Requirement 4: suruteo location er parmition nia nibe
+  LaunchedEffect(Unit) {
+    if (!com.example.util.LocationHelper.hasLocationPermission(context)) {
+      locationPermissionLauncher.launch(
+        arrayOf(
+          Manifest.permission.ACCESS_FINE_LOCATION,
+          Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+      )
+    }
+  }
+
   // Prompt RM for notification permission only once and schedule background sync worker
   LaunchedEffect(currentUser?.rmCode) {
     NotificationHelper.createNotificationChannels(context)
@@ -138,6 +167,22 @@ fun EblMainApp(viewModel: AppViewModel) {
       if (!NotificationHelper.hasAskedPermissionOnce(context)) {
         NotificationHelper.markPermissionAsked(context)
         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      }
+    }
+  }
+
+  // Requirement 3: app background a location auto nibe abong mentorer page update hobe
+  LaunchedEffect(currentUser?.rmCode) {
+    val userCode = currentUser?.rmCode
+    if (!userCode.isNullOrBlank()) {
+      while (true) {
+        if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+          try {
+            val loc = com.example.util.LocationHelper.getCurrentLocation(context)
+            viewModel.updateUserLocation(userCode, loc.latitude, loc.longitude, loc.address, "AUTO_BACKGROUND_BEACON")
+          } catch (_: Exception) {}
+        }
+        kotlinx.coroutines.delay(60_000) // auto beacon every 60 seconds
       }
     }
   }
@@ -291,7 +336,8 @@ fun EblMainApp(viewModel: AppViewModel) {
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
               },
               isBiometricEnabled = viewModel.isBiometricEnabled(user.rmCode),
-              onToggleBiometric = { viewModel.setBiometricEnabled(user.rmCode, it) }
+              onToggleBiometric = { viewModel.setBiometricEnabled(user.rmCode, it) },
+              onRefresh = { viewModel.refreshData() }
             )
           }
 

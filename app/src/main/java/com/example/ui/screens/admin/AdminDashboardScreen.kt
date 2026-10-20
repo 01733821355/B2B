@@ -62,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
+import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.KpiGridSection
 import com.example.ui.common.StatusDistributionChart
 import com.example.ui.common.TimeFilterBar
@@ -84,14 +85,20 @@ fun AdminDashboardScreen(
   val selectedTimeFilter by viewModel.selectedTimeFilter.collectAsState()
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
   var targetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
+  val isRefreshing by viewModel.isRefreshing.collectAsState()
 
-  LazyColumn(
-    modifier = modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
-      .testTag("admin_dashboard_screen")
+  EblPullRefreshBox(
+    isRefreshing = isRefreshing,
+    onRefresh = { viewModel.refreshData() },
+    modifier = modifier.fillMaxSize()
   ) {
-    // Executive Banner
+    LazyColumn(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background)
+        .testTag("admin_dashboard_screen")
+    ) {
+      // Executive Banner
     item {
       val currentTheme = com.example.ui.theme.LocalAppTheme.current
       Card(
@@ -391,6 +398,7 @@ fun AdminDashboardScreen(
     item {
       Spacer(modifier = Modifier.height(28.dp))
     }
+  }
   }
 
   // Set RM Targets Dialog for Admin

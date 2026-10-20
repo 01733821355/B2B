@@ -91,15 +91,72 @@ object AttachmentHelper {
     val uniqueFileName = "doc_${System.currentTimeMillis()}_${finalName.replace("[^a-zA-Z0-9._-]".toRegex(), "_")}"
     val destinationFile = File(attachDir, uniqueFileName)
 
-    // Copy stream
+    // Copy or compress stream
     try {
-      contentResolver.openInputStream(sourceUri)?.use { input ->
-        FileOutputStream(destinationFile).use { output ->
-          input.copyTo(output)
+      val isImage = mimeType.startsWith("image/", ignoreCase = true) ||
+        listOf("jpg", "jpeg", "png", "webp", "bmp", "heic", "heif").any { extension.equals(it, ignoreCase = true) }
+
+      if (isImage) {
+        val tempRaw = File(attachDir, "raw_${System.currentTimeMillis()}_$uniqueFileName")
+        contentResolver.openInputStream(sourceUri)?.use { input ->
+          FileOutputStream(tempRaw).use { output -> input.copyTo(output) }
+        }
+
+        if (tempRaw.exists() && tempRaw.length() > 0) {
+          val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+          BitmapFactory.decodeFile(tempRaw.absolutePath, boundsOpts)
+
+          var sampleSize = 1
+          val maxDim = 1080
+          var w = boundsOpts.outWidth
+          var h = boundsOpts.outHeight
+          while (w > maxDim || h > maxDim) {
+            sampleSize *= 2
+            w /= 2
+            h /= 2
+          }
+
+          val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+          val bmp = BitmapFactory.decodeFile(tempRaw.absolutePath, decodeOpts)
+          if (bmp != null) {
+            val finalBmp = if (bmp.width > maxDim || bmp.height > maxDim) {
+              val ratio = bmp.width.toFloat() / bmp.height.toFloat()
+              val targetW: Int
+              val targetH: Int
+              if (bmp.width > bmp.height) {
+                targetW = maxDim
+                targetH = (maxDim / ratio).toInt().coerceAtLeast(1)
+              } else {
+                targetH = maxDim
+                targetW = (maxDim * ratio).toInt().coerceAtLeast(1)
+              }
+              Bitmap.createScaledBitmap(bmp, targetW, targetH, true)
+            } else bmp
+
+            FileOutputStream(destinationFile).use { out ->
+              finalBmp.compress(Bitmap.CompressFormat.JPEG, 75, out)
+            }
+          } else {
+            tempRaw.copyTo(destinationFile, overwrite = true)
+          }
+          tempRaw.delete()
+        }
+      } else {
+        contentResolver.openInputStream(sourceUri)?.use { input ->
+          FileOutputStream(destinationFile).use { output ->
+            input.copyTo(output)
+          }
         }
       }
     } catch (e: Exception) {
       e.printStackTrace()
+      try {
+        contentResolver.openInputStream(sourceUri)?.use { input ->
+          FileOutputStream(destinationFile).use { output ->
+            input.copyTo(output)
+          }
+        }
+      } catch (_: Exception) {}
     }
 
     val actualSize = if (destinationFile.exists() && destinationFile.length() > 0) {
@@ -504,11 +561,11 @@ object AttachmentHelper {
    * If it's an image, downscales to maxDimension (e.g. 1600px) and compresses to JPEG 85%
    * to ensure rapid transmission. For PDFs/docs up to 10MB, reads raw bytes.
    */
-  fun fileToBase64(file: File, maxDimension: Int = 1600): String? {
+  fun fileToBase64(file: File, maxDimension: Int = 1080): String? {
     if (!file.exists() || file.length() == 0L) return null
     return try {
       val nameLower = file.name.lowercase()
-      val isImage = listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp").any { nameLower.endsWith(it) }
+      val isImage = listOf(".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".heif").any { nameLower.endsWith(it) }
 
       if (isImage) {
         val boundsOptions = BitmapFactory.Options().apply { inJustDecodeBounds = true }
@@ -541,7 +598,7 @@ object AttachmentHelper {
         } else bmp
 
         val baos = ByteArrayOutputStream()
-        finalBmp.compress(Bitmap.CompressFormat.JPEG, 85, baos)
+        finalBmp.compress(Bitmap.CompressFormat.JPEG, 75, baos)
         Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
       } else {
         if (file.length() > 10 * 1024 * 1024) return null // Max 10MB for documents

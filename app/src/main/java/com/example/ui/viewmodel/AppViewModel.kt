@@ -124,13 +124,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Automatically pull latest data from Google Sheets on application launch
-    // Ensures fresh installs and re-opened sessions immediately pull latest cloud data
-    // without automatically pushing local preset data to Google Sheets
+    // and periodically (every 20s) while app is active, so other users get new data & photos fast!
     viewModelScope.launch {
       delay(800)
       try {
         eblRepository.pullDataFromGoogleSheets()
       } catch (_: Exception) {}
+
+      while (true) {
+        delay(20_000)
+        try {
+          eblRepository.pullDataFromGoogleSheets()
+        } catch (_: Exception) {}
+      }
     }
   }
 
@@ -1293,6 +1299,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiMessage.emit("Attachment removed.")
       }.onFailure { err ->
         _uiMessage.emit("Failed to remove attachment: ${err.message}")
+      }
+    }
+  }
+
+  val isRefreshing = MutableStateFlow(false)
+
+  fun refreshData(onComplete: (() -> Unit)? = null) {
+    viewModelScope.launch {
+      isRefreshing.value = true
+      try {
+        eblRepository.pullDataFromGoogleSheets()
+      } catch (_: Exception) {} finally {
+        isRefreshing.value = false
+        onComplete?.invoke()
       }
     }
   }
