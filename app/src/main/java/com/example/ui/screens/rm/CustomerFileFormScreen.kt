@@ -251,7 +251,7 @@ fun CustomerFileFormScreen(
   var assignedRmCode by remember { mutableStateOf(currentUser.rmCode) }
   val allRms by viewModel.allRms.collectAsState()
   val allFiles by viewModel.allFiles.collectAsState()
-  val allActiveFiles = remember(allFiles) { allFiles.filter { !it.isDeleted } }
+  val allActiveFiles = remember(allFiles) { allFiles.filter { !it.isDeleted && !it.fileId.startsWith("demo_", true) && !it.customerName.contains("Demo", true) } }
   var rmDropdownExpanded by remember { mutableStateOf(false) }
   var showDeleteConfirmDialog by remember { mutableStateOf(false) }
 
@@ -441,10 +441,7 @@ fun CustomerFileFormScreen(
       errorMessage = "Mobile number is required."
       return
     }
-    if (companyName.isBlank()) {
-      errorMessage = "Office / Company name is required."
-      return
-    }
+    val resolvedCompany = companyName.trim().ifBlank { "N/A" }
     if (duplicateMobileFile != null) {
       val dupId = duplicateMobileFile.ccNumber.ifBlank { duplicateMobileFile.fileId }
       errorMessage = "This number already exists! Mobile is already registered with Customer: ${duplicateMobileFile.customerName} ($dupId). Duplicate mobile numbers are not allowed."
@@ -476,8 +473,8 @@ fun CustomerFileFormScreen(
 
       viewModel.saveCustomerFile(
         fileId = existingFile?.fileId ?: fileId,
-        customerName = customerName,
-        companyName = companyName,
+        customerName = customerName.trim(),
+        companyName = resolvedCompany,
         officeAddress = officeAddress,
         mobile = mobile,
         altMobile = altMobile,

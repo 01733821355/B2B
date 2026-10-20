@@ -2890,7 +2890,6 @@ fun DocumentChecklistSenderTab(
           }
         }
       }
-    }
 
     // 3. Message Preview & Sending Options
     item {

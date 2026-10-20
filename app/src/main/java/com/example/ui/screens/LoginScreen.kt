@@ -109,31 +109,6 @@ fun LoginScreen(
 
   var hasAutoPromptedBiometric by remember { mutableStateOf(false) }
 
-  // Requirement: App openkorlei finger daoar optn apper hobe
-  LaunchedEffect(Unit) {
-    if (!hasAutoPromptedBiometric && onBiometricLogin != null) {
-      val lastPw = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
-      val target = usernameInput.trim().uppercase().ifBlank { lastPw.ifBlank { lastLoggedRmCode.trim().uppercase() } }
-      val availability = BiometricHelper.checkBiometricAvailability(context)
-      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE && target.isNotBlank()) {
-        hasAutoPromptedBiometric = true
-        kotlinx.coroutines.delay(450)
-        doBiometricLogin()
-      }
-    }
-  }
-
-  LaunchedEffect(usernameInput) {
-    if (!hasAutoPromptedBiometric && onBiometricLogin != null && usernameInput.trim().length >= 2) {
-      val availability = BiometricHelper.checkBiometricAvailability(context)
-      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE) {
-        hasAutoPromptedBiometric = true
-        kotlinx.coroutines.delay(400)
-        doBiometricLogin()
-      }
-    }
-  }
-
   fun doLogin() {
     if (usernameInput.isBlank() || passwordInput.isBlank()) {
       errorMessage = "Please enter both RM Code / Username and password."
@@ -245,6 +220,31 @@ fun LoginScreen(
         errorMessage = err
       }
     )
+  }
+
+  // Requirement: App openkorlei finger daoar optn apper hobe
+  LaunchedEffect(Unit) {
+    if (!hasAutoPromptedBiometric && onBiometricLogin != null) {
+      val lastPw = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
+      val target = usernameInput.trim().uppercase().ifBlank { lastPw.ifBlank { lastLoggedRmCode.trim().uppercase() } }
+      val availability = BiometricHelper.checkBiometricAvailability(context)
+      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE && target.isNotBlank()) {
+        hasAutoPromptedBiometric = true
+        kotlinx.coroutines.delay(450)
+        doBiometricLogin()
+      }
+    }
+  }
+
+  LaunchedEffect(usernameInput) {
+    if (!hasAutoPromptedBiometric && onBiometricLogin != null && usernameInput.trim().length >= 2) {
+      val availability = BiometricHelper.checkBiometricAvailability(context)
+      if (availability == BiometricHelper.BiometricAvailability.AVAILABLE) {
+        hasAutoPromptedBiometric = true
+        kotlinx.coroutines.delay(400)
+        doBiometricLogin()
+      }
+    }
   }
 
   Box(

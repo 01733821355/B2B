@@ -319,6 +319,7 @@ fun CustomerFileListScreen(
       Box(
         modifier = Modifier
           .fillMaxSize()
+          .verticalScroll(rememberScrollState())
           .padding(32.dp),
         contentAlignment = Alignment.Center
       ) {

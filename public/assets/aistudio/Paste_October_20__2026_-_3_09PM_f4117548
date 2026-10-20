@@ -1,0 +1,397 @@
+53s
+Run echo "Building Android APK with Gradle..."
+Building Android APK with Gradle...
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.3.1/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugBuildConfig FROM-CACHE
+> Task :app:generateDebugResources FROM-CACHE
+> Task :app:processDebugGoogleServices FROM-CACHE
+> Task :app:packageDebugResources FROM-CACHE
+> Task :app:processDebugNavigationResources FROM-CACHE
+> Task :app:parseDebugLocalResources FROM-CACHE
+> Task :app:generateDebugRFile FROM-CACHE
+> Task :app:javaPreCompileDebug FROM-CACHE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:mergeDebugAssets
+> Task :app:compressDebugAssets FROM-CACHE
+> Task :app:desugarDebugFileDependencies FROM-CACHE
+> Task :app:checkDebugDuplicateClasses
+> Task :app:checkDebugAarMetadata
+> Task :app:mergeExtDexDebug FROM-CACHE
+> Task :app:mergeLibDexDebug FROM-CACHE
+> Task :app:mapDebugSourceSetPaths
+> Task :app:compileDebugNavigationResources FROM-CACHE
+> Task :app:mergeDebugResources FROM-CACHE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug FROM-CACHE
+> Task :app:processDebugMainManifest FROM-CACHE
+> Task :app:processDebugManifest FROM-CACHE
+> Task :app:processDebugManifestForPackage FROM-CACHE
+> Task :app:processDebugResources FROM-CACHE
+> Task :app:mergeDebugJniLibFolders
+> Task :app:validateSigningDebug
+> Task :app:mergeDebugNativeLibs
+> Task :app:writeDebugAppMetadata
+> Task :app:writeDebugSigningConfigVersions
+
+> Task :app:stripDebugDebugSymbols
+Unable to strip the following libraries, packaging them as they are: libandroidx.graphics.path.so, libdatastore_shared_counter.so. Run with --info option to learn more.
+
+> Task :app:kspDebugKotlin
+
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/LoginScreen.kt:121:9 Unresolved reference 'doBiometricLogin'.
+> Task :app:compileDebugKotlin
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/LoginScreen.kt:132:9 Unresolved reference 'doBiometricLogin'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/mentor/MentorDashboardScreen.kt:103:3 Unresolved reference 'LaunchedEffect'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/mentor/MentorDashboardScreen.kt:105:26 Suspend function 'suspend fun delay(timeMillis: Long): Unit' can only be called from a coroutine or another suspend function.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/mentor/MentorUserLocationScreen.kt:188:3 Unresolved reference 'LaunchedEffect'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/mentor/MentorUserLocationScreen.kt:191:26 Suspend function 'suspend fun delay(timeMillis: Long): Unit' can only be called from a coroutine or another suspend function.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:2896:5 Unresolved reference 'item'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:2897:7 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:2899:31 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:2900:34 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3063:5 Unresolved reference 'item'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3064:7 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:3 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:6 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:7 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:25 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:28 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:32 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:34 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:34 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3070:34 Function declaration must have a name.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3071:18 Unresolved reference 'editingItemTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:23 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:42 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:42 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3072:64 Unresolved reference 'second'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3073:5 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3074:28 Unresolved reference 'editingItemTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3079:42 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3080:21 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3087:30 Function invocation 'first()' expected.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3088:32 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3089:15 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3089:43 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3089:68 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'MatchGroup?'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3089:74 No parameter with name 'title' found.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3090:52 Unresolved reference 'selectedPreset'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3091:32 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3091:59 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3092:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3092:40 Unresolved reference 'selectedPreset'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3093:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3094:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3096:13 Unresolved reference 'editingItemTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3104:32 Unresolved reference 'editingItemTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:3 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:6 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:7 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:32 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:35 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:39 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:41 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:41 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3110:41 Function declaration must have a name.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3111:18 Unresolved reference 'editingCorpCompanyTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:23 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:42 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:42 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3112:64 Unresolved reference 'second'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3113:5 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3114:28 Unresolved reference 'editingCorpCompanyTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3119:42 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3120:21 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3127:30 Function invocation 'first()' expected.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3128:32 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3129:15 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3129:44 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3129:70 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'MatchGroup?'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3129:76 No parameter with name 'title' found.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3131:51 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3131:79 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3132:52 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3132:81 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3134:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3134:71 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3134:99 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3135:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3136:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3138:13 Unresolved reference 'editingCorpCompanyTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3146:32 Unresolved reference 'editingCorpCompanyTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:3 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:6 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:7 Syntax error: Expecting a top level declaration.
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:33 Syntax error: Expecting a top level declaration.
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1792486937741.json
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:36 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:40 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:42 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:42 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3152:42 Function declaration must have a name.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3153:18 Unresolved reference 'editingCorpEmployeeTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:23 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:23 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:23 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:42 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:42 Not enough information to infer type argument for 'T'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3154:64 Unresolved reference 'second'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3155:5 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3156:28 Unresolved reference 'editingCorpEmployeeTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3161:42 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3162:21 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3169:30 Function invocation 'first()' expected.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3170:32 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3171:15 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3171:45 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3171:72 Only safe (?.) or non-null asserted (!!.) calls are allowed on a nullable receiver of type 'MatchGroup?'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3171:78 No parameter with name 'title' found.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3173:51 Unresolved reference 'corporateCompanyItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3173:79 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3174:52 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3174:81 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3176:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3176:72 Unresolved reference 'corporateEmployeeItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3176:101 Unresolved reference 'it'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3177:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3178:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3180:13 Unresolved reference 'editingCorpEmployeeTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3188:32 Unresolved reference 'editingCorpEmployeeTarget'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:3 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:6 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:7 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:29 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:31 Syntax error: Expecting a top level declaration.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:31 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3194:31 Function declaration must have a name.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3195:26 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3196:31 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3198:5 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3199:28 Unresolved reference 'showCreatePresetDialog'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3226:20 Unresolved reference 'dynamicallyAddedPresets'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3227:17 Unresolved reference 'dynamicallyAddedPresets'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3229:36 Unresolved reference 'customPresetsList'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3229:56 Unresolved reference 'dynamicallyAddedPresets'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3230:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3233:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3234:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3235:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3238:15 Unresolved reference 'selectedPreset'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3239:15 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3241:17 Unresolved reference 'singleChecklistItems'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3245:15 Unresolved reference 'viewModel'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3247:15 Unresolved reference 'showCreatePresetDialog'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3248:30 Function invocation 'context(...)' expected.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3258:32 Unresolved reference 'showCreatePresetDialog'.
+e: file:///home/runner/work/B2B/B2B/app/src/main/java/com/example/ui/screens/tools/DbrAndChecklistScreen.kt:3262:1 Syntax error: Expecting a top level declaration.
+
+FAILURE: Build failed with an exception.
+
+32 actionable tasks: 13 executed, 19 from cache
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+* Exception is:
+org.gradle.api.tasks.TaskExecutionException: Execution failed for task ':app:compileDebugKotlin'.
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.lambda$executeIfValid$1(ExecuteActionsTaskExecuter.java:135)
+	at org.gradle.internal.Try$Failure.ifSuccessfulOrElse(Try.java:288)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:133)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.execute(ExecuteActionsTaskExecuter.java:121)
+	at org.gradle.api.internal.tasks.execution.ProblemsTaskPathTrackingTaskExecuter.execute(ProblemsTaskPathTrackingTaskExecuter.java:41)
+	at org.gradle.api.internal.tasks.execution.FinalizePropertiesTaskExecuter.execute(FinalizePropertiesTaskExecuter.java:46)
+	at org.gradle.api.internal.tasks.execution.ResolveTaskExecutionModeExecuter.execute(ResolveTaskExecutionModeExecuter.java:51)
+	at org.gradle.api.internal.tasks.execution.SkipTaskWithNoActionsExecuter.execute(SkipTaskWithNoActionsExecuter.java:57)
+	at org.gradle.api.internal.tasks.execution.SkipOnlyIfTaskExecuter.execute(SkipOnlyIfTaskExecuter.java:74)
+	at org.gradle.api.internal.tasks.execution.CatchExceptionTaskExecuter.execute(CatchExceptionTaskExecuter.java:36)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.executeTask(EventFiringTaskExecuter.java:77)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:55)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter$1.call(EventFiringTaskExecuter.java:52)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.api.internal.tasks.execution.EventFiringTaskExecuter.execute(EventFiringTaskExecuter.java:52)
+	at org.gradle.execution.plan.DefaultNodeExecutor.executeLocalTaskNode(DefaultNodeExecutor.java:55)
+	at org.gradle.execution.plan.DefaultNodeExecutor.execute(DefaultNodeExecutor.java:34)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:355)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$InvokeNodeExecutorsAction.execute(DefaultTaskExecutionGraph.java:343)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.lambda$execute$0(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:84)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:339)
+	at org.gradle.execution.taskgraph.DefaultTaskExecutionGraph$BuildOperationAwareExecutionAction.execute(DefaultTaskExecutionGraph.java:328)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.execute(DefaultPlanExecutor.java:459)
+	at org.gradle.execution.plan.DefaultPlanExecutor$ExecutorWorker.run(DefaultPlanExecutor.java:376)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: org.gradle.workers.internal.DefaultWorkerExecutor$WorkExecutionException: A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+	at org.gradle.workers.internal.DefaultWorkerExecutor$WorkItemExecution.waitForCompletion(DefaultWorkerExecutor.java:289)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.lambda$waitForItemsAndGatherFailures$2(DefaultAsyncWorkTracker.java:130)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withoutLocks$2(DefaultWorkerLeaseService.java:344)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:342)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLocks(DefaultWorkerLeaseService.java:326)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withoutLock(DefaultWorkerLeaseService.java:331)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:126)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForItemsAndGatherFailures(DefaultAsyncWorkTracker.java:92)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForAll(DefaultAsyncWorkTracker.java:78)
+	at org.gradle.internal.work.DefaultAsyncWorkTracker.waitForCompletion(DefaultAsyncWorkTracker.java:66)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$3.run(TaskExecution.java:267)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:29)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$1.execute(DefaultBuildOperationRunner.java:26)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.run(DefaultBuildOperationRunner.java:47)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeAction(TaskExecution.java:244)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeActions(TaskExecution.java:227)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.executeWithPreviousOutputFiles(TaskExecution.java:210)
+	at org.gradle.api.internal.tasks.execution.TaskExecution.execute(TaskExecution.java:176)
+	at org.gradle.internal.execution.steps.ExecuteStep.executeInternal(ExecuteStep.java:110)
+	at org.gradle.internal.execution.steps.ExecuteStep.access$000(ExecuteStep.java:47)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:64)
+	at org.gradle.internal.execution.steps.ExecuteStep$1.call(ExecuteStep.java:61)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:61)
+	at org.gradle.internal.execution.steps.ExecuteStep.execute(ExecuteStep.java:47)
+	at org.gradle.internal.execution.steps.CancelExecutionStep.execute(CancelExecutionStep.java:42)
+	at org.gradle.internal.execution.steps.TimeoutStep.executeWithoutTimeout(TimeoutStep.java:75)
+	at org.gradle.internal.execution.steps.TimeoutStep.execute(TimeoutStep.java:55)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:51)
+	at org.gradle.internal.execution.steps.PreCreateOutputParentsStep.execute(PreCreateOutputParentsStep.java:29)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:70)
+	at org.gradle.internal.execution.steps.RemovePreviousOutputsStep.executeMutable(RemovePreviousOutputsStep.java:40)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:62)
+	at org.gradle.internal.execution.steps.BroadcastChangingOutputsStep.execute(BroadcastChangingOutputsStep.java:27)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:69)
+	at org.gradle.internal.execution.steps.CaptureOutputsAfterExecutionStep.execute(CaptureOutputsAfterExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveInputChangesStep.executeMutable(ResolveInputChangesStep.java:28)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithoutCache(BuildCacheStep.java:192)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeAndStoreInCache(BuildCacheStep.java:148)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$4(BuildCacheStep.java:104)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$executeWithCache$5(BuildCacheStep.java:104)
+	at org.gradle.internal.Try$Success.map(Try.java:170)
+	at org.gradle.internal.execution.steps.BuildCacheStep.executeWithCache(BuildCacheStep.java:88)
+	at org.gradle.internal.execution.steps.BuildCacheStep.lambda$execute$0(BuildCacheStep.java:75)
+	at org.gradle.internal.Either$Left.fold(Either.java:116)
+	at org.gradle.internal.execution.caching.CachingState.fold(CachingState.java:62)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:74)
+	at org.gradle.internal.execution.steps.BuildCacheStep.execute(BuildCacheStep.java:49)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:46)
+	at org.gradle.internal.execution.steps.StoreExecutionStateStep.execute(StoreExecutionStateStep.java:35)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.executeBecause(SkipUpToDateStep.java:75)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.lambda$execute$2(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:53)
+	at org.gradle.internal.execution.steps.SkipUpToDateStep.execute(SkipUpToDateStep.java:35)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:37)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsFinishedStep.execute(MarkSnapshottingInputsFinishedStep.java:27)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:49)
+	at org.gradle.internal.execution.steps.ResolveIncrementalCachingStateStep.executeDelegate(ResolveIncrementalCachingStateStep.java:27)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:71)
+	at org.gradle.internal.execution.steps.AbstractResolveCachingStateStep.execute(AbstractResolveCachingStateStep.java:39)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:63)
+	at org.gradle.internal.execution.steps.ResolveChangesStep.executeMutable(ResolveChangesStep.java:34)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:64)
+	at org.gradle.internal.execution.steps.ValidateStep.execute(ValidateStep.java:42)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:77)
+	at org.gradle.internal.execution.steps.AbstractCaptureStateBeforeExecutionStep.execute(AbstractCaptureStateBeforeExecutionStep.java:46)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.executeWithNonEmptySources(AbstractSkipEmptyWorkStep.java:133)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:64)
+	at org.gradle.internal.execution.steps.AbstractSkipEmptyWorkStep.execute(AbstractSkipEmptyWorkStep.java:36)
+	at org.gradle.internal.execution.steps.legacy.MarkSnapshottingInputsStartedStep.execute(MarkSnapshottingInputsStartedStep.java:38)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:36)
+	at org.gradle.internal.execution.steps.LoadPreviousExecutionStateStep.execute(LoadPreviousExecutionStateStep.java:23)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:77)
+	at org.gradle.internal.execution.steps.HandleStaleOutputsStep.executeMutable(HandleStaleOutputsStep.java:43)
+	at org.gradle.internal.execution.steps.MutableStep.execute(MutableStep.java:25)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.lambda$execute$0(AssignMutableWorkspaceStep.java:35)
+	at org.gradle.api.internal.tasks.execution.TaskExecution$4.withWorkspace(TaskExecution.java:305)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:31)
+	at org.gradle.internal.execution.steps.AssignMutableWorkspaceStep.execute(AssignMutableWorkspaceStep.java:22)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:40)
+	at org.gradle.internal.execution.steps.ChoosePipelineStep.execute(ChoosePipelineStep.java:23)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.lambda$execute$2(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:67)
+	at org.gradle.internal.execution.steps.ExecuteWorkBuildOperationFiringStep.execute(ExecuteWorkBuildOperationFiringStep.java:39)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:46)
+	at org.gradle.internal.execution.steps.IdentityCacheStep.execute(IdentityCacheStep.java:34)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:44)
+	at org.gradle.internal.execution.steps.IdentifyStep.execute(IdentifyStep.java:31)
+	at org.gradle.internal.execution.impl.DefaultExecutionEngine$1.execute(DefaultExecutionEngine.java:68)
+	at org.gradle.api.internal.tasks.execution.ExecuteActionsTaskExecuter.executeIfValid(ExecuteActionsTaskExecuter.java:132)
+	... 30 more
+Caused by: org.jetbrains.kotlin.gradle.tasks.CompilationErrorException: Compilation error. See log for more details
+	at org.jetbrains.kotlin.gradle.tasks.TasksUtilsKt.throwExceptionIfCompilationFailed(tasksUtils.kt:21)
+	at org.jetbrains.kotlin.compilerRunner.GradleKotlinCompilerWork.run(GradleKotlinCompilerWork.kt:119)
+	at org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction.execute(GradleCompilerRunnerWithWorkers.kt:74)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:68)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:64)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:61)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:102)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:61)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:209)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:166)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:58)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:176)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:194)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:127)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:169)
+	at org.gradle.internal.Factories$1.create(Factories.java:30)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.lambda$withLocksAcquired$0(DefaultWorkerLeaseService.java:269)
+	at org.gradle.internal.work.ResourceLockStatistics$1.measure(ResourceLockStatistics.java:42)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocksAcquired(DefaultWorkerLeaseService.java:267)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:259)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:127)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:132)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:164)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:133)
+	... 2 more
+
+
+BUILD FAILED in 52s
+Error: Process completed with exit code 1.
