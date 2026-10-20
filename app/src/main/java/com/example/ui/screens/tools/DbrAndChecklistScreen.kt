@@ -1245,6 +1245,11 @@ fun DocumentChecklistSenderTab(
     "Personal / Auto / Home Loan"
   )
   val appSettingsList = viewModel?.appSettings?.collectAsState()?.value ?: emptyList()
+  val nonPresetKeywords = setOf(
+    "OFFICE", "LAT", "LNG", "RADIUS", "ADDRESS", "BANK", "APP_NAME", "APPLICATION_NAME",
+    "COMPANY", "SUPPORT", "PHONE", "EMAIL", "URL", "TERMS", "POLICY", "PASSWORD", "SECRET",
+    "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS"
+  )
   val customPresetsSetting = appSettingsList.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue
   val customPresetsList = remember(customPresetsSetting, appSettingsList) {
     val listFromSetting = if (!customPresetsSetting.isNullOrBlank()) {
@@ -1262,17 +1267,54 @@ fun DocumentChecklistSenderTab(
       if (s.settingKey.startsWith("CHECKLIST_PRESET_")) {
         val name = s.settingKey.removePrefix("CHECKLIST_PRESET_").replace("_", " ").trim()
         if (name.isNotBlank() && !defaultPresets.any { it.equals(name, ignoreCase = true) }) name else null
-      } else if (s.settingKey.startsWith("CHECKLIST_CUSTOM_") && s.settingKey != "CHECKLIST_CUSTOM_PRESETS_LIST") {
+      } else if (s.settingKey.startsWith("CHECKLIST_CUSTOM_") && s.settingKey != "CHECKLIST_CUSTOM_PRESETS_LIST" && s.settingKey != "CHECKLIST_PRESETS_VISIBILITY") {
         val name = s.settingKey.removePrefix("CHECKLIST_CUSTOM_").replace("_", " ").trim()
         if (name.isNotBlank() && !defaultPresets.any { it.equals(name, ignoreCase = true) }) name else null
       } else null
     }
 
-    (listFromSetting + listFromKeys).distinct()
+    (listFromSetting + listFromKeys).distinct().filter { name ->
+      val upper = name.uppercase()
+      !nonPresetKeywords.any { kw -> upper.contains(kw) }
+    }
   }
+
+  val visibilitySetting = appSettingsList.find { it.settingKey == "CHECKLIST_PRESETS_VISIBILITY" }?.settingValue.orEmpty()
+  val visibilityMap = remember(visibilitySetting) {
+    if (visibilitySetting.startsWith("{")) {
+      try {
+        val json = org.json.JSONObject(visibilitySetting)
+        val map = mutableMapOf<String, Boolean>()
+        json.keys().forEach { k ->
+          map[k] = json.optBoolean(k, true)
+          map[k.uppercase()] = json.optBoolean(k, true)
+        }
+        map
+      } catch (_: Exception) {
+        emptyMap<String, Boolean>()
+      }
+    } else emptyMap()
+  }
+
+  fun isVisibleForRm(presetName: String): Boolean {
+    val key1 = "CHECKLIST_CUSTOM_" + presetName.replace("\\s+".toRegex(), "_").uppercase()
+    val key2 = "CHECKLIST_PRESET_" + presetName.replace("\\s+".toRegex(), "_").uppercase()
+    if (visibilityMap[presetName] == false || visibilityMap[presetName.uppercase()] == false) return false
+    if (visibilityMap[key1] == false || visibilityMap[key2] == false) return false
+    return true
+  }
+
   val dynamicallyAddedPresets = remember { mutableStateListOf<String>() }
-  val presetOptions = remember(customPresetsList, dynamicallyAddedPresets.toList()) {
+  val allAvailablePresets = remember(customPresetsList, dynamicallyAddedPresets.toList()) {
     (defaultPresets + customPresetsList + dynamicallyAddedPresets).distinct()
+  }
+  val presetOptions = remember(allAvailablePresets, visibilityMap, currentUser.role) {
+    if (currentUser.role == "RM") {
+      val filtered = allAvailablePresets.filter { isVisibleForRm(it) }
+      if (filtered.isNotEmpty()) filtered else defaultPresets
+    } else {
+      allAvailablePresets
+    }
   }
 
   var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
@@ -2289,8 +2331,14 @@ fun DocumentChecklistSenderTab(
               presetOptions.forEach { opt ->
                 DropdownMenuItem(
                   text = {
+                    val isVis = isVisibleForRm(opt)
                     Column {
-                      Text(opt, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                      Text(
+                        text = if (currentUser.role != "RM" && !isVis) "$opt 🔒 (Only Admin)" else opt,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = if (currentUser.role != "RM" && !isVis) Color(0xFFB45309) else Color.Unspecified
+                      )
                       if (opt == "Corporate Card") {
                         Text("2-Part: Company Docs & Employee Docs", fontSize = 10.sp, color = Color.Gray)
                       }

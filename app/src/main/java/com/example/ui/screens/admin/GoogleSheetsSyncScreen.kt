@@ -647,6 +647,237 @@ function doPost(e) {
       }
     }
 
+    // Handle Direct Attachment / Photo Upsert (Immediately syncs customer/status/CPV photos to Google Sheets & Drive)
+    if (data.action === 'UPSERT_ATTACHMENT' && (data.attachment || (data.attachments && data.attachments.length > 0))) {
+      var atU = data.attachment || data.attachments[0];
+      var atIdU = String(atU.attachmentId || '').trim();
+      if (atIdU) {
+        var attDriveLink = atU.fileUri || atU.driveLink || '';
+        if (atU.fileBase64 && (!attDriveLink || attDriveLink.indexOf('http') !== 0)) {
+          var atRes = saveFileToDrive(atU.fileBase64, atU.fileName, atU.fileType);
+          if (atRes && atRes.success) {
+            attDriveLink = atRes.url;
+          }
+        }
+        var curAttsU = attachSheet.getDataRange().getValues();
+        var foundAttRow = 0;
+        for (var au = 1; au < curAttsU.length; au++) {
+          if (String(curAttsU[au][0] || '').trim().toLowerCase() === atIdU.toLowerCase()) {
+            foundAttRow = au + 1;
+            break;
+          }
+        }
+        var attRowU = [
+          atIdU,
+          atU.fileId || '',
+          atU.fileName || '',
+          atU.category || 'Photo',
+          atU.fileSize || atU.fileSizeBytes || 0,
+          atU.uploadedBy || '',
+          atU.uploadedAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
+          attDriveLink
+        ];
+        if (foundAttRow > 0) {
+          attachSheet.getRange(foundAttRow, 1, 1, attRowU.length).setValues([attRowU]);
+        } else {
+          attachSheet.appendRow(attRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Attachment to sheet and Drive.",
+          attachmentId: atIdU,
+          fileUrl: attDriveLink,
+          driveUrl: attDriveLink
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Event Upsert (Immediately syncs team/delivery event to Team_Events tab)
+    if (data.action === 'UPSERT_EVENT' && (data.event || (data.events && data.events.length > 0))) {
+      var evU = data.event || data.events[0];
+      var evIdU = String(evU.eventId || '').trim();
+      if (evIdU) {
+        var curEvsU = eventSheet.getDataRange().getValues();
+        var foundEvRow = 0;
+        for (var eu = 1; eu < curEvsU.length; eu++) {
+          if (String(curEvsU[eu][0] || '').trim().toLowerCase() === evIdU.toLowerCase()) {
+            foundEvRow = eu + 1;
+            break;
+          }
+        }
+        var evRowU = [
+          evIdU,
+          evU.title || '',
+          evU.description || '',
+          evU.creatorRmCode || '',
+          evU.creatorName || '',
+          evU.targetDate || '',
+          evU.allowedFields || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS',
+          evU.status || 'ACTIVE',
+          evU.createdAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
+          evU.closeTime || ''
+        ];
+        if (foundEvRow > 0) {
+          eventSheet.getRange(foundEvRow, 1, 1, evRowU.length).setValues([evRowU]);
+        } else {
+          eventSheet.appendRow(evRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Event to sheet.",
+          eventId: evIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Event Response Upsert (Immediately saves RM submissions for events)
+    if (data.action === 'UPSERT_EVENT_RESPONSE' && (data.eventResponse || data.response || (data.eventResponses && data.eventResponses.length > 0))) {
+      var respU = data.eventResponse || data.response || data.eventResponses[0];
+      var respIdU = String(respU.responseId || '').trim();
+      if (respIdU) {
+        var curRespsU = respSheet.getDataRange().getValues();
+        var foundRespRow = 0;
+        for (var ru = 1; ru < curRespsU.length; ru++) {
+          if (String(curRespsU[ru][0] || '').trim().toLowerCase() === respIdU.toLowerCase()) {
+            foundRespRow = ru + 1;
+            break;
+          }
+        }
+        var respRowU = [
+          respIdU,
+          respU.eventId || '',
+          respU.rmCode || '',
+          respU.rmName || '',
+          respU.filesCount || 1,
+          respU.requestedDate || '',
+          respU.location || '',
+          respU.remarks || '',
+          respU.customerEntriesJson || '',
+          respU.submittedAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss")
+        ];
+        if (foundRespRow > 0) {
+          respSheet.getRange(foundRespRow, 1, 1, respRowU.length).setValues([respRowU]);
+        } else {
+          respSheet.appendRow(respRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Event Response to sheet.",
+          responseId: respIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Chat / RM-to-RM Message Upsert (Immediately appends message to Chat_And_Calls tab)
+    if (data.action === 'UPSERT_CHAT' && (data.chatMessage || data.message || (data.chatMessages && data.chatMessages.length > 0))) {
+      var cmU = data.chatMessage || data.message || data.chatMessages[0];
+      var cmIdU = String(cmU.id || '').trim();
+      if (cmIdU) {
+        var curChatsU = chatSheet.getDataRange().getValues();
+        var foundChatRow = 0;
+        for (var cu = 1; cu < curChatsU.length; cu++) {
+          if (String(curChatsU[cu][0] || '').trim().toLowerCase() === cmIdU.toLowerCase()) {
+            foundChatRow = cu + 1;
+            break;
+          }
+        }
+        var chatRowU = [
+          cmIdU,
+          cmU.senderRmCode || '',
+          cmU.senderName || '',
+          cmU.senderRole || '',
+          cmU.recipientRmCode || '',
+          cmU.messageText || '',
+          cmU.messageType || 'TEXT',
+          cmU.eventId || '',
+          cmU.timestamp || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss")
+        ];
+        if (foundChatRow > 0) {
+          chatSheet.getRange(foundChatRow, 1, 1, chatRowU.length).setValues([chatRowU]);
+        } else {
+          chatSheet.appendRow(chatRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Chat Message to sheet.",
+          id: cmIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct SMS Notification Upsert (Immediately appends SMS to SMS_Notifications tab)
+    if (data.action === 'UPSERT_SMS' && (data.sms || (data.smsList && data.smsList.length > 0))) {
+      var sU = data.sms || data.smsList[0];
+      var sIdU = String(sU.id || sU.sentTimestamp || '').trim();
+      if (sIdU) {
+        var curSmsU = smsSheet.getDataRange().getValues();
+        var foundSmsRow = 0;
+        for (var su = 1; su < curSmsU.length; su++) {
+          if (String(curSmsU[su][0] || '').trim().toLowerCase() === sIdU.toLowerCase()) {
+            foundSmsRow = su + 1;
+            break;
+          }
+        }
+        var smsRowU = [
+          sIdU,
+          sU.recipientRmCode || '',
+          sU.recipientName || '',
+          sU.recipientMobile || '',
+          sU.triggeredByRole || '',
+          sU.triggeredByCode || '',
+          sU.actionType || '',
+          sU.fileId || sU.targetType || '',
+          sU.messageText || '',
+          sU.status || 'DELIVERED',
+          sU.sentTimestamp || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss")
+        ];
+        if (foundSmsRow > 0) {
+          smsSheet.getRange(foundSmsRow, 1, 1, smsRowU.length).setValues([smsRowU]);
+        } else {
+          smsSheet.appendRow(smsRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted SMS notification to sheet.",
+          id: sIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Setting & Preset Upsert (Immediately syncs preset to Universal_Settings tab)
+    if (data.action === 'UPSERT_SETTING' || data.action === 'UPSERT_PRESET') {
+      var sKeyU = String(data.settingKey || data.key || '').trim();
+      var sValU = String(data.settingValue != null ? data.settingValue : (data.value != null ? data.value : ''));
+      if (sKeyU) {
+        var curSettingsU = settingsSheet.getDataRange().getValues();
+        var foundSetRow = 0;
+        for (var stu = 1; stu < curSettingsU.length; stu++) {
+          if (String(curSettingsU[stu][0] || '').trim().toLowerCase() === sKeyU.toLowerCase()) {
+            foundSetRow = stu + 1;
+            break;
+          }
+        }
+        var nowStrU = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+        var setRowU = [
+          sKeyU,
+          sValU,
+          String(data.description || 'Universal Setting - Auto-synced across all mobile apps'),
+          String(data.updatedBy || 'App'),
+          nowStrU
+        ];
+        if (foundSetRow > 0) {
+          settingsSheet.getRange(foundSetRow, 1, 1, setRowU.length).setValues([setRowU]);
+        } else {
+          settingsSheet.appendRow(setRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted setting to Universal_Settings tab.",
+          key: sKeyU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     // Handle Direct RM Live Location Ping (Immediately saves GPS coords & address to RM_Details and Location_Logs)
     if (data.action === 'SYNC_LOCATION' || data.action === 'UPDATE_LOCATION') {
       var targetRm = String(data.rmCode || '').trim().toUpperCase();

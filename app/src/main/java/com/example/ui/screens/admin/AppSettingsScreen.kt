@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.ui.theme.AppThemeId
 import com.example.ui.theme.AppThemeConfig
 import com.example.ui.theme.ThemeManager
@@ -313,7 +315,13 @@ fun AppSettingsScreen(
       Triple("CHECKLIST_REGARDS_TEMPLATE", "Checklist Footer / Regards", "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC")
     )
 
-    // Gather any additional custom checklist items stored in Universal Settings
+    val nonPresetKeywords = setOf(
+      "OFFICE", "LAT", "LNG", "RADIUS", "ADDRESS", "BANK", "APP_NAME", "APPLICATION_NAME",
+      "COMPANY", "SUPPORT", "PHONE", "EMAIL", "URL", "TERMS", "POLICY", "PASSWORD", "SECRET",
+      "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS"
+    )
+
+    // Gather any additional custom checklist items stored in Universal Settings (excluding non-preset keys)
     val customChecklistPresets = remember(settings) {
       val customListRaw = settings.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue ?: ""
       val customNames = if (customListRaw.startsWith("[")) {
@@ -325,6 +333,9 @@ fun AppSettingsScreen(
         }
       } else {
         customListRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+      }.filter { name ->
+        val upper = name.uppercase()
+        !nonPresetKeywords.any { kw -> upper.contains(kw) }
       }
 
       val presetsFromList = customNames.map { name ->
@@ -337,6 +348,7 @@ fun AppSettingsScreen(
       val presetsFromKeys = settings.filter {
         (it.settingKey.startsWith("CHECKLIST_CUSTOM_") || it.settingKey.startsWith("CHECKLIST_PRESET_")) &&
         it.settingKey != "CHECKLIST_CUSTOM_PRESETS_LIST" &&
+        it.settingKey != "CHECKLIST_PRESETS_VISIBILITY" &&
         it.settingKey != "CHECKLIST_CORP_COMPANY_DOCS" &&
         it.settingKey != "CHECKLIST_CORP_EMPLOYEE_DOCS" &&
         it.settingKey != "CHECKLIST_SALARIED_DOCS" &&
@@ -344,7 +356,8 @@ fun AppSettingsScreen(
         it.settingKey != "CHECKLIST_LOAN_DOCS" &&
         it.settingKey != "CHECKLIST_ENHANCE_DOCS" &&
         it.settingKey != "CHECKLIST_HEADER_TEMPLATE" &&
-        it.settingKey != "CHECKLIST_REGARDS_TEMPLATE"
+        it.settingKey != "CHECKLIST_REGARDS_TEMPLATE" &&
+        !nonPresetKeywords.any { kw -> it.settingKey.uppercase().contains(kw) }
       }.map {
         val friendly = it.settingKey.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ")
         Triple(it.settingKey, friendly, it.settingValue)
@@ -353,6 +366,45 @@ fun AppSettingsScreen(
       (presetsFromList + presetsFromKeys).distinctBy { it.second.lowercase() }
     }
     val checklistPresets = defaultChecklistPresets + customChecklistPresets
+
+    val visibilitySetting = settings.find { it.settingKey == "CHECKLIST_PRESETS_VISIBILITY" }?.settingValue.orEmpty()
+    val visibilityMap = remember(visibilitySetting) {
+      if (visibilitySetting.startsWith("{")) {
+        try {
+          val json = org.json.JSONObject(visibilitySetting)
+          val map = mutableMapOf<String, Boolean>()
+          json.keys().forEach { k ->
+            map[k] = json.optBoolean(k, true)
+            map[k.uppercase()] = json.optBoolean(k, true)
+          }
+          map
+        } catch (_: Exception) {
+          emptyMap<String, Boolean>()
+        }
+      } else emptyMap()
+    }
+
+    fun isPresetVisibleToAll(key: String, title: String): Boolean {
+      if (visibilityMap.containsKey(key)) return visibilityMap[key] != false
+      if (visibilityMap.containsKey(key.uppercase())) return visibilityMap[key.uppercase()] != false
+      if (visibilityMap.containsKey(title)) return visibilityMap[title] != false
+      if (visibilityMap.containsKey(title.uppercase())) return visibilityMap[title.uppercase()] != false
+      return true
+    }
+
+    fun setPresetVisibility(key: String, title: String, isVisible: Boolean) {
+      val json = try {
+        if (visibilitySetting.startsWith("{")) org.json.JSONObject(visibilitySetting) else org.json.JSONObject()
+      } catch (_: Exception) {
+        org.json.JSONObject()
+      }
+      json.put(key, isVisible)
+      json.put(title, isVisible)
+      val newStr = json.toString()
+      viewModel.updateSetting("CHECKLIST_PRESETS_VISIBILITY", newStr)
+    }
+
+    var showVisibilityMatrixDialog by remember { mutableStateOf(false) }
 
     var selectedPresetKey by remember { mutableStateOf(checklistPresets[0].first) }
     val currentPresetObj = checklistPresets.find { it.first == selectedPresetKey } ?: checklistPresets[0]
@@ -387,11 +439,19 @@ fun AppSettingsScreen(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Text("Select Category / Docs to Edit:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
-          androidx.compose.material3.TextButton(
-            onClick = { showAddNewCategoryDialog = true },
-            modifier = Modifier.testTag("btn_add_new_checklist_category")
-          ) {
-            Text("+ Add New Category / Row", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
+          Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            androidx.compose.material3.TextButton(
+              onClick = { showVisibilityMatrixDialog = true },
+              modifier = Modifier.testTag("btn_open_visibility_matrix")
+            ) {
+              Text("👁️ দৃশ্যমানতা তালিকা", fontSize = 11.sp, color = Color(0xFF0D9488), fontWeight = FontWeight.Bold)
+            }
+            androidx.compose.material3.TextButton(
+              onClick = { showAddNewCategoryDialog = true },
+              modifier = Modifier.testTag("btn_add_new_checklist_category")
+            ) {
+              Text("+ Add Category", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold)
+            }
           }
         }
         Spacer(modifier = Modifier.height(4.dp))
@@ -402,22 +462,77 @@ fun AppSettingsScreen(
         ) {
           checklistPresets.forEach { preset ->
             val isSelected = preset.first == selectedPresetKey
+            val isVis = isPresetVisibleToAll(preset.first, preset.second)
             Surface(
               shape = RoundedCornerShape(16.dp),
-              color = if (isSelected) EblNavyPrimary else Color(0xFFF1F5F9),
-              border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+              color = if (isSelected) EblNavyPrimary else (if (isVis) Color(0xFFF1F5F9) else Color(0xFFFEF3C7)),
+              border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, if (isVis) Color(0xFFCBD5E1) else Color(0xFFF59E0B)),
               modifier = Modifier
                 .clickable { selectedPresetKey = preset.first }
                 .padding(vertical = 2.dp)
             ) {
               Text(
-                text = preset.second,
-                color = if (isSelected) Color.White else Color.DarkGray,
+                text = (if (isVis) "🟢 " else "🔒 ") + preset.second,
+                color = if (isSelected) Color.White else (if (isVis) Color.DarkGray else Color(0xFF92400E)),
                 fontSize = 11.sp,
                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
               )
             }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Preset Visibility Control Card (Requirement: kono kon preset sobai dekhte parbe ta set korar babostha)
+        val currentIsVisibleToAll = isPresetVisibleToAll(currentPresetObj.first, currentPresetObj.second)
+        Card(
+          modifier = Modifier.fillMaxWidth().testTag("card_preset_visibility_control"),
+          shape = RoundedCornerShape(8.dp),
+          colors = CardDefaults.cardColors(
+            containerColor = if (currentIsVisibleToAll) Color(0xFFF0FDF4) else Color(0xFFFFFBEB)
+          ),
+          border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (currentIsVisibleToAll) Color(0xFF86EFAC) else Color(0xFFFDE68A)
+          )
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                  if (currentIsVisibleToAll) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                  contentDescription = null,
+                  tint = if (currentIsVisibleToAll) Color(0xFF16A34A) else Color(0xFFD97706),
+                  modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = if (currentIsVisibleToAll) "সবাই দেখতে পারবে (Visible to All RMs)" else "শুধুমাত্র অ্যাডমিন ও মেন্টর (Admin & Mentor Only)",
+                  fontSize = 12.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = if (currentIsVisibleToAll) Color(0xFF15803D) else Color(0xFFB45309)
+                )
+              }
+              Text(
+                text = if (currentIsVisibleToAll) "সাধারণ সকল RM চেকলিস্ট সেন্ডারে '${currentPresetObj.second}' দেখতে পাবে।"
+                       else "সাধারণ RM-রা এই প্রিসেট দেখতে পাবে না, কেবল অ্যাডমিন ও মেন্টরদের তালিকায় থাকবে।",
+                fontSize = 10.sp,
+                color = Color.DarkGray
+              )
+            }
+            Switch(
+              checked = currentIsVisibleToAll,
+              onCheckedChange = { checked ->
+                setPresetVisibility(currentPresetObj.first, currentPresetObj.second, checked)
+                Toast.makeText(context, if (checked) "✓ '${currentPresetObj.second}' এখন সবাই দেখতে পারবে" else "🔒 '${currentPresetObj.second}' এখন শুধুমাত্র অ্যাডমিন ও মেন্টর দেখতে পারবে", Toast.LENGTH_SHORT).show()
+              },
+              modifier = Modifier.testTag("switch_preset_visibility")
+            )
           }
         }
 
@@ -588,6 +703,82 @@ fun AppSettingsScreen(
         dismissButton = {
           androidx.compose.material3.TextButton(onClick = { showAddNewCategoryDialog = false }) {
             Text("Cancel")
+          }
+        }
+      )
+    }
+
+    // Preset Visibility Matrix Dialog (Requirement: kono kon preset sobai dekhte parbe ta set korar babostha)
+    if (showVisibilityMatrixDialog) {
+      androidx.compose.material3.AlertDialog(
+        onDismissRequest = { showVisibilityMatrixDialog = false },
+        title = {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Visibility, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("প্রিসেট দৃশ্যমানতা পারমিশন (Preset Visibility)", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = EblNavyDark)
+          }
+        },
+        text = {
+          Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+            Text(
+              "এখানে প্রতিটি প্রিসেটের পাশে সুইচ অন/অফ করে ঠিক করুন কোন কোন প্রিসেট সাধারণ RM-রা চেকলিস্ট সেন্ডারে দেখতে পাবে আর কোনটি শুধুমাত্র অ্যাডমিন ও মেন্টরদের তালিকায় থাকবে।",
+              fontSize = 12.sp,
+              color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+            checklistPresets.forEach { preset ->
+              val isVis = isPresetVisibleToAll(preset.first, preset.second)
+              Surface(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(vertical = 4.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = if (isVis) Color(0xFFF8FAFC) else Color(0xFFFEF3C7),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isVis) Color(0xFFE2E8F0) else Color(0xFFFDE68A))
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                  Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                      text = (if (isVis) "🟢 " else "🔒 ") + preset.second,
+                      fontSize = 13.sp,
+                      fontWeight = FontWeight.SemiBold,
+                      color = if (isVis) EblNavyDark else Color(0xFF92400E)
+                    )
+                    Text(
+                      text = if (isVis) "সকল RM দেখতে পারবে" else "শুধুমাত্র অ্যাডমিন ও মেন্টর",
+                      fontSize = 11.sp,
+                      color = if (isVis) Color(0xFF16A34A) else Color(0xFFD97706),
+                      fontWeight = FontWeight.Medium
+                    )
+                  }
+                  Switch(
+                    checked = isVis,
+                    onCheckedChange = { checked ->
+                      setPresetVisibility(preset.first, preset.second, checked)
+                    },
+                    modifier = Modifier.testTag("switch_matrix_${preset.first}")
+                  )
+                }
+              }
+            }
+          }
+        },
+        confirmButton = {
+          Button(
+            onClick = {
+              showVisibilityMatrixDialog = false
+              Toast.makeText(context, "প্রিসেট দৃশ্যমানতা আপডেট করা হয়েছে ও শিটে সিঙ্ক হচ্ছে!", Toast.LENGTH_SHORT).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+          ) {
+            Text("Done / সমাপ্ত")
           }
         }
       )

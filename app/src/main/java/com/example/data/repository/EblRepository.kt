@@ -112,6 +112,37 @@ class EblRepository(
             }
           }
         }
+
+        // Clean up any bogus CHECKLIST_PRESET_ entities created from general universal settings
+        val knownNonPresetKeywords = listOf(
+          "OFFICE", "LAT", "LNG", "RADIUS", "ADDRESS", "BANK", "APP_NAME", "APPLICATION_NAME",
+          "COMPANY", "SUPPORT", "PHONE", "EMAIL", "URL", "TERMS", "POLICY", "PASSWORD", "SECRET",
+          "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS"
+        )
+        val customPresetSetting = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")
+        if (customPresetSetting != null && customPresetSetting.settingValue.isNotBlank()) {
+          try {
+            val arr = org.json.JSONArray(customPresetSetting.settingValue)
+            val cleanedList = mutableListOf<String>()
+            for (i in 0 until arr.length()) {
+              val item = arr.getString(i).trim()
+              val itemUpper = item.uppercase()
+              val isBogus = knownNonPresetKeywords.any { kw -> itemUpper.contains(kw) }
+              if (!isBogus && item.isNotBlank()) {
+                cleanedList.add(item)
+              } else if (isBogus) {
+                val cleanKey = "CHECKLIST_CUSTOM_" + item.replace("\\s+".toRegex(), "_").uppercase()
+                val legacyKey = "CHECKLIST_PRESET_" + item.replace("\\s+".toRegex(), "_").uppercase()
+                database.appSettingDao().deleteSetting(cleanKey)
+                database.appSettingDao().deleteSetting(legacyKey)
+                database.appSettingDao().deleteSetting(item)
+              }
+            }
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(cleanedList.distinct()).toString(), "Sanitization", DateUtils.currentDhakaMillis())
+            )
+          } catch (_: Exception) {}
+        }
       } catch (_: Exception) {}
     }
   }
@@ -1066,6 +1097,150 @@ class EblRepository(
       val payload = org.json.JSONObject().apply {
         put("action", "UPSERT_ATTACHMENT")
         put("attachment", attJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      val respStr = httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+      if (!respStr.isNullOrBlank()) {
+        try {
+          val resJson = org.json.JSONObject(respStr)
+          val driveUrl = resJson.optString("fileUrl", resJson.optString("driveUrl", ""))
+          if (driveUrl.isNotBlank() && driveUrl.startsWith("http")) {
+            val updatedAtt = att.copy(fileUri = driveUrl)
+            database.fileAttachmentDao().insertAttachment(updatedAtt)
+          }
+        } catch (_: Exception) {}
+      }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncEventUpsertToGoogleSheets(event: com.example.data.model.TeamEventEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val evJson = org.json.JSONObject().apply {
+        put("eventId", event.eventId)
+        put("title", event.title)
+        put("description", event.description)
+        put("creatorRmCode", event.creatorRmCode)
+        put("creatorName", event.creatorName)
+        put("targetDate", event.targetDate)
+        put("allowedFields", event.allowedFields)
+        put("status", event.status)
+        put("createdAt", DateUtils.formatDateTime(event.createdAt))
+        put("closeTime", event.closeTime)
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_EVENT")
+        put("event", evJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncEventResponseUpsertToGoogleSheets(respEntity: com.example.data.model.EventResponseEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val rJson = org.json.JSONObject().apply {
+        put("responseId", respEntity.responseId)
+        put("eventId", respEntity.eventId)
+        put("rmCode", respEntity.rmCode)
+        put("rmName", respEntity.rmName)
+        put("filesCount", respEntity.filesCount)
+        put("requestedDate", respEntity.requestedDate)
+        put("location", respEntity.location)
+        put("remarks", respEntity.remarks)
+        put("customerEntriesJson", respEntity.customerEntriesJson)
+        put("submittedAt", DateUtils.formatDateTime(respEntity.submittedAt))
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_EVENT_RESPONSE")
+        put("eventResponse", rJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncChatUpsertToGoogleSheets(msg: com.example.data.model.ChatMessageEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val mJson = org.json.JSONObject().apply {
+        put("id", msg.id)
+        put("senderRmCode", msg.senderRmCode)
+        put("senderName", msg.senderName)
+        put("senderRole", msg.senderRole)
+        put("recipientRmCode", msg.recipientRmCode ?: "")
+        put("messageText", msg.messageText)
+        put("timestamp", DateUtils.formatDateTime(msg.timestamp))
+        put("messageType", msg.messageType)
+        put("eventId", msg.eventId ?: "")
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_CHAT")
+        put("chatMessage", mJson)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncSmsUpsertToGoogleSheets(sms: com.example.data.model.SmsNotificationEntity): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val sJson = org.json.JSONObject().apply {
+        put("id", sms.id)
+        put("recipientRmCode", sms.recipientRmCode)
+        put("recipientName", sms.recipientName)
+        put("recipientMobile", sms.recipientMobile)
+        put("triggeredByRole", sms.triggeredByRole)
+        put("triggeredByCode", sms.triggeredByCode)
+        put("actionType", sms.actionType)
+        put("targetType", sms.targetType)
+        put("fileId", sms.fileId ?: "")
+        put("customerName", sms.customerName ?: "")
+        put("messageText", sms.messageText)
+        put("sentTimestamp", DateUtils.formatDateTime(sms.sentTimestamp))
+        put("status", sms.status)
+      }
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_SMS")
+        put("sms", sJson)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -3238,30 +3413,28 @@ class EblRepository(
             database.appSettingDao().insertOrUpdateSetting(
               AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
             )
-            database.appSettingDao().insertOrUpdateSetting(
-              AppSettingEntity("App Name", value, "GoogleSheets_Universal", now)
-            )
-          } else if (!key.startsWith("CHECKLIST_") && !key.startsWith("deleted_") && !key.startsWith("app_") &&
-                     !key.startsWith("PRODUCT_") && !key.startsWith("WEEK_") && !key.startsWith("REPORTING_") && !key.startsWith("PENDING_")) {
-            val legacyKey = "CHECKLIST_PRESET_" + key.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
-            if (legacyKey.uppercase() in delPresetSet || key.uppercase() in delPresetSet) {
-              continue
-            }
-            database.appSettingDao().insertOrUpdateSetting(
-              AppSettingEntity(legacyKey, value, "GoogleSheets_Universal", now)
-            )
-            val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
-            val customList = try {
-              val arr = org.json.JSONArray(existingCustom)
-              (0 until arr.length()).map { arr.getString(it).trim() }
-            } catch (_: Exception) {
-              existingCustom.split(",").map { it.trim() }
-            }.filter { it.isNotBlank() }
-            if (key !in customList) {
-              val updatedList = (customList + key).distinct()
-              database.appSettingDao().insertOrUpdateSetting(
-                AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), "GoogleSheets_Universal", now)
-              )
+          } else if (key.startsWith("CHECKLIST_PRESET_") || key.startsWith("CHECKLIST_CUSTOM_")) {
+            if (key != "CHECKLIST_CUSTOM_PRESETS_LIST" && key != "CHECKLIST_PRESETS_VISIBILITY" &&
+                key != "CHECKLIST_CORP_COMPANY_DOCS" && key != "CHECKLIST_CORP_EMPLOYEE_DOCS" &&
+                key != "CHECKLIST_SALARIED_DOCS" && key != "CHECKLIST_BUSINESS_DOCS" &&
+                key != "CHECKLIST_LOAN_DOCS" && key != "CHECKLIST_ENHANCE_DOCS" &&
+                key != "CHECKLIST_HEADER_TEMPLATE" && key != "CHECKLIST_REGARDS_TEMPLATE") {
+              val friendly = key.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ")
+              if (friendly.uppercase() !in delPresetSet && key.uppercase() !in delPresetSet) {
+                val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
+                val customList = try {
+                  val arr = org.json.JSONArray(existingCustom)
+                  (0 until arr.length()).map { arr.getString(it).trim() }
+                } catch (_: Exception) {
+                  existingCustom.split(",").map { it.trim() }
+                }.filter { it.isNotBlank() }
+                if (friendly !in customList) {
+                  val updatedList = (customList + friendly).distinct()
+                  database.appSettingDao().insertOrUpdateSetting(
+                    AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), "GoogleSheets_Universal", now)
+                  )
+                }
+              }
             }
           }
           updatedCount++
@@ -4193,7 +4366,8 @@ class EblRepository(
       eventId = eventId
     )
     database.communicationDao().insertMessage(msg)
-    CoroutineScope(Dispatchers.IO).launch {
+    applicationScope.launch {
+      syncChatUpsertToGoogleSheets(msg)
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(msg)
@@ -4247,7 +4421,8 @@ class EblRepository(
       messageType = "EVENT",
       eventId = eventId
     )
-    CoroutineScope(Dispatchers.IO).launch {
+    applicationScope.launch {
+      syncEventUpsertToGoogleSheets(event)
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(event)
@@ -4288,7 +4463,8 @@ class EblRepository(
       closeTime = if (closeTime.isNotBlank()) closeTime.trim() else existing.closeTime
     )
     database.communicationDao().insertEvent(updated)
-    CoroutineScope(Dispatchers.IO).launch {
+    applicationScope.launch {
+      syncEventUpsertToGoogleSheets(updated)
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
@@ -4325,7 +4501,8 @@ class EblRepository(
       submittedAt = now
     )
     database.communicationDao().insertOrUpdateResponse(resp)
-    CoroutineScope(Dispatchers.IO).launch {
+    applicationScope.launch {
+      syncEventResponseUpsertToGoogleSheets(resp)
       try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
