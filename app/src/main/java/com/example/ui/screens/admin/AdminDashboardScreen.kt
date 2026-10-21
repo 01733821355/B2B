@@ -1,5 +1,6 @@
 package com.example.ui.screens.admin
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -110,90 +111,123 @@ fun AdminDashboardScreen(
 
     item {
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+
         // Operational Quick Links
         Row(
           modifier = Modifier.fillMaxWidth(),
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            OutlinedButton(
-              onClick = { onNavigate(Screen.RmMapping) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_rm_mapping")
-            ) {
-              Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("RM Mapping", fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.GlobalDatabase) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_database")
-            ) {
-              Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Database", fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.RmMapping) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFDE047)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_add_rm")
-            ) {
-              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+          // 1. RM Mapping (Blue theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.RmMapping) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              contentColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6) else Color(0xFFBFDBFE)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f).testTag("admin_nav_rm_mapping")
+          ) {
+            Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("RM Mapping", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          // 2. Database (Violet theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.GlobalDatabase) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.35f) else Color(0xFFF5F3FF),
+              contentColor = if (isDark) Color(0xFFC4B5FD) else Color(0xFF6D28D9)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF8B5CF6) else Color(0xFFDDD6FE)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f).testTag("admin_nav_database")
           ) {
-            OutlinedButton(
-              onClick = { onNavigate(Screen.DbrChecklist) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_dbr_tool")
-            ) {
-              Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp), tint = EblGold)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("DBR & Checklist Tool", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
-            OutlinedButton(
-              onClick = { onNavigate(Screen.Reports) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(0.7f).testTag("admin_nav_reports")
-            ) {
-              Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Reports", fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
+            Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Database", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+          }
 
-            OutlinedButton(
-              onClick = { onNavigate(Screen.ImportantDocuments) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF67E8F9)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
-              modifier = Modifier.weight(1f).testTag("admin_nav_important_docs")
-            ) {
-              Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF67E8F9))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+          // 3. + Add RM (Emerald Green theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.RmMapping) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFECFDF5),
+              contentColor = if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f).testTag("admin_nav_add_rm")
+          ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("+ Add RM", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          // 4. DBR & Checklist Tool (Amber/Gold theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.DbrChecklist) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
+              contentColor = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF59E0B) else Color(0xFFFDE68A)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f).testTag("admin_nav_dbr_tool")
+          ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("DBR & Checklist Tool", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+
+          // 5. Reports (Rose theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.Reports) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF881337).copy(alpha = 0.35f) else Color(0xFFFFF1F2),
+              contentColor = if (isDark) Color(0xFFFDA4AF) else Color(0xFFBE123C)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF43F5E) else Color(0xFFFECDD3)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(0.7f).testTag("admin_nav_reports")
+          ) {
+            Icon(Icons.Default.Assessment, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Reports", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+          }
+
+          // 6. Important Docs (Cyan/Teal theme)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.ImportantDocuments) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF164E63).copy(alpha = 0.35f) else Color(0xFFECFEFF),
+              contentColor = if (isDark) Color(0xFF67E8F9) else Color(0xFF0E7490)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF06B6D4) else Color(0xFFA5F3FC)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+            modifier = Modifier.weight(1f).testTag("admin_nav_important_docs")
+          ) {
+            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
         }
       }
+    }
 
     // Time filter pills
     item {
