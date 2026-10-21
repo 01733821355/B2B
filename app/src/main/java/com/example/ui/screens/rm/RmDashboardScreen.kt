@@ -311,7 +311,6 @@ fun RmDashboardScreen(
           }
         }
       }
-    }
 
     // Unread SMS Alert Card from Admin/Mentor
     if (unreadSmsCount > 0) {

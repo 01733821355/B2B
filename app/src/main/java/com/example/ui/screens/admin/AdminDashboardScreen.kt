@@ -194,7 +194,6 @@ fun AdminDashboardScreen(
           }
         }
       }
-    }
 
     // Time filter pills
     item {

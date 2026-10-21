@@ -98,7 +98,7 @@ fun MentorDashboardScreen(
   var showDeletedRecordsDialog by remember { mutableStateOf(false) }
   var showEditAppNameDialog by remember { mutableStateOf(false) }
   var newAppNameInput by remember { mutableStateOf("") }
-  var mentorTargetSettingRow by remember { mutableStateOf<RmPerformanceRow?>(null) }
+  var mentorTargetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
 
   val isRefreshing by viewModel.isRefreshing.collectAsState()
 
@@ -288,7 +288,6 @@ fun MentorDashboardScreen(
           }
         }
       }
-    }
 
     // Pending RM Approvals Alert Banner (Only for Mentor)
     val pendingRms = allRms.filter { it.accountStatus == "PENDING_APPROVAL" }

@@ -3161,10 +3161,11 @@ class EblRepository(
           lastSyncMessage = msg
         )
       )
-      database.appSettingDao().insertSetting(
+      database.appSettingDao().insertOrUpdateSetting(
         com.example.data.model.AppSettingEntity(
           settingKey = "is_initial_sync_done",
           settingValue = "true",
+          updatedBy = "SYSTEM",
           updatedAt = now
         )
       )
