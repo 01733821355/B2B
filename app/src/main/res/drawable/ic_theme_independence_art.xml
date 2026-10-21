@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Bangladesh Flag Forest Green Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#064E3B" />
+    <!-- Rising Red Circle Sun (National Flag Motif) -->
+    <path
+        android:pathData="M175,55 m-28,0 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0"
+        android:fillColor="#F42A41" />
+    <!-- National Monument (Jatiyo Smriti Soudho) Pyramidal Spires -->
+    <!-- Center Highest Spire -->
+    <path
+        android:pathData="M100,135 L120,20 L140,135 z"
+        android:fillColor="#E2E8F0" />
+    <!-- Inner Spires Layer 2 -->
+    <path
+        android:pathData="M88,135 L112,42 L120,135 z"
+        android:fillColor="#CBD5E1" />
+    <path
+        android:pathData="M120,135 L128,42 L152,135 z"
+        android:fillColor="#94A3B8" />
+    <!-- Layer 3 -->
+    <path
+        android:pathData="M76,135 L104,65 L112,135 z"
+        android:fillColor="#94A3B8" />
+    <path
+        android:pathData="M128,135 L136,65 L164,135 z"
+        android:fillColor="#64748B" />
+    <!-- Layer 4 (Outer) -->
+    <path
+        android:pathData="M62,135 L96,88 L104,135 z"
+        android:fillColor="#64748B" />
+    <path
+        android:pathData="M136,135 L144,88 L178,135 z"
+        android:fillColor="#475569" />
+    <!-- Base Monument Water Reflection & Green Lawns -->
+    <path
+        android:pathData="M0,132 Q120,122 240,132 v8 h-240 z"
+        android:fillColor="#006A4E" />
+</vector>

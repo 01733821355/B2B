@@ -1,0 +1,59 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Day Sky Gradient Background -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#0F2C59" />
+    <!-- Radiant Morning/Day Sun -->
+    <path
+        android:pathData="M180,45 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:fillColor="#FBBF24" />
+    <!-- Sun Glow Ring -->
+    <path
+        android:pathData="M180,45 m-28,0 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0"
+        android:fillColor="#FDE047"
+        android:fillAlpha="0.3" />
+    <!-- Clouds -->
+    <path
+        android:pathData="M130,55 q10,-14 24,-6 q12,-8 22,4 q14,2 14,14 h-60 z"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.35" />
+    <!-- Modern Corporate Banking Skyline -->
+    <!-- Tower 1 -->
+    <path
+        android:pathData="M20,140 V65 h30 V140 z"
+        android:fillColor="#1E3A8A" />
+    <!-- Tower 2 (Main High Rise) -->
+    <path
+        android:pathData="M55,140 V35 h42 V140 z"
+        android:fillColor="#2563EB" />
+    <!-- Tower 2 Spire -->
+    <path
+        android:pathData="M73,35 V18 h6 V35 z"
+        android:fillColor="#E2E8F0" />
+    <!-- Windows on Main Tower -->
+    <path
+        android:pathData="M62,45 h8 v6 h-8 z M77,45 h8 v6 h-8 z M62,60 h8 v6 h-8 z M77,60 h8 v6 h-8 z M62,75 h8 v6 h-8 z M77,75 h8 v6 h-8 z M62,90 h8 v6 h-8 z M77,90 h8 v6 h-8 z M62,105 h8 v6 h-8 z M77,105 h8 v6 h-8 z"
+        android:fillColor="#FEF08A"
+        android:fillAlpha="0.85" />
+    <!-- Tower 3 -->
+    <path
+        android:pathData="M102,140 V55 h35 V140 z"
+        android:fillColor="#1D4ED8" />
+    <path
+        android:pathData="M108,65 h7 v6 h-7 z M122,65 h7 v6 h-7 z M108,80 h7 v6 h-7 z M122,80 h7 v6 h-7 z M108,95 h7 v6 h-7 z M122,95 h7 v6 h-7 z"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.7" />
+    <!-- Tower 4 (Right) -->
+    <path
+        android:pathData="M142,140 V78 h32 V140 z"
+        android:fillColor="#1E40AF" />
+    <!-- Glass Reflections and foreground slope -->
+    <path
+        android:pathData="M0,120 Q120,105 240,120 v20 h-240 z"
+        android:fillColor="#0A192F"
+        android:fillAlpha="0.9" />
+</vector>

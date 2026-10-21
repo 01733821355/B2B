@@ -98,6 +98,7 @@ fun MentorDashboardScreen(
   var showDeletedRecordsDialog by remember { mutableStateOf(false) }
   var showEditAppNameDialog by remember { mutableStateOf(false) }
   var newAppNameInput by remember { mutableStateOf("") }
+  var mentorTargetSettingRow by remember { mutableStateOf<RmPerformanceRow?>(null) }
 
   val isRefreshing by viewModel.isRefreshing.collectAsState()
 
@@ -119,60 +120,19 @@ fun MentorDashboardScreen(
         .background(MaterialTheme.colorScheme.background)
         .testTag("mentor_dashboard_screen")
     ) {
-    // Mentor Command Banner
+    // Mentor Command Theme Photo Banner
     item {
-      val currentTheme = com.example.ui.theme.LocalAppTheme.current
-      Card(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
-      ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Operations Mentor Console",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-              )
-              Text(
-                text = "Executive Oversight • Highest Authority Level (${currentUser.rmCode})",
-                fontSize = 12.sp,
-                color = currentTheme.tertiary
-              )
-              Spacer(modifier = Modifier.height(3.dp))
-              Text(
-                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
-                fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.85f),
-                fontWeight = FontWeight.Medium
-              )
-            }
-            Box(
-              modifier = Modifier
-                .padding(start = 8.dp)
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(currentTheme.secondary),
-              contentAlignment = Alignment.Center
-            ) {
-              Text(
-                text = currentTheme.id.emoji,
-                fontSize = 24.sp
-              )
-            }
-          }
+      com.example.ui.common.ThemeVisualBanner(
+        title = "Operations Mentor Console",
+        subtitle = "Executive Oversight • Authority Level (${currentUser.rmCode})",
+        badgeText = "Mentor Governance • Operational Command",
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+      )
+    }
 
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // Operational Quick Action Buttons
+    item {
+      Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Operational Quick Action Buttons
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -680,19 +640,33 @@ fun MentorDashboardScreen(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                val ccTarget = row.target?.creditCardTarget ?: 20
-                val corpTarget = row.target?.corporateCardTarget ?: 10
-                val b2bTarget = row.target?.b2bTarget ?: 15
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
-                    Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget", fontSize = 10.sp, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                val ccTarget = row.target?.getEffectiveCcTarget() ?: 20
+                val corpTarget = row.target?.getEffectiveCorpTarget() ?: 10
+                val b2bTarget = row.target?.getEffectiveB2bTarget() ?: 15
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
+                      Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget", fontSize = 10.sp, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    }
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
+                      Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget", fontSize = 10.sp, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    }
+                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
+                      Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget", fontSize = 10.sp, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    }
                   }
-                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
-                    Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget", fontSize = 10.sp, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
-                  }
-                  Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
-                    Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget", fontSize = 10.sp, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
-                  }
+
+                  Text(
+                    text = "⚙ Set Target",
+                    fontSize = 11.sp,
+                    color = Color(0xFF2563EB),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable { mentorTargetSettingRow = row }
+                  )
                 }
               }
               HorizontalDivider(color = Color(0xFFF1F5F9))
@@ -1140,5 +1114,21 @@ fun MentorDashboardScreen(
         }
       }
     }
+  }
+
+  // Set RM Quarter Targets Dialog for Mentor
+  if (mentorTargetSettingRow != null) {
+    val row = mentorTargetSettingRow!!
+    com.example.ui.common.QuarterTargetSettingDialog(
+      rmCode = row.rmCode,
+      rmName = row.rmName,
+      currentTarget = row.target,
+      onDismiss = { mentorTargetSettingRow = null },
+      onSave = { quarter, year, cc, corp, b2b ->
+        viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
+          if (success) mentorTargetSettingRow = null
+        }
+      }
+    )
   }
 }

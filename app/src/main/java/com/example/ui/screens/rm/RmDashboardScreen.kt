@@ -113,9 +113,11 @@ fun RmDashboardScreen(
     }
   }
 
-  val ccTarget = target?.creditCardTarget ?: 20
-  val corpTarget = target?.corporateCardTarget ?: 10
-  val b2bTarget = target?.b2bTarget ?: 15
+  var selectedKpiQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
+  val currentQuarterTargets = target?.getTargetForQuarter(selectedKpiQuarter) ?: Triple(20, 10, 15)
+  val ccTarget = currentQuarterTargets.first
+  val corpTarget = currentQuarterTargets.second
+  val b2bTarget = currentQuarterTargets.third
   Box(
     modifier = modifier
       .fillMaxSize()
@@ -137,62 +139,20 @@ fun RmDashboardScreen(
           .fillMaxSize()
           .testTag("rm_dashboard_screen")
       ) {
-    // Welcome Banner Card
+    // Welcome Theme Photo Banner
     item {
-      val currentTheme = com.example.ui.theme.LocalAppTheme.current
-      Card(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
-      ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Welcome, ${user.name}",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-              )
-              Text(
-                text = "Assigned RM Code: ${user.rmCode} | ${user.officeAddress}",
-                fontSize = 12.sp,
-                color = currentTheme.tertiary
-              )
-              Spacer(modifier = Modifier.height(3.dp))
-              Text(
-                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
-                fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.85f),
-                fontWeight = FontWeight.Medium
-              )
-            }
+      com.example.ui.common.ThemeVisualBanner(
+        title = "Welcome, ${user.name}",
+        subtitle = "RM Code: ${user.rmCode} • ${user.officeAddress}",
+        badgeText = "Relationship Manager • EBL Sales Suite",
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+      )
+    }
 
-            Box(
-              modifier = Modifier
-                .padding(start = 8.dp)
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(currentTheme.secondary),
-              contentAlignment = Alignment.Center
-            ) {
-              Text(
-                text = currentTheme.id.emoji,
-                fontSize = 24.sp
-              )
-            }
-          }
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // Quick action buttons
-          Row(
+    item {
+      Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Quick action buttons
+        Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
           ) {
@@ -452,22 +412,45 @@ fun RmDashboardScreen(
               }
             }
             Surface(
-              shape = RoundedCornerShape(4.dp),
-              color = Color(0xFFEFF6FF)
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFEFF6FF),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
             ) {
               Text(
-                text = "Monthly Quotas",
-                fontSize = 10.sp,
+                text = "$selectedKpiQuarter 2026 Target",
+                fontSize = 11.sp,
                 color = Color(0xFF1D4ED8),
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 maxLines = 1,
                 softWrap = false
               )
             }
           }
 
-          Spacer(modifier = Modifier.height(12.dp))
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Quarter selection bar
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+              val isSelected = selectedKpiQuarter.equals(q, ignoreCase = true)
+              androidx.compose.material3.FilterChip(
+                selected = isSelected,
+                onClick = { selectedKpiQuarter = q },
+                label = { Text(q, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = EblNavyPrimary,
+                  selectedLabelColor = Color.White
+                ),
+                modifier = Modifier.weight(1f).testTag("kpi_chip_quarter_$q")
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
 
           // 3 Columns: Credit Card, Corporate Card, B2B
           Row(

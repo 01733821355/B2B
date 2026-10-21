@@ -326,22 +326,30 @@ fun LoginScreen(
 
       Spacer(modifier = Modifier.height(6.dp))
 
-      // Active Theme Seasonal & Picture Badge
-      Box(
-        modifier = Modifier
-          .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
-          .padding(horizontal = 10.dp, vertical = 4.dp)
+      val timePeriod = remember { DateUtils.getCurrentTimeOfDayPeriod() }
+
+      // Time-of-Day Greeting & Active Theme Seasonal Badge
+      Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = Color.Black.copy(alpha = 0.4f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.5f))
       ) {
-        Text(
-          text = "${currentTheme.id.emoji} ${currentTheme.banglaName} • ${currentTheme.id.motif}",
-          color = Color.White.copy(alpha = 0.95f),
-          fontSize = 11.sp,
-          fontWeight = FontWeight.Medium,
-          textAlign = TextAlign.Center
-        )
+        Row(
+          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text(text = timePeriod.emoji, fontSize = 11.sp)
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "${timePeriod.greeting} • ${currentTheme.name}",
+            color = Color.White,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+          )
+        }
       }
 
-      Spacer(modifier = Modifier.height(20.dp))
+      Spacer(modifier = Modifier.height(18.dp))
 
       Card(
         modifier = Modifier

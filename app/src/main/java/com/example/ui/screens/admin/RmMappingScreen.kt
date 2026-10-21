@@ -752,56 +752,14 @@ fun RmMappingScreen(
     var corpTargetInput by remember { mutableStateOf((existingTarget?.corporateCardTarget ?: 10).toString()) }
     var b2bTargetInput by remember { mutableStateOf((existingTarget?.b2bTarget ?: 15).toString()) }
 
-    AlertDialog(
-      onDismissRequest = { settingTargetsRm = null },
-      title = { Text("Set Targets for ${settingTargetsRm!!.name}", fontWeight = FontWeight.Bold) },
-      text = {
-        Column(modifier = Modifier.fillMaxWidth()) {
-          Text("Define monthly KPI quotas for RM Code: ${settingTargetsRm!!.rmCode}", fontSize = 12.sp, color = Color.Gray)
-          Spacer(modifier = Modifier.height(10.dp))
-          OutlinedTextField(
-            value = ccTargetInput,
-            onValueChange = { ccTargetInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("Credit Card Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-          Spacer(modifier = Modifier.height(8.dp))
-          OutlinedTextField(
-            value = corpTargetInput,
-            onValueChange = { corpTargetInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("Corporate Card Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-          Spacer(modifier = Modifier.height(8.dp))
-          OutlinedTextField(
-            value = b2bTargetInput,
-            onValueChange = { b2bTargetInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("B2B Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-        }
-      },
-      confirmButton = {
-        Button(
-          onClick = {
-            val cc = ccTargetInput.toIntOrNull() ?: 20
-            val corp = corpTargetInput.toIntOrNull() ?: 10
-            val b2b = b2bTargetInput.toIntOrNull() ?: 15
-            viewModel.setRmTargets(settingTargetsRm!!.rmCode, cc, corp, b2b) { success, _ ->
-              if (success) settingTargetsRm = null
-            }
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
-        ) {
-          Text("Save Targets")
-        }
-      },
-      dismissButton = {
-        OutlinedButton(onClick = { settingTargetsRm = null }) {
-          Text("Cancel")
+    com.example.ui.common.QuarterTargetSettingDialog(
+      rmCode = settingTargetsRm!!.rmCode,
+      rmName = settingTargetsRm!!.name,
+      currentTarget = existingTarget,
+      onDismiss = { settingTargetsRm = null },
+      onSave = { quarter, year, cc, corp, b2b ->
+        viewModel.setRmQuarterTargets(settingTargetsRm!!.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
+          if (success) settingTargetsRm = null
         }
       }
     )

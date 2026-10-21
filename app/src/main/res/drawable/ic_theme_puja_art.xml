@@ -1,0 +1,66 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Autumn Festive Warm Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#450A0A" />
+    <!-- Autumn Soft Warm Sun -->
+    <path
+        android:pathData="M180,45 m-25,0 a25,25 0 1,0 50,0 a25,25 0 1,0 -50,0"
+        android:fillColor="#DC2626" />
+    <path
+        android:pathData="M180,45 m-18,0 a18,18 0 1,0 36,0 a18,18 0 1,0 -36,0"
+        android:fillColor="#FBBF24" />
+    <!-- Kashful (Autumn white wild grass flowers) stems & plumes -->
+    <!-- Kashful 1 -->
+    <path
+        android:pathData="M40,140 Q48,95 44,55"
+        android:strokeColor="#78350F"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M44,55 C40,42 48,32 50,25 C52,32 50,42 44,55 z"
+        android:fillColor="#F8FAFC" />
+    <path
+        android:pathData="M42,65 C35,55 38,46 36,40 C42,46 44,55 42,65 z"
+        android:fillColor="#E2E8F0" />
+    <!-- Kashful 2 -->
+    <path
+        android:pathData="M60,140 Q62,90 68,48"
+        android:strokeColor="#78350F"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M68,48 C66,35 74,26 78,18 C78,26 74,36 68,48 z"
+        android:fillColor="#FFFFFF" />
+    <!-- Kashful 3 -->
+    <path
+        android:pathData="M82,140 Q80,100 86,62"
+        android:strokeColor="#78350F"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M86,62 C82,52 88,44 92,36 C92,44 88,52 86,62 z"
+        android:fillColor="#F1F5F9" />
+    <!-- Festive Clay Diya / Lamp on Right -->
+    <!-- Diya Bowl -->
+    <path
+        android:pathData="M140,118 Q165,138 190,118 L194,114 Q165,118 136,114 z"
+        android:fillColor="#B45309" />
+    <!-- Diya Golden Rim -->
+    <path
+        android:pathData="M136,114 Q165,118 194,114"
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="2" />
+    <!-- Diya Warm Flame -->
+    <path
+        android:pathData="M165,115 C158,102 160,90 165,80 C170,90 172,102 165,115 z"
+        android:fillColor="#F97316" />
+    <path
+        android:pathData="M165,114 C161,104 162,94 165,88 C168,94 169,104 165,114 z"
+        android:fillColor="#FDE047" />
+    <!-- Foreground Festive Red Alpona Curve -->
+    <path
+        android:pathData="M0,132 Q120,118 240,132 v8 h-240 z"
+        android:fillColor="#991B1B" />
+</vector>

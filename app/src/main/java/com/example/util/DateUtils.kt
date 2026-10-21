@@ -217,4 +217,68 @@ object DateUtils {
     }
     return false
   }
+
+  enum class TimeOfDayPeriod(val label: String, val banglaLabel: String, val greeting: String, val emoji: String) {
+    MORNING("Morning", "সকাল", "Good Morning (শুভ সকাল)", "🌅"),
+    AFTERNOON("Afternoon", "দুপুর", "Good Afternoon (শুভ দুপুর)", "☀️"),
+    EVENING("Evening", "সন্ধ্যা", "Good Evening (শুভ সন্ধ্যা)", "🌇"),
+    NIGHT("Night", "রাত", "Good Night (শুভ রাত্রি)", "🌙")
+  }
+
+  fun getCurrentTimeOfDayPeriod(): TimeOfDayPeriod {
+    val ldt = LocalDateTime.now(DHAKA_ZONE)
+    val hour = ldt.hour
+    return when (hour) {
+      in 5..11 -> TimeOfDayPeriod.MORNING
+      in 12..16 -> TimeOfDayPeriod.AFTERNOON
+      in 17..19 -> TimeOfDayPeriod.EVENING
+      else -> TimeOfDayPeriod.NIGHT
+    }
+  }
+
+  fun getCurrentQuarter(): String {
+    val month = LocalDate.now(DHAKA_ZONE).monthValue
+    return when (month) {
+      in 1..3 -> "Q1"
+      in 4..6 -> "Q2"
+      in 7..9 -> "Q3"
+      else -> "Q4"
+    }
+  }
+
+  fun getQuarterRange(quarter: String, year: Int = LocalDate.now(DHAKA_ZONE).year): Pair<Long, Long> {
+    val cleanQ = quarter.trim().uppercase()
+    val (startMonth, startDay, endMonth, endDay) = when (cleanQ) {
+      "Q1" -> listOf(1, 1, 3, 31)
+      "Q2" -> listOf(4, 1, 6, 30)
+      "Q3" -> listOf(7, 1, 9, 30)
+      else -> listOf(10, 1, 12, 31)
+    }
+    val start = LocalDate.of(year, startMonth, startDay).atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
+    val end = LocalDate.of(year, endMonth, endDay).atTime(23, 59, 59, 999_000_000).atZone(DHAKA_ZONE).toInstant().toEpochMilli()
+    return Pair(start, end)
+  }
+
+  fun getQuarterDateLabel(quarter: String, year: Int = LocalDate.now(DHAKA_ZONE).year): String {
+    return when (quarter.trim().uppercase()) {
+      "Q1" -> "Q1 $year (01 Jan - 31 Mar $year)"
+      "Q2" -> "Q2 $year (01 Apr - 30 Jun $year)"
+      "Q3" -> "Q3 $year (01 Jul - 30 Sep $year)"
+      else -> "Q4 $year (01 Oct - 31 Dec $year)"
+    }
+  }
+
+  fun parseStartOfDayMillis(dateStr: String): Long? {
+    val trimmed = dateStr.trim()
+    val parsed = parseDateTime(trimmed) ?: return null
+    val ld = LocalDateTime.ofInstant(Instant.ofEpochMilli(parsed), DHAKA_ZONE).toLocalDate()
+    return ld.atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
+  }
+
+  fun parseEndOfDayMillis(dateStr: String): Long? {
+    val trimmed = dateStr.trim()
+    val parsed = parseDateTime(trimmed) ?: return null
+    val ld = LocalDateTime.ofInstant(Instant.ofEpochMilli(parsed), DHAKA_ZONE).toLocalDate()
+    return ld.atTime(23, 59, 59, 999_000_000).atZone(DHAKA_ZONE).toInstant().toEpochMilli()
+  }
 }

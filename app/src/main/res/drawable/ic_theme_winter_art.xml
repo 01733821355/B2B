@@ -1,0 +1,48 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Cool Slate Mist Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#0F172A" />
+    <!-- Pale Winter Morning Sun behind Fog -->
+    <path
+        android:pathData="M185,42 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:fillColor="#E0F2FE"
+        android:fillAlpha="0.75" />
+    <path
+        android:pathData="M185,42 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0"
+        android:fillColor="#BAE6FD"
+        android:fillAlpha="0.25" />
+    <!-- Mist waves -->
+    <path
+        android:pathData="M0,50 Q60,40 120,50 T240,45 v8 Q180,60 120,55 T0,60 z"
+        android:fillColor="#94A3B8"
+        android:fillAlpha="0.35" />
+    <path
+        android:pathData="M0,75 Q70,65 140,75 T240,70 v10 Q170,90 100,80 T0,88 z"
+        android:fillColor="#CBD5E1"
+        android:fillAlpha="0.4" />
+    <!-- Snowflakes / Frost Crystals -->
+    <path
+        android:pathData="M45,28 v12 M39,34 h12 M41,30 l8,8 M49,30 l-8,8"
+        android:strokeColor="#BAE6FD"
+        android:strokeWidth="1.5" />
+    <path
+        android:pathData="M110,22 v10 M105,27 h10 M107,24 l6,6 M113,24 l-6,6"
+        android:strokeColor="#E0F2FE"
+        android:strokeWidth="1.2" />
+    <path
+        android:pathData="M80,65 v10 M75,70 h10 M77,67 l6,6 M83,67 l-6,6"
+        android:strokeColor="#7DD3FC"
+        android:strokeWidth="1.2" />
+    <!-- Winter Misty Tree & Hills -->
+    <path
+        android:pathData="M0,140 Q80,100 160,118 T240,105 v35 h-240 z"
+        android:fillColor="#334155" />
+    <path
+        android:pathData="M0,140 Q100,120 180,126 T240,120 v20 h-240 z"
+        android:fillColor="#1E293B" />
+</vector>

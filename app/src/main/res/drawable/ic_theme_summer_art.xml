@@ -1,0 +1,44 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Summer Warm Amber Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#7C2D12" />
+    <!-- Rising Golden Sun -->
+    <path
+        android:pathData="M180,50 m-30,0 a30,30 0 1,0 60,0 a30,30 0 1,0 -60,0"
+        android:fillColor="#F97316" />
+    <path
+        android:pathData="M180,50 m-22,0 a22,22 0 1,0 44,0 a22,22 0 1,0 -44,0"
+        android:fillColor="#FBBF24" />
+    <!-- Sun Rays -->
+    <path
+        android:pathData="M180,12 v-8 M180,88 v8 M142,50 h-8 M218,50 h8 M153,23 l-6,-6 M207,77 l6,6 M153,77 l-6,6 M207,23 l6,-6"
+        android:strokeColor="#FDE047"
+        android:strokeWidth="2.5" />
+    <!-- Golden Harvest Hills / Rural Landscape -->
+    <path
+        android:pathData="M0,140 Q60,85 140,110 T240,95 v45 h-240 z"
+        android:fillColor="#EA580C"
+        android:fillAlpha="0.75" />
+    <path
+        android:pathData="M0,140 Q80,105 160,115 T240,110 v30 h-240 z"
+        android:fillColor="#B45309" />
+    <!-- Palm trees silhouette -->
+    <path
+        android:pathData="M40,135 Q42,95 45,75 M45,75 Q30,68 18,72 M45,75 Q25,58 22,48 M45,75 Q42,52 48,46 M45,75 Q60,55 65,48 M45,75 Q68,65 72,75"
+        android:strokeColor="#451A03"
+        android:strokeWidth="2.5" />
+    <path
+        android:pathData="M58,138 Q59,105 60,88 M60,88 Q48,82 38,85 M60,88 Q44,74 42,66 M60,88 Q58,68 62,64 M60,88 Q72,70 76,64 M60,88 Q78,78 82,86"
+        android:strokeColor="#451A03"
+        android:strokeWidth="2" />
+    <!-- City silhouette in background -->
+    <path
+        android:pathData="M110,140 V90 h20 V140 z M135,140 V78 h25 V140 z M165,140 V88 h18 V140 z"
+        android:fillColor="#9A3412"
+        android:fillAlpha="0.6" />
+</vector>

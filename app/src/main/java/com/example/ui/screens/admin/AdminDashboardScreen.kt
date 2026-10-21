@@ -98,65 +98,23 @@ fun AdminDashboardScreen(
         .background(MaterialTheme.colorScheme.background)
         .testTag("admin_dashboard_screen")
     ) {
-      // Executive Banner
+      // Executive Theme Photo Banner
     item {
-      val currentTheme = com.example.ui.theme.LocalAppTheme.current
-      Card(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = currentTheme.primary)
-      ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Column(modifier = Modifier.weight(1f)) {
-              Text(
-                text = "Central Administration Console",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-              )
-              Text(
-                text = "Signed in: ${currentUser.name} (${currentUser.role})",
-                fontSize = 12.sp,
-                color = currentTheme.tertiary
-              )
-              Spacer(modifier = Modifier.height(3.dp))
-              Text(
-                text = "${currentTheme.id.emoji} ${currentTheme.banglaName} - ${currentTheme.id.motif}",
-                fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.85f),
-                fontWeight = FontWeight.Medium
-              )
-            }
+      com.example.ui.common.ThemeVisualBanner(
+        title = "Central Administration Console",
+        subtitle = "Signed in: ${currentUser.name} (${currentUser.role})",
+        badgeText = "System Administrator • Live Operations",
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+      )
+    }
 
-            Box(
-              modifier = Modifier
-                .padding(start = 8.dp)
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(currentTheme.secondary),
-              contentAlignment = Alignment.Center
-            ) {
-              Text(
-                text = currentTheme.id.emoji,
-                fontSize = 24.sp
-              )
-            }
-          }
-
-          Spacer(modifier = Modifier.height(16.dp))
-
-          // Operational Quick Links
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
+    item {
+      Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Operational Quick Links
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             OutlinedButton(
               onClick = { onNavigate(Screen.RmMapping) },
               colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
@@ -404,60 +362,14 @@ fun AdminDashboardScreen(
   // Set RM Targets Dialog for Admin
   if (targetSettingRow != null) {
     val row = targetSettingRow!!
-    var ccInput by remember { mutableStateOf((row.target?.creditCardTarget ?: 20).toString()) }
-    var corpInput by remember { mutableStateOf((row.target?.corporateCardTarget ?: 10).toString()) }
-    var b2bInput by remember { mutableStateOf((row.target?.b2bTarget ?: 15).toString()) }
-
-    AlertDialog(
-      onDismissRequest = { targetSettingRow = null },
-      title = { Text("Set Targets: ${row.rmName}", fontWeight = FontWeight.Bold) },
-      text = {
-        Column(modifier = Modifier.fillMaxWidth()) {
-          Text("Assign monthly targets for RM Code: ${row.rmCode}", fontSize = 12.sp, color = Color.Gray)
-          Spacer(modifier = Modifier.height(10.dp))
-          OutlinedTextField(
-            value = ccInput,
-            onValueChange = { ccInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("Credit Card Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-          Spacer(modifier = Modifier.height(8.dp))
-          OutlinedTextField(
-            value = corpInput,
-            onValueChange = { corpInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("Corporate Card Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-          Spacer(modifier = Modifier.height(8.dp))
-          OutlinedTextField(
-            value = b2bInput,
-            onValueChange = { b2bInput = it.filter { ch -> ch.isDigit() } },
-            label = { Text("B2B Monthly Target") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            modifier = Modifier.fillMaxWidth()
-          )
-        }
-      },
-      confirmButton = {
-        Button(
-          onClick = {
-            val cc = ccInput.toIntOrNull() ?: 20
-            val corp = corpInput.toIntOrNull() ?: 10
-            val b2b = b2bInput.toIntOrNull() ?: 15
-            viewModel.setRmTargets(row.rmCode, cc, corp, b2b) { success, _ ->
-              if (success) targetSettingRow = null
-            }
-          },
-          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
-        ) {
-          Text("Save Targets")
-        }
-      },
-      dismissButton = {
-        OutlinedButton(onClick = { targetSettingRow = null }) {
-          Text("Cancel")
+    com.example.ui.common.QuarterTargetSettingDialog(
+      rmCode = row.rmCode,
+      rmName = row.rmName,
+      currentTarget = row.target,
+      onDismiss = { targetSettingRow = null },
+      onSave = { quarter, year, cc, corp, b2b ->
+        viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
+          if (success) targetSettingRow = null
         }
       }
     )

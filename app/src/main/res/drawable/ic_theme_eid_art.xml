@@ -1,0 +1,57 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Festive Crescent Emerald Night Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#022C22" />
+    <!-- Glowing Golden Crescent Moon -->
+    <path
+        android:pathData="M180,20 A24,24 0 1 0 162,60 A19,19 0 1 1 180,20 z"
+        android:fillColor="#FBBF24" />
+    <!-- Star next to moon -->
+    <path
+        android:pathData="M188,40 l2,3 l3,-2 l-2,3 l2,3 l-3,-1 l-2,3 l-1,-3 l-3,1 l2,-3 l-2,-3 l3,2 z"
+        android:fillColor="#FDE047" />
+    <!-- Festive Lantern (Fanous) Hanging on Left -->
+    <path
+        android:pathData="M48,0 v28"
+        android:strokeColor="#F59E0B"
+        android:strokeWidth="1.5" />
+    <!-- Lantern Top Cap -->
+    <path
+        android:pathData="M40,28 h16 l-2,6 h-12 z"
+        android:fillColor="#D97706" />
+    <!-- Lantern Glass Body -->
+    <path
+        android:pathData="M38,34 h20 l-3,22 h-14 z"
+        android:fillColor="#FEF08A"
+        android:fillAlpha="0.85" />
+    <!-- Lantern Light Glow -->
+    <path
+        android:pathData="M48,44 m-6,0 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0"
+        android:fillColor="#F59E0B" />
+    <!-- Lantern Base -->
+    <path
+        android:pathData="M42,56 h12 l-2,5 h-8 z"
+        android:fillColor="#D97706" />
+    <!-- Mosque Domes and Minarets Silhouette -->
+    <!-- Minaret 1 (Left) -->
+    <path
+        android:pathData="M78,140 V62 h8 V140 z M82,62 L78,54 L82,46 L86,54 z"
+        android:fillColor="#064E3B" />
+    <!-- Main Center Dome -->
+    <path
+        android:pathData="M98,140 V82 h64 V140 z M98,82 C98,58 162,58 162,82 z"
+        android:fillColor="#047857" />
+    <!-- Minaret 2 (Right) -->
+    <path
+        android:pathData="M174,140 V62 h8 V140 z M178,62 L174,54 L178,46 L182,54 z"
+        android:fillColor="#064E3B" />
+    <!-- Foreground Hill with Islamic geometric pattern lines -->
+    <path
+        android:pathData="M0,126 Q120,112 240,126 v14 h-240 z"
+        android:fillColor="#065F46" />
+</vector>

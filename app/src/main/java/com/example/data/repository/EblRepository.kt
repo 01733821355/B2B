@@ -190,16 +190,89 @@ class EblRepository(
     creditCardTarget: Int,
     corporateCardTarget: Int,
     b2bTarget: Int
+  ): Result<Unit> {
+    val q = DateUtils.getCurrentQuarter()
+    return setRmQuarterTargets(rmCode, q, 2026, creditCardTarget, corporateCardTarget, b2bTarget)
+  }
+
+  suspend fun setRmQuarterTargets(
+    rmCode: String,
+    quarter: String,
+    year: Int = 2026,
+    creditCardTarget: Int,
+    corporateCardTarget: Int,
+    b2bTarget: Int
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val now = DateUtils.currentDhakaMillis()
-    val target = RmTargetEntity(
-      rmCode = rmCode,
-      creditCardTarget = creditCardTarget,
-      corporateCardTarget = corporateCardTarget,
-      b2bTarget = b2bTarget,
-      updatedAt = now
-    )
-    database.rmTargetDao().insertOrUpdateTarget(target)
+    val existing = database.rmTargetDao().getTargetForRm(rmCode) ?: RmTargetEntity(rmCode = rmCode)
+    val cleanQ = quarter.trim().uppercase()
+    val updated = when (cleanQ) {
+      "Q1" -> existing.copy(
+        targetYear = year,
+        activeQuarter = "Q1",
+        creditCardTarget = creditCardTarget,
+        corporateCardTarget = corporateCardTarget,
+        b2bTarget = b2bTarget,
+        q1CreditCardTarget = creditCardTarget,
+        q1CorporateCardTarget = corporateCardTarget,
+        q1B2bTarget = b2bTarget,
+        updatedAt = now
+      )
+      "Q2" -> existing.copy(
+        targetYear = year,
+        activeQuarter = "Q2",
+        creditCardTarget = creditCardTarget,
+        corporateCardTarget = corporateCardTarget,
+        b2bTarget = b2bTarget,
+        q2CreditCardTarget = creditCardTarget,
+        q2CorporateCardTarget = corporateCardTarget,
+        q2B2bTarget = b2bTarget,
+        updatedAt = now
+      )
+      "Q3" -> existing.copy(
+        targetYear = year,
+        activeQuarter = "Q3",
+        creditCardTarget = creditCardTarget,
+        corporateCardTarget = corporateCardTarget,
+        b2bTarget = b2bTarget,
+        q3CreditCardTarget = creditCardTarget,
+        q3CorporateCardTarget = corporateCardTarget,
+        q3B2bTarget = b2bTarget,
+        updatedAt = now
+      )
+      "Q4" -> existing.copy(
+        targetYear = year,
+        activeQuarter = "Q4",
+        creditCardTarget = creditCardTarget,
+        corporateCardTarget = corporateCardTarget,
+        b2bTarget = b2bTarget,
+        q4CreditCardTarget = creditCardTarget,
+        q4CorporateCardTarget = corporateCardTarget,
+        q4B2bTarget = b2bTarget,
+        updatedAt = now
+      )
+      else -> existing.copy(
+        targetYear = year,
+        activeQuarter = cleanQ.ifBlank { "Q4" },
+        creditCardTarget = creditCardTarget,
+        corporateCardTarget = corporateCardTarget,
+        b2bTarget = b2bTarget,
+        q1CreditCardTarget = creditCardTarget,
+        q1CorporateCardTarget = corporateCardTarget,
+        q1B2bTarget = b2bTarget,
+        q2CreditCardTarget = creditCardTarget,
+        q2CorporateCardTarget = corporateCardTarget,
+        q2B2bTarget = b2bTarget,
+        q3CreditCardTarget = creditCardTarget,
+        q3CorporateCardTarget = corporateCardTarget,
+        q3B2bTarget = b2bTarget,
+        q4CreditCardTarget = creditCardTarget,
+        q4CorporateCardTarget = corporateCardTarget,
+        q4B2bTarget = b2bTarget,
+        updatedAt = now
+      )
+    }
+    database.rmTargetDao().insertOrUpdateTarget(updated)
 
     val currentUser = authRepository.currentUser.value
     if (currentUser != null && (currentUser.role == "ADMIN" || currentUser.role == "MENTOR")) {
@@ -207,7 +280,8 @@ class EblRepository(
       val rmMobile = targetRmUser?.mobile ?: ""
       val rmName = targetRmUser?.name ?: rmCode
       val formattedTime = DateUtils.formatDateTime(now)
-      val smsMessage = "[EBL Alert] Dear $rmName ($rmCode), your sales target was updated by ${currentUser.role} (${currentUser.rmCode}). Targets -> CC: $creditCardTarget, Corp: $corporateCardTarget, B2B: $b2bTarget. Timestamp: $formattedTime. EBL Sales Suite."
+      val qLabel = if (cleanQ in listOf("Q1", "Q2", "Q3", "Q4")) "$cleanQ $year" else "All Quarters $year"
+      val smsMessage = "[EBL Alert] Dear $rmName ($rmCode), your $qLabel sales target was set by ${currentUser.role} (${currentUser.rmCode}). Targets -> CC: $creditCardTarget, Corp: $corporateCardTarget, B2B: $b2bTarget. Timestamp: $formattedTime. EBL Sales Suite."
 
       var smsStatus = "DELIVERED"
       if (context != null && rmMobile.isNotBlank()) {

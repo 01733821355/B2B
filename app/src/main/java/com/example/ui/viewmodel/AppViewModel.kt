@@ -331,6 +331,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val allTargets: StateFlow<List<com.example.data.model.RmTargetEntity>> = database.rmTargetDao().getAllTargetsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+  val selectedKpiQuarter = MutableStateFlow(DateUtils.getCurrentQuarter())
+  val selectedKpiYear = MutableStateFlow(2026)
+
   // RM-wise performance breakdown for Admin / Mentor
   val rmPerformanceList: StateFlow<List<RmPerformanceRow>> = combine(
     authorizedFilesFlow,
@@ -1076,10 +1079,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     b2bTarget: Int,
     onResult: (Boolean, String?) -> Unit = { _, _ -> }
   ) {
+    setRmQuarterTargets(
+      rmCode = rmCode,
+      quarter = selectedKpiQuarter.value,
+      year = selectedKpiYear.value,
+      creditCardTarget = creditCardTarget,
+      corporateCardTarget = corporateCardTarget,
+      b2bTarget = b2bTarget,
+      onResult = onResult
+    )
+  }
+
+  fun setRmQuarterTargets(
+    rmCode: String,
+    quarter: String,
+    year: Int = 2026,
+    creditCardTarget: Int,
+    corporateCardTarget: Int,
+    b2bTarget: Int,
+    onResult: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
     viewModelScope.launch {
-      val res = eblRepository.setRmTargets(rmCode, creditCardTarget, corporateCardTarget, b2bTarget)
+      val res = eblRepository.setRmQuarterTargets(rmCode, quarter, year, creditCardTarget, corporateCardTarget, b2bTarget)
       res.onSuccess {
-        _uiMessage.emit("Monthly targets updated for RM $rmCode.")
+        _uiMessage.emit("Targets updated for RM $rmCode ($quarter $year).")
         onResult(true, null)
       }.onFailure { err ->
         _uiMessage.emit("Failed to set targets: ${err.message}")

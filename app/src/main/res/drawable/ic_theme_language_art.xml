@@ -1,0 +1,56 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="140dp"
+    android:viewportWidth="240"
+    android:viewportHeight="140">
+    <!-- Solemn Deep Charcoal Night/Dawn Sky -->
+    <path
+        android:pathData="M0,0 h240 v140 h-240 z"
+        android:fillColor="#18181B" />
+    <!-- Rising Red Sun of Shahid Minar -->
+    <path
+        android:pathData="M120,72 m-32,0 a32,32 0 1,0 64,0 a32,32 0 1,0 -64,0"
+        android:fillColor="#DC2626" />
+    <!-- Shahid Minar Monument Structure -->
+    <!-- Center Tilted Pillar Frame (Main) -->
+    <path
+        android:pathData="M112,125 V45 l16,-8 v88 z"
+        android:fillColor="#E4E4E7" />
+    <path
+        android:pathData="M115,125 V48 l10,-5 v82 z"
+        android:fillColor="#F4F4F5" />
+    <!-- Center Top Horizontal Canopy -->
+    <path
+        android:pathData="M106,42 l28,-14 l3,4 l-28,14 z"
+        android:fillColor="#D4D4D8" />
+    <!-- Left Inner Pillar -->
+    <path
+        android:pathData="M92,125 V65 h10 V125 z"
+        android:fillColor="#D4D4D8" />
+    <!-- Left Outer Pillar -->
+    <path
+        android:pathData="M74,125 V82 h10 V125 z"
+        android:fillColor="#A1A1AA" />
+    <!-- Right Inner Pillar -->
+    <path
+        android:pathData="M138,125 V65 h10 V125 z"
+        android:fillColor="#D4D4D8" />
+    <!-- Right Outer Pillar -->
+    <path
+        android:pathData="M156,125 V82 h10 V125 z"
+        android:fillColor="#A1A1AA" />
+    <!-- Marble Altar Steps (Bedi) -->
+    <path
+        android:pathData="M55,125 h130 v5 h-130 z"
+        android:fillColor="#F4F4F5" />
+    <path
+        android:pathData="M45,130 h150 v5 h-150 z"
+        android:fillColor="#E4E4E7" />
+    <path
+        android:pathData="M35,135 h170 v5 h-170 z"
+        android:fillColor="#D4D4D8" />
+    <!-- Red Floral Wreaths on Steps -->
+    <path
+        android:pathData="M80,132 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M100,132 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M120,132 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M140,132 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0 M160,132 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0"
+        android:fillColor="#EF4444" />
+</vector>

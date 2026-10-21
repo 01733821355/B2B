@@ -46,7 +46,7 @@ import com.example.data.model.UserLocationLogEntity
     EventResponseEntity::class,
     ImportantDocumentEntity::class
   ],
-  version = 10,
+  version = 11,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -176,6 +176,25 @@ abstract class AppDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_10_11 = object : Migration(10, 11) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `targetYear` INTEGER NOT NULL DEFAULT 2026")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `activeQuarter` TEXT NOT NULL DEFAULT 'Q4'")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q1CreditCardTarget` INTEGER NOT NULL DEFAULT 20")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q1CorporateCardTarget` INTEGER NOT NULL DEFAULT 10")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q1B2bTarget` INTEGER NOT NULL DEFAULT 15")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q2CreditCardTarget` INTEGER NOT NULL DEFAULT 20")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q2CorporateCardTarget` INTEGER NOT NULL DEFAULT 10")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q2B2bTarget` INTEGER NOT NULL DEFAULT 15")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q3CreditCardTarget` INTEGER NOT NULL DEFAULT 20")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q3CorporateCardTarget` INTEGER NOT NULL DEFAULT 10")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q3B2bTarget` INTEGER NOT NULL DEFAULT 15")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q4CreditCardTarget` INTEGER NOT NULL DEFAULT 20")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q4CorporateCardTarget` INTEGER NOT NULL DEFAULT 10")
+        db.execSQL("ALTER TABLE `rm_targets` ADD COLUMN `q4B2bTarget` INTEGER NOT NULL DEFAULT 15")
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         val instance = Room.databaseBuilder(
@@ -183,7 +202,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "ebl_rm_database.db"
         )
-          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
           .fallbackToDestructiveMigration()
           .build()
         INSTANCE = instance
