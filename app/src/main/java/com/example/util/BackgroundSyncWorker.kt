@@ -5,6 +5,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -22,16 +23,25 @@ class BackgroundSyncWorker(
 
   override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
     try {
+      // 1. Ensure notification channels are registered
+      NotificationHelper.createNotificationChannels(appContext)
+
       val database = AppDatabase.getDatabase(appContext)
       val authRepository = AuthRepository(database)
-      authRepository.restoreSessionFromLastLogged()
+
+      // Restore user session from database or SharedPreferences so recipient matching works in background
+      val authPrefs = appContext.getSharedPreferences("auth_prefs", Context.MODE_PRIVATE)
+      val cachedRm = authPrefs.getString("last_logged_rm_code", "") ?: ""
+      authRepository.restoreSessionFromLastLogged(cachedRm)
 
       val eblRepository = EblRepository(database, authRepository, appContext)
-      // Pull latest cloud updates from Google Sheets in the background even if the app is closed!
-      // This checks for new file updates, team events, or incoming SMS and triggers notifications.
+
+      // 2. Pull latest cloud updates from Google Sheets even if app is completely closed/killed!
+      // This retrieves new files, updates, SMS alerts, and team events and fires high-importance device notifications.
       eblRepository.pullDataFromGoogleSheets()
 
-      val lastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: ""
+      // 3. Location beacon update if location permission is active
+      val lastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: cachedRm
       if (lastRm.isNotBlank() && LocationHelper.hasLocationPermission(appContext)) {
         try {
           val loc = LocationHelper.getCurrentLocation(appContext)
@@ -63,9 +73,23 @@ class BackgroundSyncWorker(
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
           WORK_NAME,
-          ExistingPeriodicWorkPolicy.KEEP,
+          ExistingPeriodicWorkPolicy.UPDATE,
           workRequest
         )
+      } catch (_: Exception) {}
+    }
+
+    fun triggerImmediateSync(context: Context) {
+      try {
+        val constraints = Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build()
+
+        val workRequest = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
+          .setConstraints(constraints)
+          .build()
+
+        WorkManager.getInstance(context).enqueue(workRequest)
       } catch (_: Exception) {}
     }
   }

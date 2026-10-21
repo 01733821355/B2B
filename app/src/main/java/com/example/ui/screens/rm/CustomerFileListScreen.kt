@@ -317,19 +317,18 @@ fun CustomerFileListScreen(
 
     // Files List
     if (files.isEmpty()) {
-      Box(
+      Column(
         modifier = Modifier
           .fillMaxSize()
           .verticalScroll(rememberScrollState())
           .padding(32.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
       ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          Text("No customer records match your filter criteria.", color = Color.Gray, fontSize = 14.sp)
-          Spacer(modifier = Modifier.height(10.dp))
-          OutlinedButton(onClick = { viewModel.resetFilters() }) {
-            Text("Clear All Filters")
-          }
+        Text("No customer records match your filter criteria.", color = Color.Gray, fontSize = 14.sp)
+        Spacer(modifier = Modifier.height(10.dp))
+        OutlinedButton(onClick = { viewModel.resetFilters() }) {
+          Text("Clear All Filters")
         }
       }
     } else {

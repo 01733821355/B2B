@@ -1,10 +1,12 @@
 package com.example.util
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.os.Build
@@ -18,12 +20,20 @@ object NotificationHelper {
   private const val PREF_NAME = "app_notification_prefs"
   private const val KEY_NOTIFICATION_ASKED = "notification_permission_asked_once"
 
+  fun areNotificationsEnabled(context: Context): Boolean {
+    return try {
+      NotificationManagerCompat.from(context).areNotificationsEnabled()
+    } catch (_: Exception) {
+      true
+    }
+  }
+
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
       val audioAttributes = AudioAttributes.Builder()
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+        .setUsage(AudioAttributes.USAGE_NOTIFICATION_COMMUNICATION_INSTANT)
         .build()
 
       val channel1 = NotificationChannel(
@@ -31,10 +41,13 @@ object NotificationHelper {
         "File & Data Updates",
         NotificationManager.IMPORTANCE_HIGH
       ).apply {
-        description = "Instant notifications with distinct sound when data is updated by Admin or Mentor"
+        description = "Instant notifications with distinct sound when data or SMS is updated by Admin or Mentor"
         enableLights(true)
+        lightColor = Color.BLUE
         enableVibration(true)
         vibrationPattern = longArrayOf(0, 150, 100, 150, 100, 300)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        setShowBadge(true)
         setSound(soundUri, audioAttributes)
       }
 
@@ -45,8 +58,11 @@ object NotificationHelper {
       ).apply {
         description = "Alerts to Mentor when a new RM is assigned by Admin pending approval"
         enableLights(true)
+        lightColor = Color.GREEN
         enableVibration(true)
         vibrationPattern = longArrayOf(0, 250, 150, 250)
+        lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        setShowBadge(true)
         setSound(soundUri, audioAttributes)
       }
 
@@ -77,14 +93,13 @@ object NotificationHelper {
     try {
       createNotificationChannels(context)
 
-      // Emit distinct unique alert sound tone
       try {
         val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
         toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -105,7 +120,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("Attention RM $targetRmCode:\nYour customer file data was modified by $updatedByRole.\n\nRecord: $refDisplay\nCustomer: $customerName\nModifications: $changeDetails")
         )
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 150, 100, 150, 100, 300))
         .setAutoCancel(true)
@@ -125,14 +143,13 @@ object NotificationHelper {
     try {
       createNotificationChannels(context)
 
-      // Emit distinct alert tone for Mentor
       try {
         val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
         toneGen.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -147,12 +164,15 @@ object NotificationHelper {
       val builder = NotificationCompat.Builder(context, CHANNEL_RM_APPROVAL_ID)
         .setSmallIcon(android.R.drawable.ic_dialog_alert)
         .setContentTitle("New RM Assignment Pending")
-        .setContentText("new rm assingne pending for your approval ($rmName, Code: $rmCode)")
+        .setContentText("New RM assigned pending your approval ($rmName, Code: $rmCode)")
         .setStyle(
           NotificationCompat.BigTextStyle()
-            .bigText("new rm assingne pending for your approval\n\nRM: $rmName\nCode: $rmCode\nAssigned by: Admin\nStatus: Pending Mentor Approval")
+            .bigText("New RM assigned pending your approval\n\nRM: $rmName\nCode: $rmCode\nAssigned by: Admin\nStatus: Pending Mentor Approval")
         )
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_STATUS)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 200, 150, 200, 150, 350))
         .setAutoCancel(true)
@@ -174,14 +194,13 @@ object NotificationHelper {
     try {
       createNotificationChannels(context)
 
-      // Emit distinct unique alert tone for RM
       try {
         val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
         toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -201,7 +220,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("Attention RM $targetRmCode ($rmName):\nYour account information was updated by $updatedByRole.\n\nDetails: $details")
         )
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_STATUS)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 150, 100, 150, 100, 250))
         .setAutoCancel(true)
@@ -221,14 +243,13 @@ object NotificationHelper {
     try {
       createNotificationChannels(context)
 
-      // Alert tone for incoming SMS
       try {
         val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
         toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 300)
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -245,7 +266,10 @@ object NotificationHelper {
         .setContentTitle("SMS / Team Hub: $senderTitle")
         .setContentText(messageText)
         .setStyle(NotificationCompat.BigTextStyle().bigText("$senderTitle:\n$messageText"))
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 180, 100, 250))
         .setAutoCancel(true)
@@ -267,9 +291,9 @@ object NotificationHelper {
     val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     val current = (prefs.getStringSet("shown_notification_keys", emptySet()) ?: emptySet()).toMutableSet()
     current.add(key)
-    // Keep set bounded to last 500 keys to avoid unlimited growth
-    if (current.size > 500) {
-      val trimmed = current.toList().takeLast(300).toSet()
+    // Keep set bounded to last 1000 keys to avoid unlimited growth
+    if (current.size > 1000) {
+      val trimmed = current.toList().takeLast(600).toSet()
       prefs.edit().putStringSet("shown_notification_keys", trimmed).apply()
     } else {
       prefs.edit().putStringSet("shown_notification_keys", current).apply()
@@ -287,14 +311,13 @@ object NotificationHelper {
     try {
       createNotificationChannels(context)
 
-      // Alert tone for Admin / Mentor
       try {
         val toneGen = android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100)
         toneGen.startTone(android.media.ToneGenerator.TONE_PROP_BEEP2, 350)
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -314,7 +337,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("New Customer File Created!\n\nCustomer: $customerName\nProduct: $productType\nFile ID: $fileId\nEntered by: RM $rmName ($rmCode)")
         )
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_STATUS)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 200, 100, 200, 100, 200))
         .setAutoCancel(true)
@@ -341,7 +367,7 @@ object NotificationHelper {
       } catch (_: Exception) {}
 
       val intent = Intent(context, MainActivity::class.java).apply {
-        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
       val pendingIntent = PendingIntent.getActivity(
@@ -361,7 +387,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("New Team Event Announcement!\n\nEvent: $eventTitle\nTarget Date: $targetDate\nPosted by: $creatorName")
         )
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_EVENT)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setSound(soundUri)
         .setVibrate(longArrayOf(0, 150, 150, 300))
         .setAutoCancel(true)
@@ -373,4 +402,3 @@ object NotificationHelper {
     } catch (_: Exception) {}
   }
 }
-

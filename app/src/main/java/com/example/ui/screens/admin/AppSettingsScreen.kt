@@ -26,6 +26,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
@@ -34,6 +36,10 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import com.example.ui.theme.AppThemeId
 import com.example.ui.theme.AppThemeConfig
 import com.example.ui.theme.ThemeManager
+import com.example.util.NotificationHelper
+import com.example.util.BackgroundSyncWorker
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
 import android.content.ContextWrapper
 import android.widget.Toast
@@ -140,6 +146,95 @@ fun AppSettingsScreen(
     }
 
     Spacer(modifier = Modifier.height(16.dp))
+
+    // Device Notifications & Background Sync Card (Ensures App-Off delivery works)
+    val areNotifsEnabled = remember { NotificationHelper.areNotificationsEnabled(context) }
+    Card(
+      modifier = Modifier.fillMaxWidth().testTag("card_notification_settings"),
+      shape = RoundedCornerShape(12.dp),
+      colors = CardDefaults.cardColors(
+        containerColor = if (areNotifsEnabled) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+      ),
+      border = BorderStroke(1.dp, if (areNotifsEnabled) Color(0xFF86EFAC) else Color(0xFFFCA5A5)),
+      elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+      Column(modifier = Modifier.padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(
+            if (areNotifsEnabled) Icons.Default.NotificationsActive else Icons.Default.Notifications,
+            contentDescription = null,
+            tint = if (areNotifsEnabled) Color(0xFF16A34A) else Color(0xFFDC2626),
+            modifier = Modifier.size(24.dp)
+          )
+          Spacer(modifier = Modifier.width(10.dp))
+          Column(modifier = Modifier.weight(1f)) {
+            Text(
+              "Mobile Notification Status (App Off Mode)",
+              fontWeight = FontWeight.Bold,
+              fontSize = 14.sp,
+              color = if (areNotifsEnabled) Color(0xFF15803D) else Color(0xFFB91C1C)
+            )
+            Text(
+              if (areNotifsEnabled)
+                "✓ সক্রিয়: অ্যাপ বন্ধ থাকলেও এসএমএস, নতুন ফাইল ও ইভেন্ট নোটিফিকেশন মোবাইলে রিং ও ভাইব্রেট করবে।"
+              else
+                "✕ বন্ধ: আপনার ডিভাইসে নোটিফিকেশন অফ আছে। অনুগ্রহ করে সেটিংসে গিয়ে পারমিশন চালু করুন।",
+              fontSize = 11.sp,
+              color = if (areNotifsEnabled) Color(0xFF166534) else Color(0xFF991B1B)
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          OutlinedButton(
+            onClick = {
+              try {
+                val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                  putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                  flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+              } catch (_: Exception) {
+                try {
+                  val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                  }
+                  context.startActivity(intent)
+                } catch (_: Exception) {
+                  Toast.makeText(context, "Please open device Settings -> Apps -> Notifications", Toast.LENGTH_LONG).show()
+                }
+              }
+            },
+            modifier = Modifier.weight(1f)
+          ) {
+            Text("App Settings", fontSize = 12.sp)
+          }
+
+          Button(
+            onClick = {
+              NotificationHelper.createNotificationChannels(context)
+              NotificationHelper.sendIncomingSmsNotification(
+                context = context,
+                senderTitle = "System Test Alert",
+                messageText = "Notification is working properly! Alerts will arrive even when the app is closed."
+              )
+              BackgroundSyncWorker.triggerImmediateSync(context)
+              BackgroundSyncWorker.schedulePeriodicSync(context)
+              Toast.makeText(context, "Test notification triggered! Check your notification bar.", Toast.LENGTH_SHORT).show()
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = if (areNotifsEnabled) Color(0xFF16A34A) else EblNavyPrimary),
+            modifier = Modifier.weight(1f).testTag("btn_test_notification")
+          ) {
+            Text("Test Notification", fontSize = 12.sp)
+          }
+        }
+      }
+    }
 
     // Product Types
     Card(

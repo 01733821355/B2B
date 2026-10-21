@@ -3161,6 +3161,13 @@ class EblRepository(
           lastSyncMessage = msg
         )
       )
+      database.appSettingDao().insertSetting(
+        com.example.data.model.AppSettingEntity(
+          settingKey = "is_initial_sync_done",
+          settingValue = "true",
+          updatedAt = now
+        )
+      )
 
       Result.success(msg)
     } catch (e: Exception) {
@@ -3722,11 +3729,12 @@ class EblRepository(
         count++
       }
 
-      // DEVICE NOTIFICATION RULES (Fixes flood of 700-800 notifications):
-      // 1. Only trigger device sound/alert if sent recently (within last 15 minutes)
-      // 2. Intended for the current logged-in user and wasn't triggered by themselves
-      // 3. Has NOT already been sounded/shown on this device
-      val isRecent = sentTime > 0L && (now - sentTime) < 15 * 60 * 1000L
+      // DEVICE NOTIFICATION RULES:
+      // 1. Initial sync seeds historical records as shown so old items don't buzz the phone.
+      // 2. Any SMS arriving within 24 hours that hasn't been shown alerts the device with high priority.
+      // 3. Delivers reliably even when the app was closed or off.
+      val isInitialSyncDone = database.appSettingDao().getSetting("is_initial_sync_done")?.settingValue == "true"
+      val isRecent = sentTime <= 0L || (now - sentTime) < 24 * 60 * 60 * 1000L
       val notifKey = "sms_notif_${smsId.ifBlank { "${recipientRm}_${rawSentTime}_${actionType}_${messageText.take(20).hashCode()}" }}"
 
       val shouldNotifyAdmin = isPrivileged && (actionType == "NEW_FILE" || recipientRm == userRmCode || recipientRm == "ADMIN" || recipientRm == "MENTOR" || recipientRm == "ALL") && triggeredCode != userRmCode && isRecent
@@ -3734,7 +3742,9 @@ class EblRepository(
 
       if ((shouldNotifyAdmin || shouldNotifyRm) && isRecent) {
         context?.let { ctx ->
-          if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+          if (!isInitialSyncDone) {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+          } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
             NotificationHelper.markNotificationShown(ctx, notifKey)
             if (shouldNotifyAdmin) {
               if (actionType == "NEW_FILE") {
@@ -3914,10 +3924,14 @@ class EblRepository(
       count++
 
       // If new event created recently and user is RM, trigger event notification!
-      if (existingEvent == null && (now - createdAt < 30 * 60 * 1000L) && creatorRmCode != userRmCode) {
+      val isInitialSyncDone = database.appSettingDao().getSetting("is_initial_sync_done")?.settingValue == "true"
+      val isEventRecent = (now - createdAt) < 24 * 60 * 60 * 1000L
+      if (existingEvent == null && isEventRecent && creatorRmCode != userRmCode) {
         context?.let { ctx ->
           val notifKey = "event_$eventId"
-          if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+          if (!isInitialSyncDone) {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+          } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
             NotificationHelper.markNotificationShown(ctx, notifKey)
             NotificationHelper.sendNewEventNotification(
               context = ctx,
@@ -4253,11 +4267,14 @@ class EblRepository(
         // Requirement 2: When RM enters new customer file, Admin and Mentor receive SMS/notification even when app is closed
         val currentUser = authRepository.currentUser.value
         val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR"
-        val isRecent = (now - newFile.createdAt) < 30 * 60 * 1000L
+        val isInitialSyncDone = database.appSettingDao().getSetting("is_initial_sync_done")?.settingValue == "true"
+        val isRecent = (now - newFile.createdAt) < 24 * 60 * 60 * 1000L
         if (isPrivileged && isRecent && newFile.assignedRmCode != currentUser?.rmCode) {
           context?.let { ctx ->
             val notifKey = "new_file_notif_${newFile.fileId}"
-            if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+            if (!isInitialSyncDone) {
+              NotificationHelper.markNotificationShown(ctx, notifKey)
+            } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
               NotificationHelper.markNotificationShown(ctx, notifKey)
               val rmUser = database.userDao().getUser(newFile.assignedRmCode)
               val rmDisplayName = rmUser?.name ?: newFile.assignedRmCode

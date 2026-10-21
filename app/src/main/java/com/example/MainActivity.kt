@@ -104,6 +104,14 @@ class MainActivity : FragmentActivity() {
       }
     }
   }
+
+  override fun onStop() {
+    super.onStop()
+    try {
+      com.example.util.BackgroundSyncWorker.triggerImmediateSync(applicationContext)
+      com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
+    } catch (_: Exception) {}
+  }
 }
 
 @Composable
