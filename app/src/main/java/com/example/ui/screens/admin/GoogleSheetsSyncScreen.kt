@@ -836,6 +836,7 @@ function doPost(e) {
         } else {
           smsSheet.appendRow(smsRowU);
         }
+        cleanStaleSheetSms(smsSheet);
         return ContentService.createTextOutput(JSON.stringify({
           status: "SUCCESS",
           message: "Upserted SMS notification to sheet.",
@@ -1320,6 +1321,7 @@ function doPost(e) {
           smsMap[sId] = true;
         }
       });
+      cleanStaleSheetSms(smsSheet);
     }
 
     // Record Location Logs
@@ -1584,15 +1586,59 @@ function extractAllSheetDocuments(sheet) {
   return list;
 }
 
+function cleanStaleSheetSms(smsSheet) {
+  if (!smsSheet) return;
+  try {
+    var data = smsSheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+    var now = new Date().getTime();
+    var toDelete = [];
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var nid = String(row[0] || '').trim();
+      var timeStr = String(row[10] || '').trim();
+      if (!nid) {
+        toDelete.push(r + 1);
+        continue;
+      }
+      var rowTime = 0;
+      if (timeStr) {
+        try {
+          var parsed = Date.parse(timeStr.replace(/-/g, '/'));
+          if (!isNaN(parsed)) rowTime = parsed;
+        } catch (e) {}
+      }
+      var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
+      // Sheet keeps notification only for ~10 seconds transit buffer
+      if (ageMs > 10000 || ageMs < -60000) {
+        toDelete.push(r + 1);
+      }
+    }
+    for (var d = toDelete.length - 1; d >= 0; d--) {
+      smsSheet.deleteRow(toDelete[d]);
+    }
+  } catch (errClean) {}
+}
+
 function extractAllSheetSms(sheet) {
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   var list = [];
+  var now = new Date().getTime();
+  var rowsToDelete = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     var nid = String(row[0] || '').trim();
     if (!nid) continue;
+    var timeStr = String(row[10] || '').trim();
+    var rowTime = 0;
+    if (timeStr) {
+      try {
+        var parsed = Date.parse(timeStr.replace(/-/g, '/'));
+        if (!isNaN(parsed)) rowTime = parsed;
+      } catch (e) {}
+    }
     list.push({
       notificationId: nid,
       recipientRmCode: String(row[1] || '').trim(),
@@ -1604,9 +1650,23 @@ function extractAllSheetSms(sheet) {
       targetId: String(row[7] || '').trim(),
       messageText: String(row[8] || '').trim(),
       status: String(row[9] || 'DELIVERED').trim(),
-      sentTimestamp: String(row[10] || '').trim()
+      sentTimestamp: timeStr
     });
+
+    // Sheet holds notification for 10-second transit window; then purges automatically
+    var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
+    if (ageMs > 10000 || ageMs < -60000) {
+      rowsToDelete.push(r + 1);
+    }
   }
+
+  // Prune expired notification rows from bottom to top so index order is preserved
+  for (var d = rowsToDelete.length - 1; d >= 0; d--) {
+    try {
+      sheet.deleteRow(rowsToDelete[d]);
+    } catch (delErr) {}
+  }
+
   return list;
 }
 

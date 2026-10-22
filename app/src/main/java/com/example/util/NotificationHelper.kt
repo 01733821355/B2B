@@ -88,9 +88,17 @@ object NotificationHelper {
     ccNumber: String,
     customerName: String,
     changeDetails: String,
-    updatedByRole: String
+    updatedByRole: String,
+    customMessage: String? = null,
+    dedupeKey: String? = null
   ) {
     try {
+      val key = dedupeKey ?: "rm_file_${targetRmCode}_${ccNumber}_${changeDetails.take(30).hashCode()}"
+      if (hasNotificationBeenShown(context, key)) {
+        return
+      }
+      markNotificationShown(context, key)
+
       createNotificationChannels(context)
 
       try {
@@ -112,13 +120,16 @@ object NotificationHelper {
       val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
       val refDisplay = if (ccNumber.isNotBlank()) "CC: $ccNumber" else "Customer: $customerName"
 
+      val displayTitle = if (!customMessage.isNullOrBlank()) "🔔 File Update: $customerName" else "File Updated ($refDisplay)"
+      val displayText = customMessage ?: "RM $targetRmCode: Data updated by $updatedByRole ($changeDetails)"
+
       val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.ic_dialog_info)
-        .setContentTitle("File Updated ($refDisplay)")
-        .setContentText("RM $targetRmCode: Data updated by $updatedByRole ($changeDetails)")
+        .setContentTitle(displayTitle)
+        .setContentText(displayText)
         .setStyle(
           NotificationCompat.BigTextStyle()
-            .bigText("Attention RM $targetRmCode:\nYour customer file data was modified by $updatedByRole.\n\nRecord: $refDisplay\nCustomer: $customerName\nModifications: $changeDetails")
+            .bigText(if (!customMessage.isNullOrBlank()) customMessage else "Attention RM $targetRmCode:\nYour customer file data was modified by $updatedByRole.\n\nRecord: $refDisplay\nCustomer: $customerName\nModifications: $changeDetails")
         )
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -238,9 +249,16 @@ object NotificationHelper {
   fun sendIncomingSmsNotification(
     context: Context,
     senderTitle: String,
-    messageText: String
+    messageText: String,
+    dedupeKey: String? = null
   ) {
     try {
+      val key = dedupeKey ?: "sms_incoming_${senderTitle}_${messageText.take(40).hashCode()}"
+      if (hasNotificationBeenShown(context, key)) {
+        return
+      }
+      markNotificationShown(context, key)
+
       createNotificationChannels(context)
 
       try {

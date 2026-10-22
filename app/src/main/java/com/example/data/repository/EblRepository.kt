@@ -363,6 +363,17 @@ class EblRepository(
       )
     }
 
+    try {
+      val prefs = context?.getSharedPreferences("notification_prefs", Context.MODE_PRIVATE)
+      val deletedSet = (prefs?.getStringSet("permanently_deleted_sms_keys", emptySet()) ?: emptySet()).toMutableSet()
+      deletedSet.add(id.toString())
+      targetSms?.let {
+        deletedSet.add("${it.recipientRmCode}_${it.fileId ?: ""}_${it.messageText.take(20).hashCode()}")
+        if (it.sentTimestamp > 0L) deletedSet.add(it.sentTimestamp.toString())
+      }
+      prefs?.edit()?.putStringSet("permanently_deleted_sms_keys", deletedSet)?.apply()
+    } catch (_: Exception) {}
+
     // Synchronize SMS deletion directly to Google Sheets permanently
     targetSms?.let {
       syncSmsDeletionToGoogleSheets(it.id.toString(), it.sentTimestamp.toString(), it.messageText)
@@ -666,20 +677,25 @@ class EblRepository(
       val formattedTime = DateUtils.formatDateTime(now)
 
       val hasRmChanged = !existing.assignedRmCode.equals(resolvedRmCode, ignoreCase = true)
-      val changedItems = mutableListOf<String>()
-      if (hasRmChanged) changedItems.add("Assigned RM Reassigned -> $resolvedRmCode")
-      if (existing.applicationStatus != applicationStatus) changedItems.add("Status -> $applicationStatus")
-      if (existing.activeStatus != activeStatus) changedItems.add("Active -> $activeStatus")
-      if (existing.remarks != remarks.trim()) changedItems.add("Remarks updated")
-      if (existing.cpvStatus != cpvStatus) changedItems.add("CPV -> $cpvStatus")
-      if (existing.ccNumber != ccNumber.trim()) changedItems.add("CC Number -> $ccNumber")
-      if (changedItems.isEmpty()) changedItems.add("File details modified by ${currentUser.role} (${currentUser.name})")
+      val prevStatus = when {
+        existing.applicationStatus != applicationStatus && existing.cpvStatus != cpvStatus ->
+          "${existing.applicationStatus} (CPV: ${existing.cpvStatus})"
+        existing.cpvStatus != cpvStatus -> existing.cpvStatus
+        else -> existing.applicationStatus
+      }
+      val presStatus = when {
+        existing.applicationStatus != applicationStatus && existing.cpvStatus != cpvStatus ->
+          "$applicationStatus (CPV: $cpvStatus)"
+        existing.cpvStatus != cpvStatus -> cpvStatus
+        else -> applicationStatus
+      }
+      val changePerson = "${currentUser.name.ifBlank { currentUser.rmCode }} (${currentUser.role})"
+      val fileType = entity.productType.ifBlank { "Credit Card" }
 
-      val changeDetailsStr = changedItems.joinToString(", ")
       val smsMessage = if (hasRmChanged) {
-        "[EBL Alert] Dear $rmName ($resolvedRmCode), customer file $targetFileId for '$customerName' has been REASSIGNED to you by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. EBL Sales Suite."
+        "Dear $rmName your $fileType file customer name '$customerName' is change by $changePerson from 'Assigned to ${existing.assignedRmCode}' to 'Reassigned to $resolvedRmCode' time is $formattedTime"
       } else {
-        "[EBL Alert] Dear $rmName ($resolvedRmCode), your customer file $targetFileId for '$customerName' was UPDATED by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Changes: $changeDetailsStr. Timestamp: $formattedTime. EBL Sales Suite."
+        "Dear $rmName your $fileType file customer name '$customerName' is change by $changePerson from '$prevStatus' to '$presStatus' time is $formattedTime"
       }
 
       var smsStatus = "DELIVERED"
@@ -711,7 +727,7 @@ class EblRepository(
         val oldRmUser = database.userDao().getUser(existing.assignedRmCode)
         val oldRmMobile = oldRmUser?.mobile ?: ""
         val oldRmName = oldRmUser?.name ?: existing.assignedRmCode
-        val oldMsg = "[EBL Alert] Notice: Dear $oldRmName (${existing.assignedRmCode}), customer file $targetFileId ('$customerName') previously under your code has been transferred to RM $resolvedRmCode by ${currentUser.role}. Timestamp: $formattedTime."
+        val oldMsg = "Dear $oldRmName your $fileType file customer name '$customerName' is change by $changePerson from 'Under your code' to 'Transferred to $resolvedRmCode' time is $formattedTime"
 
         var oldSmsStatus = "DELIVERED"
         if (context != null && oldRmMobile.isNotBlank()) {
@@ -744,8 +760,10 @@ class EblRepository(
           targetRmCode = resolvedRmCode,
           ccNumber = ccNumber.ifBlank { existing.ccNumber.ifBlank { targetFileId } },
           customerName = customerName,
-          changeDetails = changeDetailsStr,
-          updatedByRole = currentUser.role
+          changeDetails = "Status: $presStatus",
+          updatedByRole = currentUser.role,
+          customMessage = smsMessage,
+          dedupeKey = "rm_update_${targetFileId}_${presStatus}_${now / 15000}"
         )
       }
     }
@@ -2563,7 +2581,11 @@ class EblRepository(
     val rmMobile = targetRmUser?.mobile ?: ""
     val rmName = targetRmUser?.name ?: updated.assignedRmCode
     val formattedTime = DateUtils.formatDateTime(now)
-    val smsMessage = "[EBL Alert] Dear $rmName (${updated.assignedRmCode}), your customer file ${updated.fileId} ('${updated.customerName}') status was updated to '$newStatus' by ${currentUser.role} (${currentUser.name}). Notes: ${updatedRemarks.take(40)}. Time: $formattedTime."
+    val prevStatus = existing.applicationStatus
+    val presStatus = newStatus
+    val changePerson = "${currentUser.name.ifBlank { currentUser.rmCode }} (${currentUser.role})"
+    val fileType = updated.productType.ifBlank { "Credit Card" }
+    val smsMessage = "Dear $rmName your $fileType file customer name '${updated.customerName}' is change by $changePerson from '$prevStatus' to '$presStatus' time is $formattedTime"
 
     var smsStatus = "DELIVERED"
     if (context != null && rmMobile.isNotBlank()) {
@@ -2596,7 +2618,9 @@ class EblRepository(
         ccNumber = updated.ccNumber.ifBlank { updated.fileId },
         customerName = updated.customerName,
         changeDetails = "Status updated to: $newStatus",
-        updatedByRole = currentUser.role
+        updatedByRole = currentUser.role,
+        customMessage = smsMessage,
+        dedupeKey = "status_change_${updated.fileId}_${newStatus}_${now / 15000}"
       )
     }
 
@@ -2811,9 +2835,12 @@ class EblRepository(
           })
         }
 
-        val recentSms = database.smsNotificationDao().getAllSms().take(50)
+        val currentUserCode = authRepository.currentUser.value?.rmCode ?: ""
+        val freshSms = database.smsNotificationDao().getAllSms().filter { s ->
+          (now - s.sentTimestamp) < 15_000L && s.triggeredByCode == currentUserCode
+        }
         val smsArray = org.json.JSONArray()
-        for (s in recentSms) {
+        for (s in freshSms) {
           smsArray.put(JSONObject().apply {
             put("id", s.id)
             put("recipientRmCode", s.recipientRmCode)
@@ -3708,15 +3735,25 @@ class EblRepository(
       ?: database.appSettingDao().getSetting("last_cleared_sms_timestamp")?.settingValue ?: "0"
     val lastClearedTime = lastClearedTimeStr.toLongOrNull() ?: 0L
 
+    val notifPrefs = context?.getSharedPreferences("notification_prefs", Context.MODE_PRIVATE)
+    val permDeletedKeys = (notifPrefs?.getStringSet("permanently_deleted_sms_keys", emptySet()) ?: emptySet()) + deletedSmsIdSet
+    val seenSmsKeys = (notifPrefs?.getStringSet("seen_sms_signatures", emptySet()) ?: emptySet()).toMutableSet()
+
     for (i in 0 until sheetSmsJson.length()) {
       val obj = sheetSmsJson.optJSONObject(i) ?: continue
       val smsId = obj.optString("id", "").trim()
-      if (smsId.isNotBlank() && smsId in deletedSmsIdSet) continue
-
       val recipientRm = obj.optString("recipientRmCode").trim().uppercase()
       val messageText = obj.optString("messageText", "").trim()
       val rawSentTime = obj.optString("sentTimestamp", "").trim()
       val sentTime = DateUtils.parseDateTime(rawSentTime) ?: 0L
+      val targetId = obj.optString("targetId", "").trim()
+
+      val dedupeSignature = "${recipientRm}_${targetId}_${messageText.take(25).hashCode()}"
+
+      if (smsId.isNotBlank() && smsId in permDeletedKeys) continue
+      if (dedupeSignature in permDeletedKeys || rawSentTime in permDeletedKeys) continue
+      if (smsId.isNotBlank() && smsId in seenSmsKeys) continue
+      if (dedupeSignature in seenSmsKeys) continue
 
       if (recipientRm.isBlank() || messageText.isBlank()) continue
 
@@ -3737,7 +3774,6 @@ class EblRepository(
       val triggeredRole = obj.optString("triggeredByRole", "SYSTEM").trim()
       val triggeredCode = obj.optString("triggeredByCode", "").trim()
       val actionType = obj.optString("actionType", "UPDATE").trim()
-      val targetId = obj.optString("targetId", "").trim()
       val status = obj.optString("status", "DELIVERED").trim()
 
       if (matchCount == 0) {
@@ -3758,6 +3794,10 @@ class EblRepository(
         )
         database.smsNotificationDao().insertSms(entity)
         count++
+
+        if (smsId.isNotBlank()) seenSmsKeys.add(smsId)
+        seenSmsKeys.add(dedupeSignature)
+        if (rawSentTime.isNotBlank()) seenSmsKeys.add(rawSentTime)
       }
 
       // DEVICE NOTIFICATION RULES:
@@ -3826,6 +3866,9 @@ class EblRepository(
         }
       }
     }
+    try {
+      notifPrefs?.edit()?.putStringSet("seen_sms_signatures", seenSmsKeys.takeLast(1000).toSet())?.apply()
+    } catch (_: Exception) {}
     return count
   }
 
@@ -4149,110 +4192,6 @@ class EblRepository(
           )
           database.customerFileDao().updateFile(updated)
           updatedCount++
-
-          // Send SMS to RM when status, active, remarks, documents, or RM assignment were changed in Google Sheets
-          if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasRmChanged) {
-            val targetRmUser = database.userDao().getUser(updated.assignedRmCode)
-            val rmMobile = targetRmUser?.mobile ?: ""
-            val rmName = targetRmUser?.name ?: updated.assignedRmCode
-            val formattedTime = DateUtils.formatDateTime(now)
-            val changeNote = when {
-              hasRmChanged -> "Assigned RM: $rmCode"
-              hasStatusChanged -> "Status: $appStatus"
-              hasActiveChanged -> "Active Status: $activeStatus"
-              hasRemarksChanged -> "CPV Remarks Updated"
-              else -> "Pending Docs Updated"
-            }
-            val smsMessage = "[Eastern Bank PLC] Customer File Update: File ${existing.fileId} ('${existing.customerName}') was updated ($changeNote). Timestamp: $formattedTime. - EBL Retail Banking"
-
-            val allRecentSms = database.smsNotificationDao().getAllSms()
-            val deletedSmsSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
-            val deletedSmsSigSet = deletedSmsSigs.split(",").map { it.trim() }.filter { it.isNotBlank() }.toSet()
-            val currentSig = "${existing.fileId}_${updated.assignedRmCode}_${if (hasRmChanged) "TRANSFER" else "UPDATE"}_$changeNote"
-            val isDeletedByUser = currentSig in deletedSmsSigSet
-
-            val isDuplicate = isDeletedByUser || allRecentSms.any {
-              it.recipientRmCode == updated.assignedRmCode &&
-              it.fileId == existing.fileId &&
-              it.messageText.contains(changeNote) &&
-              (now - it.sentTimestamp < 60 * 1000L)
-            }
-            if (!isDuplicate) {
-              var smsStatus = "DELIVERED"
-              if (context != null && rmMobile.isNotBlank()) {
-                val sentHardware = SmsService.sendSms(context, rmMobile, smsMessage)
-                smsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
-              }
-
-              database.smsNotificationDao().insertSms(
-                SmsNotificationEntity(
-                  recipientRmCode = updated.assignedRmCode,
-                  recipientMobile = rmMobile,
-                  recipientName = rmName,
-                  triggeredByRole = "SHEETS_SYNC",
-                  triggeredByCode = "Admin_Sheets",
-                  actionType = if (hasRmChanged) "TRANSFER" else "UPDATE",
-                  targetType = "CUSTOMER_FILE",
-                  fileId = existing.fileId,
-                  customerName = existing.customerName,
-                  messageText = smsMessage,
-                  sentTimestamp = now,
-                  status = smsStatus,
-                  isRead = false
-                )
-              )
-              database.smsNotificationDao().pruneOldSms()
-            }
-
-            if (hasRmChanged && existing.assignedRmCode.isNotBlank()) {
-              val oldRmUser = database.userDao().getUser(existing.assignedRmCode)
-              val oldRmMobile = oldRmUser?.mobile ?: ""
-              val oldRmName = oldRmUser?.name ?: existing.assignedRmCode
-              val oldMsg = "[Eastern Bank PLC] Reassignment Notice: File ${existing.fileId} ('${existing.customerName}') previously under your code was transferred to RM $rmCode. Date: $formattedTime. - EBL Retail Banking"
-              val isOldDuplicate = allRecentSms.any {
-                it.recipientRmCode == existing.assignedRmCode &&
-                it.fileId == existing.fileId &&
-                it.actionType == "TRANSFER" &&
-                (now - it.sentTimestamp < 15 * 60 * 1000L)
-              }
-              if (!isOldDuplicate) {
-                var oldSmsStatus = "DELIVERED"
-                if (context != null && oldRmMobile.isNotBlank()) {
-                  val sentHardware = SmsService.sendSms(context, oldRmMobile, oldMsg)
-                  oldSmsStatus = if (sentHardware) "DELIVERED" else "SENT_IN_APP"
-                }
-                database.smsNotificationDao().insertSms(
-                  SmsNotificationEntity(
-                    recipientRmCode = existing.assignedRmCode,
-                    recipientMobile = oldRmMobile,
-                    recipientName = oldRmName,
-                    triggeredByRole = "SHEETS_SYNC",
-                    triggeredByCode = "Admin_Sheets",
-                    actionType = "TRANSFER",
-                    targetType = "CUSTOMER_FILE",
-                    fileId = existing.fileId,
-                    customerName = existing.customerName,
-                    messageText = oldMsg,
-                    sentTimestamp = now,
-                    status = oldSmsStatus,
-                    isRead = false
-                  )
-                )
-                database.smsNotificationDao().pruneOldSms()
-              }
-            }
-
-            context?.let { ctx ->
-              NotificationHelper.sendRmFileUpdateNotification(
-                context = ctx,
-                targetRmCode = updated.assignedRmCode,
-                ccNumber = existing.ccNumber.ifBlank { existing.fileId },
-                customerName = existing.customerName,
-                changeDetails = "Google Sheet Update: $changeNote",
-                updatedByRole = "ADMIN"
-              )
-            }
-          }
         }
       } else {
         // New file row added in Google Sheets - prevent duplicate mobile numbers
