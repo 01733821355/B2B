@@ -42,9 +42,48 @@ class EblRepository(
   private val httpClient = OkHttpClient.Builder()
     .connectionPool(okhttp3.ConnectionPool(10, 5, TimeUnit.MINUTES))
     .retryOnConnectionFailure(true)
-    .connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(20, TimeUnit.SECONDS)
+    .followRedirects(true)
+    .followSslRedirects(true)
+    .connectTimeout(30, TimeUnit.SECONDS)
+    .readTimeout(30, TimeUnit.SECONDS)
+    .writeTimeout(30, TimeUnit.SECONDS)
     .build()
+
+  private fun parseAppsScriptResponse(respStr: String, actionName: String = "Sync"): JSONObject {
+    val trimmed = respStr.trim()
+    if (trimmed.startsWith("<") || trimmed.contains("<!DOCTYPE", ignoreCase = true) || trimmed.contains("<html", ignoreCase = true)) {
+      val userActionAdvice = when {
+        trimmed.contains("Script function not found: doPost", ignoreCase = true) ->
+          "গুগল স্ক্রিপ্ট এরর: 'doPost' ফাংশনটি পাওয়া যায়নি। অনুগ্রহ করে গুগল শিটে Extensions > Apps Script-এ গিয়ে সম্পূর্ণ কোডটি পেস্ট করে Deploy > Manage deployments > Edit > Version: New version নির্বাচন করে আবার Deploy করুন।"
+        trimmed.contains("extractAllSheetFiles is not defined", ignoreCase = true) ->
+          "গুগল স্ক্রিপ্ট এরর: শিটের স্ক্রিপ্ট কোডটি অসম্পূর্ণ ছিল। অনুগ্রহ করে Apps Script-এ সম্পূর্ণ কোডটি পেস্ট করে New version নির্বাচন করে আবার Deploy করুন।"
+        trimmed.contains("Drive", ignoreCase = true) || trimmed.contains("permission", ignoreCase = true) || trimmed.contains("authorization", ignoreCase = true) ->
+          "গুগল ড্রাইভ পারমিশন এরর: Apps Script-এ 'authorizedDrivePermissions' রান করে পারমিশন Allow করুন এবং Web App এক্সেস 'Anyone' দিয়ে Deploy করুন।"
+        else -> {
+          val cleanText = trimmed.replace(Regex("<style[\\s\\S]*?</style>"), "")
+            .replace(Regex("<script[\\s\\S]*?</script>"), "")
+            .replace(Regex("<[^>]+>"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+          "Google Apps Script HTML Error: ${cleanText.take(150)}"
+        }
+      }
+      throw Exception(userActionAdvice)
+    }
+
+    val json = try {
+      JSONObject(trimmed)
+    } catch (e: Exception) {
+      throw Exception("Invalid JSON response from Google Apps Script: ${trimmed.take(100)}")
+    }
+
+    if (json.optString("status").equals("error", ignoreCase = true)) {
+      val errMsg = json.optString("message", "Unknown error from Google Apps Script")
+      throw Exception("Google Sheets Error: $errMsg")
+    }
+
+    return json
+  }
 
   // In-memory persistent tombstone caches to guarantee instant deletion without resurrection
   val deletedDocIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
@@ -3046,7 +3085,7 @@ class EblRepository(
             val respBodyStr = response.body?.string() ?: ""
             if (respBodyStr.isNotBlank()) {
               try {
-                val respJson = JSONObject(respBodyStr)
+                val respJson = parseAppsScriptResponse(respBodyStr, "Push/Sync")
                 val sheetFiles = respJson.optJSONArray("latestFiles") ?: respJson.optJSONArray("files")
                 if (sheetFiles != null && sheetFiles.length() > 0) {
                   processSheetFiles(sheetFiles)
@@ -3144,25 +3183,49 @@ class EblRepository(
     }
 
     try {
-      val payload = JSONObject().apply {
-        put("action", "FETCH_SHEET_DATA")
-        put("spreadsheetId", currentStatus.spreadsheetId)
-        put("secretKey", currentStatus.syncSecretKey)
-      }
-      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
-      val request = Request.Builder()
-        .url(activeWebAppUrl)
-        .post(requestBody)
-        .build()
+      var respStr = ""
+      var fetchException: Exception? = null
 
-      val respStr = httpClient.newCall(request).execute().use { response ->
-        if (!response.isSuccessful) {
-          throw Exception("HTTP ${response.code}: ${response.message}")
+      // 1. Try GET request first (doGet natively streams handleFetchAllData without body redirects)
+      try {
+        val getRequest = Request.Builder()
+          .url(activeWebAppUrl)
+          .get()
+          .build()
+        httpClient.newCall(getRequest).execute().use { response ->
+          if (response.isSuccessful) {
+            val body = response.body?.string().orEmpty()
+            if (body.isNotBlank() && !body.trim().startsWith("<")) {
+              respStr = body
+            }
+          }
         }
-        response.body?.string() ?: ""
+      } catch (ge: Exception) {
+        fetchException = ge
       }
 
-      val json = JSONObject(respStr)
+      // 2. If GET did not return JSON, attempt POST with FETCH_SHEET_DATA
+      if (respStr.isBlank()) {
+        val payload = JSONObject().apply {
+          put("action", "FETCH_SHEET_DATA")
+          put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+          put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+        }
+        val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+        val postRequest = Request.Builder()
+          .url(activeWebAppUrl)
+          .post(requestBody)
+          .build()
+
+        httpClient.newCall(postRequest).execute().use { response ->
+          if (!response.isSuccessful) {
+            throw fetchException ?: Exception("HTTP ${response.code}: ${response.message}")
+          }
+          respStr = response.body?.string() ?: ""
+        }
+      }
+
+      val json = parseAppsScriptResponse(respStr, "Pull")
       // Process settings FIRST so all deletion tombstones (deleted_doc_ids, deleted_event_ids, deleted_file_ids, deleted_sms_ids, deleted_preset_keys)
       // are applied to the local DB and cache BEFORE processing files, docs, events, and SMS notifications!
       val settingsArray = json.optJSONArray("settings") ?: JSONArray()

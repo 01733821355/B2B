@@ -1246,16 +1246,19 @@ function doPost(e) {
 function handleFetchAllData() {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var fileSheet = ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files');
-    var rmSheet = ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory');
-    var settingsSheet = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
-    var docSheet = ss.getSheetByName('Important_Documents');
-    var chatSheet = ss.getSheetByName('Chat_And_Calls');
-    var eventSheet = ss.getSheetByName('Team_Events');
-    var respSheet = ss.getSheetByName('Event_Submissions');
-    var attachSheet = ss.getSheetByName('Attachments');
-    var smsSheet = ss.getSheetByName('SMS_Notifications');
-    var locSheet = ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs');
+    if (!ss) {
+      try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+    }
+    var fileSheet = ss ? (ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files')) : null;
+    var rmSheet = ss ? (ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory')) : null;
+    var settingsSheet = ss ? (ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings')) : null;
+    var docSheet = ss ? ss.getSheetByName('Important_Documents') : null;
+    var chatSheet = ss ? ss.getSheetByName('Chat_And_Calls') : null;
+    var eventSheet = ss ? ss.getSheetByName('Team_Events') : null;
+    var respSheet = ss ? ss.getSheetByName('Event_Submissions') : null;
+    var attachSheet = ss ? ss.getSheetByName('Attachments') : null;
+    var smsSheet = ss ? ss.getSheetByName('SMS_Notifications') : null;
+    var locSheet = ss ? (ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs')) : null;
 
     return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
