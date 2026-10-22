@@ -18,31 +18,52 @@ function authorizeDrivePermissions() {
   return "Google Drive Authorized Successfully!";
 }
 
-function doGet(e) {
-  return handleFetchAllData();
+function getOrCreateSheet(ss, sheetName, headers, headerColor) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+    var hr = sheet.getRange(1, 1, 1, headers.length);
+    hr.setBackground(headerColor || '#0A192F')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
-function onEdit(e) {
+function cleanStaleSheetSms(smsSheet) {
+  if (!smsSheet) return;
   try {
-    if (!e || !e.range) return;
-    var range = e.range;
-    var sheet = range.getSheet();
-    var sheetName = sheet.getName();
-    var row = range.getRow();
-    if (row <= 1) return; // Header row ignored
-
-    var nowStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
-
-    if (sheetName === 'Customer_Files' || sheetName === 'Files') {
-      sheet.getRange(row, 18).setValue(nowStr); // Last Updated
-      sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
-    } else if (sheetName === 'RM_Details' || sheetName === 'RM_Directory') {
-      sheet.getRange(row, 14).setValue(nowStr); // Last Updated
-    } else if (sheetName === 'Universal_Settings' || sheetName === 'Settings') {
-      sheet.getRange(row, 4).setValue('Manual_Sheet_Edit'); // Last Updated By
-      sheet.getRange(row, 5).setValue(nowStr); // Last Updated At
+    var data = smsSheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+    var now = new Date().getTime();
+    var toDelete = [];
+    for (var r = 1; r < data.length; r++) {
+      var row = data[r];
+      var nid = String(row[0] || '').trim();
+      var timeStr = String(row[10] || '').trim();
+      if (!nid) {
+        toDelete.push(r + 1);
+        continue;
+      }
+      var rowTime = 0;
+      if (timeStr) {
+        try {
+          var parsed = Date.parse(timeStr.replace(/-/g, '/'));
+          if (!isNaN(parsed)) rowTime = parsed;
+        } catch (e) {}
+      }
+      var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
+      // Sheet keeps notification only for ~10 seconds transit buffer
+      if (ageMs > 10000 || ageMs < -60000) {
+        toDelete.push(r + 1);
+      }
     }
-  } catch (err) {}
+    for (var d = toDelete.length - 1; d >= 0; d--) {
+      smsSheet.deleteRow(toDelete[d]);
+    }
+  } catch (errClean) {}
 }
 
 function saveFileToDrive(base64Data, fileName, mimeType) {
@@ -69,6 +90,336 @@ function saveFileToDrive(base64Data, fileName, mimeType) {
   } catch (err) {
     return { success: false, error: err.toString() };
   }
+}
+
+function extractAllSheetFiles(sheet) {
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var headers = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+  var hasSl = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial' || headers[0] === 'serial no');
+  var offset = hasSl ? 1 : 0;
+
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var slVal = hasSl ? String(row[0] || r).trim() : String(r);
+    var ccVal = String(row[offset] || '');
+    var fIdVal = String(row[offset + 1] || ccVal || '');
+    if (!ccVal && !fIdVal) continue;
+    list.push({
+      serialNumber: slVal,
+      sl: slVal,
+      ccNumber: ccVal,
+      fileId: fIdVal,
+      customerName: String(row[offset + 2] || ''),
+      companyName: String(row[offset + 3] || ''),
+      officeAddress: String(row[offset + 4] || ''),
+      mobile: String(row[offset + 5] || ''),
+      email: String(row[offset + 6] || ''),
+      productType: String(row[offset + 7] || ''),
+      applicationStatus: String(row[offset + 8] || 'Submitted'),
+      activeStatus: String(row[offset + 9] || 'N'),
+      assignedRmCode: String(row[offset + 10] || ''),
+      pendingDocuments: String(row[offset + 11] || ''),
+      cpvRemarks: String(row[offset + 12] || ''),
+      remarks: String(row[offset + 12] || ''),
+      cpvStatus: String(row[offset + 13] || 'Pending'),
+      submissionAddress: String(row[offset + 14] || ''),
+      submissionLat: parseFloat(row[offset + 15]) || 0.0,
+      submissionLng: parseFloat(row[offset + 16]) || 0.0,
+      updatedAt: String(row[offset + 17] || ''),
+      updatedBy: String(row[offset + 18] || 'Sheet')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetRms(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      rmCode: String(row[0] || '').trim().toUpperCase(),
+      name: String(row[1] || ''),
+      mobile: String(row[2] || ''),
+      email: String(row[3] || ''),
+      officeAddress: String(row[4] || ''),
+      role: String(row[5] || 'RM'),
+      accountStatus: String(row[6] || 'ACTIVE'),
+      creditCardTarget: parseInt(row[7]) || 15,
+      corporateCardTarget: parseInt(row[8]) || 5,
+      b2bTarget: parseInt(row[9]) || 2,
+      passwordHash: String(row[10] || ''),
+      salt: String(row[11] || ''),
+      createdAt: String(row[12] || ''),
+      updatedAt: String(row[13] || ''),
+      lastLatitude: parseFloat(row[14]) || 0.0,
+      lastLongitude: parseFloat(row[15]) || 0.0,
+      lastLocationAddress: String(row[16] || ''),
+      lastLocationTime: String(row[17] || ''),
+      isOnline: Boolean(row[18] === true || String(row[18]).toLowerCase() === 'true')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetSettings(sheet) {
+  var data = sheet.getDataRange().getValues();
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      settingKey: String(row[0] || '').trim(),
+      settingValue: String(row[1] || ''),
+      description: String(row[2] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetDocuments(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var did = String(row[0] || '').trim();
+    if (!did) continue;
+    list.push({
+      docId: did,
+      title: String(row[1] || ''),
+      category: String(row[2] || ''),
+      description: String(row[3] || ''),
+      fileName: String(row[4] || ''),
+      fileType: String(row[5] || ''),
+      fileSizeBytes: Number(row[6]) || 1024,
+      fileUri: String(row[7] || ''),
+      storagePath: String(row[8] || ''),
+      uploadedBy: String(row[9] || ''),
+      uploaderName: String(row[10] || ''),
+      uploaderRole: String(row[11] || ''),
+      createdAt: String(row[12] || ''),
+      updatedAt: String(row[13] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetChat(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var mid = String(row[0] || '').trim();
+    if (!mid) continue;
+    list.push({
+      id: mid,
+      senderRmCode: String(row[1] || ''),
+      senderName: String(row[2] || ''),
+      senderRole: String(row[3] || ''),
+      recipientRmCode: String(row[4] || ''),
+      messageText: String(row[5] || ''),
+      messageType: String(row[6] || 'TEXT'),
+      eventId: String(row[7] || ''),
+      timestamp: String(row[8] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetEvents(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var eid = String(row[0] || '').trim();
+    if (!eid) continue;
+    list.push({
+      eventId: eid,
+      title: String(row[1] || ''),
+      description: String(row[2] || ''),
+      creatorRmCode: String(row[3] || ''),
+      creatorName: String(row[4] || ''),
+      targetDate: String(row[5] || ''),
+      allowedFields: String(row[6] || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS'),
+      status: String(row[7] || 'ACTIVE'),
+      createdAt: String(row[8] || ''),
+      closeTime: String(row[9] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetResponses(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var rid = String(row[0] || '').trim();
+    if (!rid) continue;
+    list.push({
+      responseId: rid,
+      eventId: String(row[1] || ''),
+      rmCode: String(row[2] || ''),
+      rmName: String(row[3] || ''),
+      filesCount: Number(row[4]) || 1,
+      requestedDate: String(row[5] || ''),
+      location: String(row[6] || ''),
+      remarks: String(row[7] || ''),
+      customerEntriesJson: String(row[8] || ''),
+      submittedAt: String(row[9] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetAttachments(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var atId = String(row[0] || '').trim();
+    if (!atId) continue;
+    list.push({
+      attachmentId: atId,
+      fileId: String(row[1] || ''),
+      fileName: String(row[2] || ''),
+      category: String(row[3] || ''),
+      fileSizeBytes: Number(row[4]) || 1024,
+      fileSize: Number(row[4]) || 1024,
+      uploadedBy: String(row[5] || ''),
+      uploadedAt: String(row[6] || ''),
+      fileUri: String(row[7] || ''),
+      storagePath: String(row[7] || '')
+    });
+  }
+  return list;
+}
+
+function extractAllSheetSms(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  var now = new Date().getTime();
+  var rowsToDelete = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var nid = String(row[0] || '').trim();
+    if (!nid) continue;
+    var timeStr = String(row[10] || '').trim();
+    var rowTime = 0;
+    if (timeStr) {
+      try {
+        var parsed = Date.parse(timeStr.replace(/-/g, '/'));
+        if (!isNaN(parsed)) rowTime = parsed;
+      } catch (e) {}
+    }
+    list.push({
+      notificationId: nid,
+      recipientRmCode: String(row[1] || '').trim(),
+      recipientName: String(row[2] || '').trim(),
+      recipientMobile: String(row[3] || '').trim(),
+      triggeredByRole: String(row[4] || '').trim(),
+      triggeredByCode: String(row[5] || '').trim(),
+      actionType: String(row[6] || '').trim(),
+      targetId: String(row[7] || '').trim(),
+      messageText: String(row[8] || '').trim(),
+      status: String(row[9] || 'DELIVERED').trim(),
+      sentTimestamp: timeStr
+    });
+
+    // Sheet holds notification for 10-second transit window; then purges automatically
+    var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
+    if (ageMs > 10000 || ageMs < -60000) {
+      rowsToDelete.push(r + 1);
+    }
+  }
+
+  // Prune expired notification rows from bottom to top so index order is preserved
+  for (var d = rowsToDelete.length - 1; d >= 0; d--) {
+    try {
+      sheet.deleteRow(rowsToDelete[d]);
+    } catch (delErr) {}
+  }
+
+  return list;
+}
+
+function extractAllSheetLocations(sheet) {
+  if (!sheet) return [];
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var list = [];
+  var start = Math.max(1, data.length - 100);
+  for (var r = data.length - 1; r >= start; r--) {
+    var row = data[r];
+    if (!row[0]) continue;
+    list.push({
+      rmCode: String(row[0] || '').trim().toUpperCase(),
+      userName: String(row[1] || ''),
+      latitude: parseFloat(row[2]) || 0.0,
+      longitude: parseFloat(row[3]) || 0.0,
+      address: String(row[4] || ''),
+      timestamp: String(row[5] || ''),
+      sourceAction: String(row[6] || 'GPS')
+    });
+  }
+  return list;
+}
+
+function handleFetchAllData() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+    }
+    var fileSheet = ss ? (ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files')) : null;
+    var rmSheet = ss ? (ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory')) : null;
+    var settingsSheet = ss ? (ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings')) : null;
+    var docSheet = ss ? ss.getSheetByName('Important_Documents') : null;
+    var chatSheet = ss ? ss.getSheetByName('Chat_And_Calls') : null;
+    var eventSheet = ss ? ss.getSheetByName('Team_Events') : null;
+    var respSheet = ss ? ss.getSheetByName('Event_Submissions') : null;
+    var attachSheet = ss ? ss.getSheetByName('Attachments') : null;
+    var smsSheet = ss ? ss.getSheetByName('SMS_Notifications') : null;
+    var locSheet = ss ? (ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs')) : null;
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      files: fileSheet ? extractAllSheetFiles(fileSheet) : [],
+      rms: rmSheet ? extractAllSheetRms(rmSheet) : [],
+      settings: settingsSheet ? extractAllSheetSettings(settingsSheet) : [],
+      importantDocuments: docSheet ? extractAllSheetDocuments(docSheet) : [],
+      chatMessages: chatSheet ? extractAllSheetChat(chatSheet) : [],
+      events: eventSheet ? extractAllSheetEvents(eventSheet) : [],
+      eventResponses: respSheet ? extractAllSheetResponses(respSheet) : [],
+      attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : [],
+      smsNotifications: smsSheet ? extractAllSheetSms(smsSheet) : [],
+      locations: locSheet ? extractAllSheetLocations(locSheet) : []
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: err.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doGet(e) {
+  return handleFetchAllData();
 }
 
 function doPost(e) {
@@ -1243,376 +1594,25 @@ function doPost(e) {
   }
 }
 
-function handleFetchAllData() {
+function onEdit(e) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-      try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+    if (!e || !e.range) return;
+    var range = e.range;
+    var sheet = range.getSheet();
+    var sheetName = sheet.getName();
+    var row = range.getRow();
+    if (row <= 1) return; // Header row ignored
+
+    var nowStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+
+    if (sheetName === 'Customer_Files' || sheetName === 'Files') {
+      sheet.getRange(row, 18).setValue(nowStr); // Last Updated
+      sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
+    } else if (sheetName === 'RM_Details' || sheetName === 'RM_Directory') {
+      sheet.getRange(row, 14).setValue(nowStr); // Last Updated
+    } else if (sheetName === 'Universal_Settings' || sheetName === 'Settings') {
+      sheet.getRange(row, 4).setValue('Manual_Sheet_Edit'); // Last Updated By
+      sheet.getRange(row, 5).setValue(nowStr); // Last Updated At
     }
-    var fileSheet = ss ? (ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files')) : null;
-    var rmSheet = ss ? (ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory')) : null;
-    var settingsSheet = ss ? (ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings')) : null;
-    var docSheet = ss ? ss.getSheetByName('Important_Documents') : null;
-    var chatSheet = ss ? ss.getSheetByName('Chat_And_Calls') : null;
-    var eventSheet = ss ? ss.getSheetByName('Team_Events') : null;
-    var respSheet = ss ? ss.getSheetByName('Event_Submissions') : null;
-    var attachSheet = ss ? ss.getSheetByName('Attachments') : null;
-    var smsSheet = ss ? ss.getSheetByName('SMS_Notifications') : null;
-    var locSheet = ss ? (ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs')) : null;
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'success',
-      files: fileSheet ? extractAllSheetFiles(fileSheet) : [],
-      rms: rmSheet ? extractAllSheetRms(rmSheet) : [],
-      settings: settingsSheet ? extractAllSheetSettings(settingsSheet) : [],
-      importantDocuments: docSheet ? extractAllSheetDocuments(docSheet) : [],
-      chatMessages: chatSheet ? extractAllSheetChat(chatSheet) : [],
-      events: eventSheet ? extractAllSheetEvents(eventSheet) : [],
-      eventResponses: respSheet ? extractAllSheetResponses(respSheet) : [],
-      attachments: attachSheet ? extractAllSheetAttachments(attachSheet) : [],
-      smsNotifications: smsSheet ? extractAllSheetSms(smsSheet) : [],
-      locations: locSheet ? extractAllSheetLocations(locSheet) : []
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: 'error',
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function extractAllSheetAttachments(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var atId = String(row[0] || '').trim();
-    if (!atId) continue;
-    list.push({
-      attachmentId: atId,
-      fileId: String(row[1] || ''),
-      fileName: String(row[2] || ''),
-      category: String(row[3] || ''),
-      fileSizeBytes: Number(row[4]) || 1024,
-      fileSize: Number(row[4]) || 1024,
-      uploadedBy: String(row[5] || ''),
-      uploadedAt: String(row[6] || ''),
-      fileUri: String(row[7] || ''),
-      storagePath: String(row[7] || '')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetDocuments(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var did = String(row[0] || '').trim();
-    if (!did) continue;
-    list.push({
-      docId: did,
-      title: String(row[1] || ''),
-      category: String(row[2] || ''),
-      description: String(row[3] || ''),
-      fileName: String(row[4] || ''),
-      fileType: String(row[5] || ''),
-      fileSizeBytes: Number(row[6]) || 1024,
-      fileUri: String(row[7] || ''),
-      storagePath: String(row[8] || ''),
-      uploadedBy: String(row[9] || ''),
-      uploaderName: String(row[10] || ''),
-      uploaderRole: String(row[11] || ''),
-      createdAt: String(row[12] || ''),
-      updatedAt: String(row[13] || '')
-    });
-  }
-  return list;
-}
-
-function cleanStaleSheetSms(smsSheet) {
-  if (!smsSheet) return;
-  try {
-    var data = smsSheet.getDataRange().getValues();
-    if (data.length <= 1) return;
-    var now = new Date().getTime();
-    var toDelete = [];
-    for (var r = 1; r < data.length; r++) {
-      var row = data[r];
-      var nid = String(row[0] || '').trim();
-      var timeStr = String(row[10] || '').trim();
-      if (!nid) {
-        toDelete.push(r + 1);
-        continue;
-      }
-      var rowTime = 0;
-      if (timeStr) {
-        try {
-          var parsed = Date.parse(timeStr.replace(/-/g, '/'));
-          if (!isNaN(parsed)) rowTime = parsed;
-        } catch (e) {}
-      }
-      var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-      // Sheet keeps notification only for ~10 seconds transit buffer
-      if (ageMs > 10000 || ageMs < -60000) {
-        toDelete.push(r + 1);
-      }
-    }
-    for (var d = toDelete.length - 1; d >= 0; d--) {
-      smsSheet.deleteRow(toDelete[d]);
-    }
-  } catch (errClean) {}
-}
-
-function extractAllSheetSms(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  var now = new Date().getTime();
-  var rowsToDelete = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var nid = String(row[0] || '').trim();
-    if (!nid) continue;
-    var timeStr = String(row[10] || '').trim();
-    var rowTime = 0;
-    if (timeStr) {
-      try {
-        var parsed = Date.parse(timeStr.replace(/-/g, '/'));
-        if (!isNaN(parsed)) rowTime = parsed;
-      } catch (e) {}
-    }
-    list.push({
-      notificationId: nid,
-      recipientRmCode: String(row[1] || '').trim(),
-      recipientName: String(row[2] || '').trim(),
-      recipientMobile: String(row[3] || '').trim(),
-      triggeredByRole: String(row[4] || '').trim(),
-      triggeredByCode: String(row[5] || '').trim(),
-      actionType: String(row[6] || '').trim(),
-      targetId: String(row[7] || '').trim(),
-      messageText: String(row[8] || '').trim(),
-      status: String(row[9] || 'DELIVERED').trim(),
-      sentTimestamp: timeStr
-    });
-
-    // Sheet holds notification for 10-second transit window; then purges automatically
-    var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-    if (ageMs > 10000 || ageMs < -60000) {
-      rowsToDelete.push(r + 1);
-    }
-  }
-
-  // Prune expired notification rows from bottom to top so index order is preserved
-  for (var d = rowsToDelete.length - 1; d >= 0; d--) {
-    try {
-      sheet.deleteRow(rowsToDelete[d]);
-    } catch (delErr) {}
-  }
-
-  return list;
-}
-
-function extractAllSheetChat(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var mid = String(row[0] || '').trim();
-    if (!mid) continue;
-    list.push({
-      id: mid,
-      senderRmCode: String(row[1] || ''),
-      senderName: String(row[2] || ''),
-      senderRole: String(row[3] || ''),
-      recipientRmCode: String(row[4] || ''),
-      messageText: String(row[5] || ''),
-      messageType: String(row[6] || 'TEXT'),
-      eventId: String(row[7] || ''),
-      timestamp: String(row[8] || '')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetEvents(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var eid = String(row[0] || '').trim();
-    if (!eid) continue;
-    list.push({
-      eventId: eid,
-      title: String(row[1] || ''),
-      description: String(row[2] || ''),
-      creatorRmCode: String(row[3] || ''),
-      creatorName: String(row[4] || ''),
-      targetDate: String(row[5] || ''),
-      allowedFields: String(row[6] || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS'),
-      status: String(row[7] || 'ACTIVE'),
-      createdAt: String(row[8] || ''),
-      closeTime: String(row[9] || '')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetResponses(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var rid = String(row[0] || '').trim();
-    if (!rid) continue;
-    list.push({
-      responseId: rid,
-      eventId: String(row[1] || ''),
-      rmCode: String(row[2] || ''),
-      rmName: String(row[3] || ''),
-      filesCount: Number(row[4]) || 1,
-      requestedDate: String(row[5] || ''),
-      location: String(row[6] || ''),
-      remarks: String(row[7] || ''),
-      customerEntriesJson: String(row[8] || ''),
-      submittedAt: String(row[9] || '')
-    });
-  }
-  return list;
-}
-
-function getOrCreateSheet(ss, sheetName, headers, headerColor) {
-  var sheet = ss.getSheetByName(sheetName);
-  if (!sheet) {
-    sheet = ss.insertSheet(sheetName);
-    sheet.appendRow(headers);
-    var hr = sheet.getRange(1, 1, 1, headers.length);
-    hr.setBackground(headerColor || '#0A192F')
-      .setFontColor('#FFFFFF')
-      .setFontWeight('bold');
-    sheet.setFrozenRows(1);
-  }
-  return sheet;
-}
-
-function extractAllSheetFiles(sheet) {
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var headers = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
-  var hasSl = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial' || headers[0] === 'serial no');
-  var offset = hasSl ? 1 : 0;
-
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    var slVal = hasSl ? String(row[0] || r).trim() : String(r);
-    var ccVal = String(row[offset] || '');
-    var fIdVal = String(row[offset + 1] || ccVal || '');
-    if (!ccVal && !fIdVal) continue;
-    list.push({
-      serialNumber: slVal,
-      sl: slVal,
-      ccNumber: ccVal,
-      fileId: fIdVal,
-      customerName: String(row[offset + 2] || ''),
-      companyName: String(row[offset + 3] || ''),
-      officeAddress: String(row[offset + 4] || ''),
-      mobile: String(row[offset + 5] || ''),
-      email: String(row[offset + 6] || ''),
-      productType: String(row[offset + 7] || ''),
-      applicationStatus: String(row[offset + 8] || 'Submitted'),
-      activeStatus: String(row[offset + 9] || 'N'),
-      assignedRmCode: String(row[offset + 10] || ''),
-      pendingDocuments: String(row[offset + 11] || ''),
-      cpvRemarks: String(row[offset + 12] || ''),
-      remarks: String(row[offset + 12] || ''),
-      cpvStatus: String(row[offset + 13] || 'Pending'),
-      submissionAddress: String(row[offset + 14] || ''),
-      submissionLat: parseFloat(row[offset + 15]) || 0.0,
-      submissionLng: parseFloat(row[offset + 16]) || 0.0,
-      updatedAt: String(row[offset + 17] || ''),
-      updatedBy: String(row[offset + 18] || 'Sheet')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetRms(sheet) {
-  var data = sheet.getDataRange().getValues();
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    if (!row[0]) continue;
-    list.push({
-      rmCode: String(row[0] || '').trim().toUpperCase(),
-      name: String(row[1] || ''),
-      mobile: String(row[2] || ''),
-      email: String(row[3] || ''),
-      officeAddress: String(row[4] || ''),
-      role: String(row[5] || 'RM'),
-      accountStatus: String(row[6] || 'ACTIVE'),
-      creditCardTarget: parseInt(row[7]) || 15,
-      corporateCardTarget: parseInt(row[8]) || 5,
-      b2bTarget: parseInt(row[9]) || 2,
-      passwordHash: String(row[10] || ''),
-      salt: String(row[11] || ''),
-      createdAt: String(row[12] || ''),
-      updatedAt: String(row[13] || ''),
-      lastLatitude: parseFloat(row[14]) || 0.0,
-      lastLongitude: parseFloat(row[15]) || 0.0,
-      lastLocationAddress: String(row[16] || ''),
-      lastLocationTime: String(row[17] || ''),
-      isOnline: Boolean(row[18] === true || String(row[18]).toLowerCase() === 'true')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetLocations(sheet) {
-  if (!sheet) return [];
-  var data = sheet.getDataRange().getValues();
-  if (data.length <= 1) return [];
-  var list = [];
-  var start = Math.max(1, data.length - 100);
-  for (var r = data.length - 1; r >= start; r--) {
-    var row = data[r];
-    if (!row[0]) continue;
-    list.push({
-      rmCode: String(row[0] || '').trim().toUpperCase(),
-      userName: String(row[1] || ''),
-      latitude: parseFloat(row[2]) || 0.0,
-      longitude: parseFloat(row[3]) || 0.0,
-      address: String(row[4] || ''),
-      timestamp: String(row[5] || ''),
-      sourceAction: String(row[6] || 'GPS')
-    });
-  }
-  return list;
-}
-
-function extractAllSheetSettings(sheet) {
-  var data = sheet.getDataRange().getValues();
-  var list = [];
-  for (var r = 1; r < data.length; r++) {
-    var row = data[r];
-    if (!row[0]) continue;
-    list.push({
-      settingKey: String(row[0] || '').trim(),
-      settingValue: String(row[1] || ''),
-      description: String(row[2] || '')
-    });
-  }
-  return list;
+  } catch (err) {}
 }
