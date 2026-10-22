@@ -2836,6 +2836,7 @@ class EblRepository(
         }
 
         val currentUserCode = authRepository.currentUser.value?.rmCode ?: ""
+        val now = DateUtils.currentDhakaMillis()
         val freshSms = database.smsNotificationDao().getAllSms().filter { s ->
           (now - s.sentTimestamp) < 15_000L && s.triggeredByCode == currentUserCode
         }
@@ -3867,7 +3868,7 @@ class EblRepository(
       }
     }
     try {
-      notifPrefs?.edit()?.putStringSet("seen_sms_signatures", seenSmsKeys.takeLast(1000).toSet())?.apply()
+      notifPrefs?.edit()?.putStringSet("seen_sms_signatures", seenSmsKeys.toList().takeLast(1000).toSet())?.apply()
     } catch (_: Exception) {}
     return count
   }
