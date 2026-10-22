@@ -1,5 +1,6 @@
 package com.example.ui.screens.rm
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -151,59 +152,88 @@ fun RmDashboardScreen(
 
     item {
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // Quick action buttons
+        val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+
+        // Universal Notification Status & App-Off Alert Control for RM
+        com.example.ui.common.NotificationStatusCard(
+          userRole = user.role,
+          userName = user.name,
+          modifier = Modifier.padding(bottom = 10.dp)
+        )
+
+        // Quick action buttons with high-contrast color-wise styling
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          // 1. New File (Emerald Green theme)
+          OutlinedButton(
+            onClick = onAddNewFile,
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFECFDF5),
+              contentColor = if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).testTag("rm_dashboard_add_file_btn")
           ) {
-            Button(
-              onClick = onAddNewFile,
-              colors = ButtonDefaults.buttonColors(containerColor = EblGold),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-              modifier = Modifier.weight(1f).testTag("rm_dashboard_add_file_btn")
-            ) {
-              Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("New File", color = EblNavyDark, fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = onViewAllFiles,
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-              modifier = Modifier.weight(1f).testTag("rm_dashboard_view_all_btn")
-            ) {
-              Icon(Icons.Default.Folder, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("My Files", fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = onOpenDbrChecklist,
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-              modifier = Modifier.weight(1f).testTag("rm_dashboard_dbr_btn")
-            ) {
-              Icon(Icons.Default.Calculate, contentDescription = null, tint = EblGold, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("DBR Tool", color = EblGold, fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = onDownloadReport,
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
-              modifier = Modifier.weight(1f).testTag("rm_dashboard_reports_btn")
-            ) {
-              Icon(Icons.Default.Download, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Report", fontSize = 11.sp, maxLines = 1, softWrap = false)
-            }
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("New File", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
           }
+
+          // 2. My Files (Blue theme)
+          OutlinedButton(
+            onClick = onViewAllFiles,
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              contentColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6) else Color(0xFFBFDBFE)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).testTag("rm_dashboard_view_all_btn")
+          ) {
+            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("My Files", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1, softWrap = false)
+          }
+
+          // 3. DBR Tool (Amber theme)
+          OutlinedButton(
+            onClick = onOpenDbrChecklist,
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
+              contentColor = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF59E0B) else Color(0xFFFDE68A)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).testTag("rm_dashboard_dbr_btn")
+          ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("DBR Tool", fontWeight = FontWeight.Bold, fontSize = 11.sp, maxLines = 1, softWrap = false)
+          }
+
+          // 4. Report (Rose theme)
+          OutlinedButton(
+            onClick = onDownloadReport,
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF881337).copy(alpha = 0.35f) else Color(0xFFFFF1F2),
+              contentColor = if (isDark) Color(0xFFFDA4AF) else Color(0xFFBE123C)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF43F5E) else Color(0xFFFECDD3)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+            modifier = Modifier.weight(1f).testTag("rm_dashboard_reports_btn")
+          ) {
+            Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Report", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, maxLines = 1, softWrap = false)
+          }
+        }
 
           Spacer(modifier = Modifier.height(12.dp))
 

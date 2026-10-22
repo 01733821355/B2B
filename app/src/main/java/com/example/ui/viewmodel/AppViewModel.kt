@@ -1,6 +1,7 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.database.AppDatabase
@@ -272,14 +273,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val appSettings: StateFlow<List<AppSettingEntity>> = eblRepository.getAppSettingsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-  val selectedThemeMode: StateFlow<String> = appSettings.map { list ->
-    list.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "AUTO")
+  private val _manualThemeFlow = MutableStateFlow<String?>(
+    try {
+      getApplication<Application>().getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        .getString("app_active_theme", null)
+    } catch (_: Exception) { null }
+  )
+
+  val selectedThemeMode: StateFlow<String> = combine(appSettings, _manualThemeFlow) { list, manual ->
+    if (!manual.isNullOrBlank()) {
+      manual
+    } else {
+      list.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
+    }
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), _manualThemeFlow.value ?: "AUTO")
+
+  val universalFontStyle: StateFlow<String> = appSettings.map { list ->
+    list.find { it.settingKey == "UI_FONT_STYLE" }?.settingValue ?: "DEFAULT_SANS"
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "DEFAULT_SANS")
+
+  val universalTextScale: StateFlow<String> = appSettings.map { list ->
+    list.find { it.settingKey == "UI_TEXT_SCALE" }?.settingValue ?: "STANDARD"
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "STANDARD")
+
+  val universalFontColor: StateFlow<String> = appSettings.map { list ->
+    list.find { it.settingKey == "UI_FONT_COLOR" }?.settingValue ?: "#0A192F"
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "#0A192F")
 
   val activeThemeConfig: StateFlow<AppThemeConfig> = combine(
     selectedThemeMode,
-    appSettings
-  ) { mode, settingsList ->
+    appSettings,
+    universalFontColor
+  ) { mode, settingsList, fontColorHex ->
     val effectiveMode = if (mode.equals("AUTO", true)) {
       ThemeManager.determineSeasonalTheme().id.code
     } else {
@@ -287,7 +312,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     val customKey = "THEME_CUSTOM_COLORS_${effectiveMode.uppercase()}"
     val customJson = settingsList.find { it.settingKey == customKey }?.settingValue
-    ThemeManager.getThemeById(effectiveMode, customJson)
+    ThemeManager.getThemeById(effectiveMode, customJson, fontColorHex)
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeManager.DefaultDayTheme)
 
   val productTypes: StateFlow<List<String>> = appSettings.map { list ->
@@ -1051,7 +1076,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   }
 
   fun setThemeMode(themeCode: String) {
+    _manualThemeFlow.value = themeCode
+    try {
+      getApplication<Application>().getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+        .edit().putString("app_active_theme", themeCode).apply()
+    } catch (_: Exception) {}
     updateSetting("APP_ACTIVE_THEME", themeCode)
+    viewModelScope.launch {
+      eblRepository.syncSettingUpsertToGoogleSheets("APP_ACTIVE_THEME", themeCode)
+    }
+  }
+
+  fun setUniversalFont(fontStyle: String, fontColorHex: String, textScale: String = "STANDARD") {
+    updateSetting("UI_FONT_STYLE", fontStyle)
+    updateSetting("UI_FONT_COLOR", fontColorHex)
+    updateSetting("UI_TEXT_SCALE", textScale)
+    viewModelScope.launch {
+      eblRepository.syncSettingUpsertToGoogleSheets("UI_FONT_STYLE", fontStyle)
+      eblRepository.syncSettingUpsertToGoogleSheets("UI_FONT_COLOR", fontColorHex)
+      eblRepository.syncSettingUpsertToGoogleSheets("UI_TEXT_SCALE", textScale)
+      _uiMessage.emit("Universal Font & Color updated across app.")
+    }
   }
 
   fun saveCustomThemeColors(themeCode: String, primaryHex: String, secondaryHex: String, tertiaryHex: String, bgHex: String, surfaceHex: String) {

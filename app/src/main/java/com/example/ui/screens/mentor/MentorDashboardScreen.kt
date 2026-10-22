@@ -133,120 +133,157 @@ fun MentorDashboardScreen(
 
     item {
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+
+        // Universal Notification Status & App-Off Alert Control for Mentor
+        com.example.ui.common.NotificationStatusCard(
+          userRole = currentUser.role,
+          userName = currentUser.name,
+          modifier = Modifier.padding(bottom = 10.dp)
+        )
+
         // Operational Quick Action Buttons
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          OutlinedButton(
+            onClick = { onNavigate(Screen.GlobalDatabase) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF581C87).copy(alpha = 0.35f) else Color(0xFFF5F3FF),
+              contentColor = if (isDark) Color(0xFFC4B5FD) else Color(0xFF6D28D9)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF8B5CF6) else Color(0xFFDDD6FE)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_database")
           ) {
-            OutlinedButton(
-              onClick = { onNavigate(Screen.GlobalDatabase) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_database")
-            ) {
-              Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(12.dp))
-              Spacer(modifier = Modifier.width(3.dp))
-              Text("Database", fontSize = 10.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.RmMapping) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_rm_mapping")
-            ) {
-              Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(12.dp))
-              Spacer(modifier = Modifier.width(3.dp))
-              Text("RMs", fontSize = 10.sp, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.MentorUserLocationTracking) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_user_locations")
-            ) {
-              Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(12.dp))
-              Spacer(modifier = Modifier.width(3.dp))
-              Text("Radar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.GoogleSheetsSync) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF34D399)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_sheets_sync")
-            ) {
-              Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(12.dp))
-              Spacer(modifier = Modifier.width(3.dp))
-              Text("Sheets", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+            Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("Database", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.RmMapping) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              contentColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6) else Color(0xFFBFDBFE)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_rm_mapping")
           ) {
-            OutlinedButton(
-              onClick = { onNavigate(Screen.DbrChecklist) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = EblGold),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
-              modifier = Modifier.weight(1.2f).testTag("mentor_btn_dbr_checklist")
-            ) {
-              Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(13.dp), tint = EblGold)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("DBR & Checklist", color = EblGold, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.ImportantDocuments) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF67E8F9)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
-              modifier = Modifier.weight(1.1f).testTag("mentor_btn_important_docs")
-            ) {
-              Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(13.dp), tint = Color(0xFF67E8F9))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+            Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("RMs", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+          OutlinedButton(
+            onClick = { onNavigate(Screen.MentorUserLocationTracking) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF164E63).copy(alpha = 0.35f) else Color(0xFFECFEFF),
+              contentColor = if (isDark) Color(0xFF67E8F9) else Color(0xFF0E7490)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF06B6D4) else Color(0xFFA5F3FC)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_user_locations")
           ) {
-            val deletedCount = allFiles.count { it.isDeleted }
-            Button(
-              onClick = { showDeletedRecordsDialog = true },
-              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
-              modifier = Modifier.weight(1.1f).testTag("mentor_btn_quick_recover_deleted")
-            ) {
-              Icon(Icons.Default.RestoreFromTrash, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Recover Deleted ($deletedCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
-
-            OutlinedButton(
-              onClick = { onNavigate(Screen.CommunicationHub) },
-              colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF38BDF8)),
-              shape = RoundedCornerShape(8.dp),
-              contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
-              modifier = Modifier.weight(1f).testTag("mentor_btn_events_hub")
-            ) {
-              Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF38BDF8))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Events & Reports", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
-            }
+            Icon(Icons.Default.LocationOn, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("Radar", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
+
+          OutlinedButton(
+            onClick = { onNavigate(Screen.GoogleSheetsSync) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFECFDF5),
+              contentColor = if (isDark) Color(0xFF6EE7B7) else Color(0xFF047857)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 2.dp, vertical = 4.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_sheets_sync")
+          ) {
+            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(12.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("Sheets", fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          OutlinedButton(
+            onClick = { onNavigate(Screen.DbrChecklist) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
+              contentColor = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF59E0B) else Color(0xFFFDE68A)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1.2f).testTag("mentor_btn_dbr_checklist")
+          ) {
+            Icon(Icons.Default.Calculate, contentDescription = null, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("DBR & Checklist", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+
+          OutlinedButton(
+            onClick = { onNavigate(Screen.ImportantDocuments) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF164E63).copy(alpha = 0.35f) else Color(0xFFECFEFF),
+              contentColor = if (isDark) Color(0xFF67E8F9) else Color(0xFF0E7490)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF06B6D4) else Color(0xFFA5F3FC)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1.1f).testTag("mentor_btn_important_docs")
+          ) {
+            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Important Docs", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          val deletedCount = allFiles.count { it.isDeleted }
+          Button(
+            onClick = { showDeletedRecordsDialog = true },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF7C3AED)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1.1f).testTag("mentor_btn_quick_recover_deleted")
+          ) {
+            Icon(Icons.Default.RestoreFromTrash, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color.White)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Recover Deleted ($deletedCount)", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+
+          OutlinedButton(
+            onClick = { onNavigate(Screen.CommunicationHub) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF881337).copy(alpha = 0.35f) else Color(0xFFFFF1F2),
+              contentColor = if (isDark) Color(0xFFFDA4AF) else Color(0xFFBE123C)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFFF43F5E) else Color(0xFFFECDD3)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_events_hub")
+          ) {
+            Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Events & Reports", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
 
           Spacer(modifier = Modifier.height(10.dp))
           val isBioMentor = viewModel.isBiometricEnabled(currentUser.rmCode)

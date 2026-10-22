@@ -891,6 +891,9 @@ fun AppSettingsScreen(
     val currentTextScale = settings.find { it.settingKey == "UI_TEXT_SCALE" }?.settingValue ?: "STANDARD"
     var selectedTextScale by remember(currentTextScale) { mutableStateOf(currentTextScale) }
 
+    val currentFontColor = settings.find { it.settingKey == "UI_FONT_COLOR" }?.settingValue ?: "#0A192F"
+    var selectedFontColorHex by remember(currentFontColor) { mutableStateOf(currentFontColor) }
+
     // Theme Customizer State
     val themeOptions = listOf(
       AppThemeId.AUTO,
@@ -1228,7 +1231,7 @@ fun AppSettingsScreen(
         Spacer(modifier = Modifier.height(14.dp))
 
         // 2. Font Style / Typography Preset
-        Text("Typography & Font Style:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Text("Typography & Universal Font Style (সর্বজনীন ফন্ট স্টাইল):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(6.dp))
 
         val fontOptions = listOf(
@@ -1247,7 +1250,7 @@ fun AppSettingsScreen(
               selected = isSelected,
               onClick = {
                 selectedFontStyle = key
-                viewModel.updateSetting("UI_FONT_STYLE", key)
+                viewModel.setUniversalFont(key, selectedFontColorHex, selectedTextScale)
               },
               label = { Text(label, fontSize = 10.sp) },
               modifier = Modifier.weight(1f)
@@ -1257,8 +1260,98 @@ fun AppSettingsScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // 3. UI Text Scale / Font Size
-        Text("UI Text Reading Scale:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        // 3. Universal Font Color Customizer
+        Text("Universal Font Color (সর্বজনীন টেক্সট রং):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
+        Spacer(modifier = Modifier.height(6.dp))
+
+        val fontColorPresets = listOf(
+          Pair("#0A192F", "Deep Navy"),
+          Pair("#0F172A", "Midnight"),
+          Pair("#1E293B", "Slate Dark"),
+          Pair("#064E3B", "Emerald"),
+          Pair("#1E1B4B", "Royal Indigo"),
+          Pair("#881337", "Burgundy")
+        )
+
+        FlowRow(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalArrangement = Arrangement.spacedBy(6.dp),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          fontColorPresets.forEach { (hex, name) ->
+            val isColorSelected = selectedFontColorHex.equals(hex, ignoreCase = true)
+            val parsedColor = AppThemeConfig.parseHexColor(hex, Color.Black)
+            Surface(
+              onClick = {
+                selectedFontColorHex = hex
+                viewModel.setUniversalFont(selectedFontStyle, hex, selectedTextScale)
+                Toast.makeText(context, "$name ফন্ট রং সক্রিয় করা হয়েছে!", Toast.LENGTH_SHORT).show()
+              },
+              shape = RoundedCornerShape(8.dp),
+              color = if (isColorSelected) parsedColor.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface,
+              border = BorderStroke(if (isColorSelected) 2.dp else 1.dp, if (isColorSelected) parsedColor else Color(0xFFCBD5E1)),
+              modifier = Modifier.padding(vertical = 2.dp)
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+              ) {
+                Box(
+                  modifier = Modifier
+                    .size(14.dp)
+                    .clip(CircleShape)
+                    .background(parsedColor)
+                )
+                Text(name, fontSize = 10.sp, fontWeight = if (isColorSelected) FontWeight.Bold else FontWeight.Normal, color = parsedColor)
+              }
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Custom Font Color Hex & Live Preview
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          OutlinedTextField(
+            value = selectedFontColorHex,
+            onValueChange = { selectedFontColorHex = it },
+            label = { Text("Custom Hex Color (যেমন: #0A192F)", fontSize = 10.sp) },
+            singleLine = true,
+            modifier = Modifier.weight(1f)
+          )
+
+          val parsedPreviewColor = AppThemeConfig.parseHexColor(selectedFontColorHex, Color.Black)
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = parsedPreviewColor.copy(alpha = 0.1f),
+            border = BorderStroke(1.dp, parsedPreviewColor),
+            modifier = Modifier.padding(top = 4.dp)
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(16.dp)
+                  .clip(CircleShape)
+                  .background(parsedPreviewColor)
+              )
+              Text("Sample Font", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = parsedPreviewColor)
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // 4. UI Text Scale / Font Size
+        Text("UI Text Reading Scale (টেক্সট আকার):", fontWeight = FontWeight.SemiBold, fontSize = 12.sp)
         Spacer(modifier = Modifier.height(6.dp))
 
         val scaleOptions = listOf(
@@ -1277,12 +1370,32 @@ fun AppSettingsScreen(
               selected = isSelected,
               onClick = {
                 selectedTextScale = key
-                viewModel.updateSetting("UI_TEXT_SCALE", key)
+                viewModel.setUniversalFont(selectedFontStyle, selectedFontColorHex, key)
               },
               label = { Text(label, fontSize = 10.sp) },
               modifier = Modifier.weight(1f)
             )
           }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Save All Font Settings Button
+        Button(
+          onClick = {
+            viewModel.setUniversalFont(
+              fontStyle = selectedFontStyle,
+              fontColorHex = selectedFontColorHex.trim(),
+              textScale = selectedTextScale
+            )
+            Toast.makeText(context, "সর্বজনীন ফন্ট স্টাইল ও রং সংরক্ষিত হয়েছে এবং সিঙ্ক হচ্ছে!", Toast.LENGTH_SHORT).show()
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Save Universal Font & Color (সর্বজনীন ফন্ট সংরক্ষণ)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
       }
     }

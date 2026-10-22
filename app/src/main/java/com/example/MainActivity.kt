@@ -99,7 +99,13 @@ class MainActivity : FragmentActivity() {
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
     setContent {
       val activeThemeConfig by viewModel.activeThemeConfig.collectAsState()
-      MyApplicationTheme(themeConfig = activeThemeConfig) {
+      val universalFontStyle by viewModel.universalFontStyle.collectAsState()
+      val universalTextScale by viewModel.universalTextScale.collectAsState()
+      MyApplicationTheme(
+        themeConfig = activeThemeConfig,
+        fontStyle = universalFontStyle,
+        textScale = universalTextScale
+      ) {
         EblMainApp(viewModel = viewModel)
       }
     }
@@ -132,15 +138,11 @@ fun EblMainApp(viewModel: AppViewModel) {
   var showRmSmsInboxModal by remember { mutableStateOf(false) }
   val context = LocalContext.current
 
-  val notificationPermissionLauncher = rememberLauncherForActivityResult(
-    ActivityResultContracts.RequestPermission()
-  ) {
-    NotificationHelper.markPermissionAsked(context)
-  }
-
-  val locationPermissionLauncher = rememberLauncherForActivityResult(
+  // Unified Permission Requester: Requests Location, SMS, and Notifications TOGETHER
+  val unifiedPermissionLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.RequestMultiplePermissions()
   ) { perms ->
+    NotificationHelper.markPermissionAsked(context)
     val fine = perms[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
     val coarse = perms[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
     if (fine || coarse) {
@@ -155,27 +157,29 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
-  // Requirement 4: suruteo location er parmition nia nibe
+  // Request SMS, Location, and Notifications together on app launch
   LaunchedEffect(Unit) {
-    if (!com.example.util.LocationHelper.hasLocationPermission(context)) {
-      locationPermissionLauncher.launch(
-        arrayOf(
-          Manifest.permission.ACCESS_FINE_LOCATION,
-          Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-      )
-    }
-  }
-
-  // Prompt RM for notification permission only once and schedule background sync worker
-  LaunchedEffect(currentUser?.rmCode) {
     NotificationHelper.createNotificationChannels(context)
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(context.applicationContext)
+
+    val neededPermissions = mutableListOf<String>()
+    if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      neededPermissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      neededPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    }
+    if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+      neededPermissions.add(Manifest.permission.SEND_SMS)
+    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-      if (!NotificationHelper.hasAskedPermissionOnce(context)) {
-        NotificationHelper.markPermissionAsked(context)
-        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+      if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        neededPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
       }
+    }
+
+    if (neededPermissions.isNotEmpty()) {
+      unifiedPermissionLauncher.launch(neededPermissions.toTypedArray())
     }
   }
 

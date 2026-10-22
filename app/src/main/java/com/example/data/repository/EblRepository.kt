@@ -2394,7 +2394,20 @@ class EblRepository(
       updatedAt = DateUtils.currentDhakaMillis()
     )
     database.appSettingDao().insertOrUpdateSetting(setting)
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    if (key.equals("APP_ACTIVE_THEME", true) ||
+        key.equals("UI_FONT_STYLE", true) ||
+        key.equals("UI_FONT_COLOR", true) ||
+        key.equals("UI_TEXT_SCALE", true)) {
+      val prefKey = if (key.equals("APP_ACTIVE_THEME", true)) "app_active_theme" else key.lowercase()
+      try {
+        context?.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+          ?.edit()?.putString(prefKey, value)?.apply()
+      } catch (_: Exception) {}
+    }
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets(key, value)
+      triggerGoogleSheetsSync()
+    }
     Result.success(Unit)
   }
 
@@ -3462,6 +3475,23 @@ class EblRepository(
         val delPresetSet = (delPresetsSetting.split(",").map { it.trim().uppercase() } + deletedPresetKeysCache.map { it.uppercase() }).toSet()
         if (key.uppercase() in delPresetSet || key.removePrefix("CHECKLIST_CUSTOM_").replace("_", " ").uppercase() in delPresetSet) {
           continue
+        }
+
+        if (key.equals("APP_ACTIVE_THEME", true) ||
+            key.equals("UI_FONT_STYLE", true) ||
+            key.equals("UI_FONT_COLOR", true) ||
+            key.equals("UI_TEXT_SCALE", true)) {
+          val prefKey = if (key.equals("APP_ACTIVE_THEME", true)) "app_active_theme" else key.lowercase()
+          val localPrefVal = try {
+            context?.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)?.getString(prefKey, null)
+          } catch (_: Exception) { null }
+          if (!localPrefVal.isNullOrBlank() && !localPrefVal.equals(value, ignoreCase = true)) {
+            // Local user selected a value! Push it back to sheet and do not overwrite locally with stale remote data!
+            applicationScope.launch {
+              syncSettingUpsertToGoogleSheets(key, localPrefVal)
+            }
+            continue
+          }
         }
 
         if (existing == null || existing.settingValue != value) {

@@ -229,6 +229,14 @@ fun AdminDashboardScreen(
       }
     }
 
+    // Universal Notification Status & Test Alert Card
+    item {
+      com.example.ui.common.NotificationStatusCard(
+        userRole = "ADMIN",
+        userName = currentUser.name
+      )
+    }
+
     // Time filter pills
     item {
       TimeFilterBar(

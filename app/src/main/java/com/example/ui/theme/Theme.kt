@@ -58,9 +58,12 @@ private val DarkColorScheme = darkColorScheme(
 @Composable
 fun MyApplicationTheme(
   themeConfig: AppThemeConfig = ThemeManager.DefaultDayTheme,
+  fontStyle: String = "DEFAULT_SANS",
+  textScale: String = "STANDARD",
   content: @Composable () -> Unit
 ) {
   val colorScheme = themeConfig.toM3ColorScheme()
+  val typography = getAppTypography(fontStyle, textScale)
   val view = LocalView.current
   if (!view.isInEditMode) {
     SideEffect {
@@ -75,7 +78,7 @@ fun MyApplicationTheme(
   CompositionLocalProvider(LocalAppTheme provides themeConfig) {
     MaterialTheme(
       colorScheme = colorScheme,
-      typography = Typography,
+      typography = typography,
       content = content
     )
   }

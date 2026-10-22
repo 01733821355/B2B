@@ -401,4 +401,38 @@ object NotificationHelper {
       notificationManager.notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }
+
+  fun sendTestAlertNotification(
+    context: Context,
+    title: String,
+    message: String,
+    notificationId: Int = 1001
+  ) {
+    try {
+      createNotificationChannels(context)
+      val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+      }
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        notificationId,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+      val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.ic_dialog_info)
+        .setContentTitle(title)
+        .setContentText(message)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
+        .setSound(soundUri)
+        .setVibrate(longArrayOf(0, 150, 100, 150))
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+      NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+    } catch (_: Exception) {}
+  }
 }

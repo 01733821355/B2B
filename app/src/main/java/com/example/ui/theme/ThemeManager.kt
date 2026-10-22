@@ -306,7 +306,7 @@ object ThemeManager {
     }
   }
 
-  fun getThemeById(idStr: String, customJson: String? = null): AppThemeConfig {
+  fun getThemeById(idStr: String, customJson: String? = null, universalFontColorHex: String? = null): AppThemeConfig {
     val themeId = try {
       AppThemeId.valueOf(idStr.trim().uppercase())
     } catch (_: Exception) {
@@ -326,24 +326,36 @@ object ThemeManager {
       AppThemeId.INDEPENDENCE_DAY -> DefaultIndependenceDayTheme
     }
 
-    if (customJson.isNullOrBlank()) return baseTheme
-
-    return try {
-      val obj = JSONObject(customJson)
-      val pri = if (obj.has("primary")) AppThemeConfig.parseHexColor(obj.getString("primary"), baseTheme.primary) else baseTheme.primary
-      val sec = if (obj.has("secondary")) AppThemeConfig.parseHexColor(obj.getString("secondary"), baseTheme.secondary) else baseTheme.secondary
-      val ter = if (obj.has("tertiary")) AppThemeConfig.parseHexColor(obj.getString("tertiary"), baseTheme.tertiary) else baseTheme.tertiary
-      val bg = if (obj.has("background")) AppThemeConfig.parseHexColor(obj.getString("background"), baseTheme.background) else baseTheme.background
-      val srf = if (obj.has("surface")) AppThemeConfig.parseHexColor(obj.getString("surface"), baseTheme.surface) else baseTheme.surface
-      baseTheme.copy(
-        primary = pri,
-        secondary = sec,
-        tertiary = ter,
-        background = bg,
-        surface = srf
-      )
-    } catch (_: Exception) {
+    val customized = if (!customJson.isNullOrBlank()) {
+      try {
+        val obj = JSONObject(customJson)
+        val pri = if (obj.has("primary")) AppThemeConfig.parseHexColor(obj.getString("primary"), baseTheme.primary) else baseTheme.primary
+        val sec = if (obj.has("secondary")) AppThemeConfig.parseHexColor(obj.getString("secondary"), baseTheme.secondary) else baseTheme.secondary
+        val ter = if (obj.has("tertiary")) AppThemeConfig.parseHexColor(obj.getString("tertiary"), baseTheme.tertiary) else baseTheme.tertiary
+        val bg = if (obj.has("background")) AppThemeConfig.parseHexColor(obj.getString("background"), baseTheme.background) else baseTheme.background
+        val srf = if (obj.has("surface")) AppThemeConfig.parseHexColor(obj.getString("surface"), baseTheme.surface) else baseTheme.surface
+        baseTheme.copy(
+          primary = pri,
+          secondary = sec,
+          tertiary = ter,
+          background = bg,
+          surface = srf
+        )
+      } catch (_: Exception) {
+        baseTheme
+      }
+    } else {
       baseTheme
+    }
+
+    return if (!universalFontColorHex.isNullOrBlank() && !customized.isDark) {
+      val parsedFontColor = AppThemeConfig.parseHexColor(universalFontColorHex, customized.onSurface)
+      customized.copy(
+        onBackground = parsedFontColor,
+        onSurface = parsedFontColor
+      )
+    } else {
+      customized
     }
   }
 }
