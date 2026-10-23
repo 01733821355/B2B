@@ -23,6 +23,12 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Badge
@@ -85,6 +91,7 @@ fun EblTopBar(
 ) {
   var showMenu by remember { mutableStateOf(false) }
   var showSmsDialog by remember { mutableStateOf(false) }
+  var showNotificationSettingsDialog by remember { mutableStateOf(false) }
   var dhakaTimeText by remember { mutableStateOf("") }
 
   LaunchedEffect(Unit) {
@@ -320,6 +327,19 @@ fun EblTopBar(
               modifier = Modifier.testTag("menu_sms_notifications")
             )
 
+            // 4b. Notification & SMS Settings (Universal)
+            DropdownMenuItem(
+              text = { Text("SMS & Alert Settings", fontSize = 13.sp, fontWeight = FontWeight.Medium) },
+              leadingIcon = {
+                Icon(Icons.Default.NotificationsActive, contentDescription = "Notification & SMS Settings", tint = Color(0xFFF59E0B))
+              },
+              onClick = {
+                showMenu = false
+                showNotificationSettingsDialog = true
+              },
+              modifier = Modifier.testTag("menu_notification_settings")
+            )
+
             // 5. Google Sheets Sync Console (Mentor Only)
             if (user.role == "MENTOR") {
               DropdownMenuItem(
@@ -399,6 +419,41 @@ fun EblTopBar(
       onMarkAllRead = onMarkAllSmsRead,
       onClearAll = onClearSms,
       onDeleteSms = onDeleteSms
+    )
+  }
+
+  if (showNotificationSettingsDialog && user != null) {
+    AlertDialog(
+      onDismissRequest = { showNotificationSettingsDialog = false },
+      title = {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = EblNavyPrimary)
+          Text("Notification & SMS Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = EblNavyDark)
+        }
+      },
+      text = {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+        ) {
+          NotificationStatusCard(
+            userRole = user.role,
+            userName = user.name
+          )
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = { showNotificationSettingsDialog = false },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("Close")
+        }
+      }
     )
   }
 }

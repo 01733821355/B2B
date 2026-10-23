@@ -26,13 +26,17 @@ data class RmTargetEntity(
   val q4B2bTarget: Int = 15
 ) {
   fun getTargetForQuarter(quarter: String): Triple<Int, Int, Int> {
-    return when (quarter.trim().uppercase()) {
+    val qTriple = when (quarter.trim().uppercase()) {
       "Q1" -> Triple(q1CreditCardTarget, q1CorporateCardTarget, q1B2bTarget)
       "Q2" -> Triple(q2CreditCardTarget, q2CorporateCardTarget, q2B2bTarget)
       "Q3" -> Triple(q3CreditCardTarget, q3CorporateCardTarget, q3B2bTarget)
       "Q4" -> Triple(q4CreditCardTarget, q4CorporateCardTarget, q4B2bTarget)
       else -> Triple(creditCardTarget, corporateCardTarget, b2bTarget)
     }
+    val finalCc = if (qTriple.first > 0 && qTriple.first != 20) qTriple.first else if (creditCardTarget > 0) creditCardTarget else qTriple.first
+    val finalCorp = if (qTriple.second > 0 && qTriple.second != 10) qTriple.second else if (corporateCardTarget > 0) corporateCardTarget else qTriple.second
+    val finalB2b = if (qTriple.third > 0 && qTriple.third != 15) qTriple.third else if (b2bTarget > 0) b2bTarget else qTriple.third
+    return Triple(finalCc, finalCorp, finalB2b)
   }
 
   fun getEffectiveCcTarget(quarter: String? = null): Int {

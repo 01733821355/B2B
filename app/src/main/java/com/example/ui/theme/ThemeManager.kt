@@ -60,7 +60,7 @@ data class AppThemeConfig(
         surface = surface,
         onSurface = onSurface,
         surfaceVariant = surface.copy(alpha = 0.85f),
-        onSurfaceVariant = Color(0xFF94A3B8),
+        onSurfaceVariant = Color(0xFFCBD5E1),
         outline = secondary.copy(alpha = 0.6f)
       )
     } else {
@@ -80,7 +80,7 @@ data class AppThemeConfig(
         surface = surface,
         onSurface = onSurface,
         surfaceVariant = Color(0xFFF1F5F9),
-        onSurfaceVariant = Color(0xFF64748B),
+        onSurfaceVariant = Color(0xFF334155),
         outline = Color(0xFFCBD5E1)
       )
     }
@@ -164,9 +164,11 @@ object ThemeManager {
     banglaName = "গ্রীষ্মকাল (বৈশাখ ও জ্যৈষ্ঠ)",
     primary = Color(0xFFC2410C), // Warm Sunset Amber
     secondary = Color(0xFFEA580C),
-    tertiary = Color(0xFFF59E0B), // Warm Marigold Sun
+    tertiary = Color(0xFFB45309), // High-contrast warm amber
     background = Color(0xFFFFFDF7), // Soft sunlit cream
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF1C1917),
+    onSurface = Color(0xFF1C1917),
     isDark = false
   )
 
@@ -175,11 +177,13 @@ object ThemeManager {
     id = AppThemeId.RAINY,
     name = "Rainy / Monsoon",
     banglaName = "বর্ষাকাল (আষাঢ় ও শ্রাবণ)",
-    primary = Color(0xFF0891B2), // Monsoon Deep Aqua Cyan
-    secondary = Color(0xFF0E7490),
-    tertiary = Color(0xFF0284C7), // Sky rain blue
+    primary = Color(0xFF0E7490), // Monsoon Deep Aqua Cyan
+    secondary = Color(0xFF155E75),
+    tertiary = Color(0xFF0369A1), // Sky rain blue
     background = Color(0xFFF0F9FF), // Fresh raindrop tint
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF0C4A6E),
+    onSurface = Color(0xFF0C4A6E),
     isDark = false
   )
 
@@ -188,11 +192,13 @@ object ThemeManager {
     id = AppThemeId.WINTER,
     name = "Winter / Fog & Frost",
     banglaName = "শীতকাল (কুয়াশা ও শিশির)",
-    primary = Color(0xFF334155), // Slate mist
-    secondary = Color(0xFF475569),
-    tertiary = Color(0xFF38BDF8), // Crisp frost blue
+    primary = Color(0xFF1E293B), // Slate mist deep
+    secondary = Color(0xFF334155),
+    tertiary = Color(0xFF0284C7), // Crisp frost blue
     background = Color(0xFFF8FAFC), // Chilly pearl
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF0F172A),
+    onSurface = Color(0xFF0F172A),
     isDark = false
   )
 
@@ -201,11 +207,13 @@ object ThemeManager {
     id = AppThemeId.PUJA,
     name = "Sharadiya Durga Puja",
     banglaName = "শারদীয় দুর্গোৎসব",
-    primary = Color(0xFFB91C1C), // Festive Vermilion Red
-    secondary = Color(0xFF991B1B),
-    tertiary = Color(0xFFD97706), // Marigold Gold
+    primary = Color(0xFF991B1B), // Festive Vermilion Red
+    secondary = Color(0xFF7F1D1D),
+    tertiary = Color(0xFFB45309), // Marigold Gold (deep enough to be crisp)
     background = Color(0xFFFFFBEB), // Festive warm cream
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF450A0A),
+    onSurface = Color(0xFF450A0A),
     isDark = false
   )
 
@@ -214,11 +222,13 @@ object ThemeManager {
     id = AppThemeId.EID,
     name = "Eid Celebration",
     banglaName = "পবিত্র ঈদ আনন্দ",
-    primary = Color(0xFF047857), // Crescent Emerald Green
-    secondary = Color(0xFF065F46),
-    tertiary = Color(0xFFD97706), // Royal festive gold
+    primary = Color(0xFF065F46), // Crescent Emerald Green
+    secondary = Color(0xFF064E3B),
+    tertiary = Color(0xFFB45309), // Royal festive gold
     background = Color(0xFFF0FDF4), // Fresh Eid emerald tint
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF022C22),
+    onSurface = Color(0xFF022C22),
     isDark = false
   )
 
@@ -228,10 +238,12 @@ object ThemeManager {
     name = "Language Day (21st Feb)",
     banglaName = "আন্তর্জাতিক মাতৃভাষা দিবস",
     primary = Color(0xFF18181B), // Memorial deep charcoal black
-    secondary = Color(0xFF3F3F46),
-    tertiary = Color(0xFFDC2626), // Shahid Minar Crimson Red
+    secondary = Color(0xFF27272A),
+    tertiary = Color(0xFFB91C1C), // Shahid Minar Crimson Red
     background = Color(0xFFFAFAFA), // Solemn marble white
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF09090B),
+    onSurface = Color(0xFF09090B),
     isDark = false
   )
 
@@ -242,9 +254,11 @@ object ThemeManager {
     banglaName = "মহান স্বাধীনতা ও জাতীয় দিবস",
     primary = Color(0xFF006A4E), // Bangladesh Flag National Forest Green
     secondary = Color(0xFF04523B),
-    tertiary = Color(0xFFF42A41), // Bangladesh Flag Sun Red
+    tertiary = Color(0xFFB91C1C), // High-contrast deep flag red
     background = Color(0xFFF2FBF6), // Subtle mint tint
     surface = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF022C22),
+    onSurface = Color(0xFF022C22),
     isDark = false
   )
 
@@ -348,12 +362,34 @@ object ThemeManager {
       baseTheme
     }
 
-    return if (!universalFontColorHex.isNullOrBlank() && !customized.isDark) {
+    return if (!universalFontColorHex.isNullOrBlank()) {
       val parsedFontColor = AppThemeConfig.parseHexColor(universalFontColorHex, customized.onSurface)
-      customized.copy(
-        onBackground = parsedFontColor,
-        onSurface = parsedFontColor
-      )
+      val lum = (parsedFontColor.red * 0.299f + parsedFontColor.green * 0.587f + parsedFontColor.blue * 0.114f)
+      if (customized.isDark) {
+        if (lum < 0.45f) {
+          customized.copy(
+            onBackground = Color(0xFFF8FAFC),
+            onSurface = Color(0xFFF8FAFC)
+          )
+        } else {
+          customized.copy(
+            onBackground = parsedFontColor,
+            onSurface = parsedFontColor
+          )
+        }
+      } else {
+        if (lum > 0.55f) {
+          customized.copy(
+            onBackground = Color(0xFF0F172A),
+            onSurface = Color(0xFF0F172A)
+          )
+        } else {
+          customized.copy(
+            onBackground = parsedFontColor,
+            onSurface = parsedFontColor
+          )
+        }
+      }
     } else {
       customized
     }

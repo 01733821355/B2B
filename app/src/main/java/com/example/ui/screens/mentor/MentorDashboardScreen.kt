@@ -135,12 +135,6 @@ fun MentorDashboardScreen(
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
-        // Universal Notification Status & App-Off Alert Control for Mentor
-        com.example.ui.common.NotificationStatusCard(
-          userRole = currentUser.role,
-          userName = currentUser.name,
-          modifier = Modifier.padding(bottom = 10.dp)
-        )
 
         // Operational Quick Action Buttons
         Row(

@@ -313,6 +313,11 @@ class EblRepository(
     }
     database.rmTargetDao().insertOrUpdateTarget(updated)
 
+    // Store target update timestamp so sheet sync does NOT overwrite it
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("RM_TARGET_UPDATED_AT_$rmCode", now.toString(), "APP", now)
+    )
+
     val currentUser = authRepository.currentUser.value
     if (currentUser != null && (currentUser.role == "ADMIN" || currentUser.role == "MENTOR")) {
       val targetRmUser = database.userDao().getUser(rmCode)
@@ -347,7 +352,10 @@ class EblRepository(
       )
     }
 
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      syncTargetUpsertToGoogleSheets(rmCode, cleanQ, year, creditCardTarget, corporateCardTarget, b2bTarget)
+      triggerGoogleSheetsSync()
+    }
     Result.success(Unit)
   }
 
@@ -1393,6 +1401,38 @@ class EblRepository(
         put("action", "UPSERT_SETTING")
         put("settingKey", key)
         put("settingValue", value)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
+  }
+
+  suspend fun syncTargetUpsertToGoogleSheets(
+    rmCode: String,
+    quarter: String,
+    year: Int,
+    ccTarget: Int,
+    corpTarget: Int,
+    b2bTarget: Int
+  ): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val payload = org.json.JSONObject().apply {
+        put("action", "UPSERT_RM_TARGET")
+        put("rmCode", rmCode)
+        put("quarter", quarter)
+        put("year", year)
+        put("creditCardTarget", ccTarget)
+        put("corporateCardTarget", corpTarget)
+        put("b2bTarget", b2bTarget)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -3412,23 +3452,56 @@ class EblRepository(
         updatedCount++
       }
 
+      val lastLocalTargetChangeTime = database.appSettingDao().getSetting("RM_TARGET_UPDATED_AT_$code")?.updatedAt ?: 0L
+      val isRecentLocalTargetChange = (now - lastLocalTargetChangeTime) < 300_000L // 5 minutes immunity window
+
       val existingTarget = database.rmTargetDao().getTargetForRm(code)
       if (existingTarget == null) {
         database.rmTargetDao().insertOrUpdateTarget(
-          RmTargetEntity(code, ccTarget, corpTarget, b2bTarget, now)
-        )
-      } else if (existingTarget.creditCardTarget != ccTarget ||
-                 existingTarget.corporateCardTarget != corpTarget ||
-                 existingTarget.b2bTarget != b2bTarget) {
-        database.rmTargetDao().insertOrUpdateTarget(
-          existingTarget.copy(
+          RmTargetEntity(
+            rmCode = code,
             creditCardTarget = ccTarget,
             corporateCardTarget = corpTarget,
             b2bTarget = b2bTarget,
+            q1CreditCardTarget = ccTarget,
+            q1CorporateCardTarget = corpTarget,
+            q1B2bTarget = b2bTarget,
+            q2CreditCardTarget = ccTarget,
+            q2CorporateCardTarget = corpTarget,
+            q2B2bTarget = b2bTarget,
+            q3CreditCardTarget = ccTarget,
+            q3CorporateCardTarget = corpTarget,
+            q3B2bTarget = b2bTarget,
+            q4CreditCardTarget = ccTarget,
+            q4CorporateCardTarget = corpTarget,
+            q4B2bTarget = b2bTarget,
             updatedAt = now
           )
         )
-        updatedCount++
+      } else if (!isRecentLocalTargetChange) {
+        // Prevent sheet's default 15, 5, 2 from overwriting user-configured targets
+        val isSheetDefaultValues = (ccTarget == 15 && corpTarget == 5 && b2bTarget == 2)
+        val hasCustomLocalTargets = (existingTarget.creditCardTarget != 15 || existingTarget.corporateCardTarget != 5 || existingTarget.b2bTarget != 2)
+
+        if (!(isSheetDefaultValues && hasCustomLocalTargets)) {
+          if (existingTarget.creditCardTarget != ccTarget ||
+              existingTarget.corporateCardTarget != corpTarget ||
+              existingTarget.b2bTarget != b2bTarget) {
+            database.rmTargetDao().insertOrUpdateTarget(
+              existingTarget.copy(
+                creditCardTarget = ccTarget,
+                corporateCardTarget = corpTarget,
+                b2bTarget = b2bTarget,
+                q1CreditCardTarget = if (existingTarget.q1CreditCardTarget == 20) ccTarget else existingTarget.q1CreditCardTarget,
+                q2CreditCardTarget = if (existingTarget.q2CreditCardTarget == 20) ccTarget else existingTarget.q2CreditCardTarget,
+                q3CreditCardTarget = if (existingTarget.q3CreditCardTarget == 20) ccTarget else existingTarget.q3CreditCardTarget,
+                q4CreditCardTarget = if (existingTarget.q4CreditCardTarget == 20) ccTarget else existingTarget.q4CreditCardTarget,
+                updatedAt = now
+              )
+            )
+            updatedCount++
+          }
+        }
       }
     }
     return updatedCount

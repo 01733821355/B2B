@@ -154,12 +154,6 @@ fun RmDashboardScreen(
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
-        // Universal Notification Status & App-Off Alert Control for RM
-        com.example.ui.common.NotificationStatusCard(
-          userRole = user.role,
-          userName = user.name,
-          modifier = Modifier.padding(bottom = 10.dp)
-        )
 
         // Quick action buttons with high-contrast color-wise styling
         Row(
