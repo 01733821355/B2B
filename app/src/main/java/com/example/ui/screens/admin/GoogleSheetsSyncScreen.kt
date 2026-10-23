@@ -157,8 +157,8 @@ function cleanStaleSheetSms(smsSheet) {
         } catch (e) {}
       }
       var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-      // Sheet keeps notification only for ~10 seconds transit buffer
-      if (ageMs > 10000 || ageMs < -60000) {
+      // Sheet keeps notification only for 15 seconds transit buffer; auto-deletes after 15s
+      if (ageMs > 15000 || ageMs < -60000) {
         toDelete.push(r + 1);
       }
     }
@@ -198,39 +198,57 @@ function extractAllSheetFiles(sheet) {
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   var headers = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
-  var hasSl = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial' || headers[0] === 'serial no');
-  var offset = hasSl ? 1 : 0;
+  var colMap = {};
+  for (var c = 0; c < headers.length; c++) {
+    var cleanH = headers[c].replace(/[^a-z0-9]/g, '');
+    colMap[cleanH] = c;
+  }
+
+  function getVal(row, candidates, defaultVal) {
+    for (var i = 0; i < candidates.length; i++) {
+      var key = candidates[i].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (colMap.hasOwnProperty(key)) {
+        var v = row[colMap[key]];
+        if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+      }
+    }
+    return defaultVal !== undefined ? defaultVal : '';
+  }
 
   var list = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
-    var slVal = hasSl ? String(row[0] || r).trim() : String(r);
-    var ccVal = String(row[offset] || '');
-    var fIdVal = String(row[offset + 1] || ccVal || '');
-    if (!ccVal && !fIdVal) continue;
+    var slVal = getVal(row, ['sl', 'sl no', 'sl.', 'serial', 'serial no', 'serial number'], String(r));
+    var ccVal = getVal(row, ['ccnumber', 'cc number', 'cc_number', 'card number', 'ccno', 'cc'], '');
+    var fIdVal = getVal(row, ['fileid', 'file id', 'file_id', 'customer id', 'customerid'], ccVal);
+    if (!ccVal && !fIdVal) {
+      if (row[1]) ccVal = String(row[1]).trim();
+      if (row[2]) fIdVal = String(row[2]).trim();
+      if (!ccVal && !fIdVal) continue;
+    }
     list.push({
       serialNumber: slVal,
       sl: slVal,
       ccNumber: ccVal,
-      fileId: fIdVal,
-      customerName: String(row[offset + 2] || ''),
-      companyName: String(row[offset + 3] || ''),
-      officeAddress: String(row[offset + 4] || ''),
-      mobile: String(row[offset + 5] || ''),
-      email: String(row[offset + 6] || ''),
-      productType: String(row[offset + 7] || ''),
-      applicationStatus: String(row[offset + 8] || 'Submitted'),
-      activeStatus: String(row[offset + 9] || 'N'),
-      assignedRmCode: String(row[offset + 10] || ''),
-      pendingDocuments: String(row[offset + 11] || ''),
-      cpvRemarks: String(row[offset + 12] || ''),
-      remarks: String(row[offset + 12] || ''),
-      cpvStatus: String(row[offset + 13] || 'Pending'),
-      submissionAddress: String(row[offset + 14] || ''),
-      submissionLat: parseFloat(row[offset + 15]) || 0.0,
-      submissionLng: parseFloat(row[offset + 16]) || 0.0,
-      updatedAt: String(row[offset + 17] || ''),
-      updatedBy: String(row[offset + 18] || 'Sheet')
+      fileId: fIdVal || ccVal,
+      customerName: getVal(row, ['customer name', 'customername', 'name', 'client name'], 'Customer'),
+      companyName: getVal(row, ['company name', 'company', 'organization', 'companyname'], ''),
+      officeAddress: getVal(row, ['office address', 'officeaddress', 'address'], ''),
+      mobile: getVal(row, ['mobile', 'phone', 'contact', 'mobile no', 'cell'], ''),
+      email: getVal(row, ['email', 'email address', 'e-mail'], ''),
+      productType: getVal(row, ['product type', 'producttype', 'product'], 'Credit Card'),
+      applicationStatus: getVal(row, ['application status', 'applicationstatus', 'status', 'file status'], 'Submitted'),
+      activeStatus: getVal(row, ['active status', 'activestatus', 'active'], 'N'),
+      assignedRmCode: getVal(row, ['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], ''),
+      pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
+      cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks'], ''),
+      remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
+      cpvStatus: getVal(row, ['cpv status', 'cpvstatus'], 'Pending'),
+      submissionAddress: getVal(row, ['gps submission address', 'submission address', 'gps address', 'submissionaddress'], ''),
+      submissionLat: parseFloat(getVal(row, ['gps lat', 'submission lat', 'lat', 'latitude'], '0')) || 0.0,
+      submissionLng: parseFloat(getVal(row, ['gps lng', 'submission lng', 'lng', 'longitude'], '0')) || 0.0,
+      updatedAt: getVal(row, ['last updated', 'updated at', 'updatedat', 'timestamp'], ''),
+      updatedBy: getVal(row, ['updated by', 'updatedby'], 'Sheet')
     });
   }
   return list;
@@ -443,9 +461,9 @@ function extractAllSheetSms(sheet) {
       sentTimestamp: timeStr
     });
 
-    // Sheet holds notification for 10-second transit window; then purges automatically
+    // Sheet holds notification for 15-second transit window; then purges automatically
     var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-    if (ageMs > 10000 || ageMs < -60000) {
+    if (ageMs > 15000 || ageMs < -60000) {
       rowsToDelete.push(r + 1);
     }
   }
@@ -690,6 +708,28 @@ function doPost(e) {
           }
         }
       }
+
+      // Also delete any photo attachments associated with this file from Attachments sheet
+      try {
+        var curAttsForFile = attachSheet.getDataRange().getValues();
+        for (var af = curAttsForFile.length - 1; af >= 1; af--) {
+          var attFid = String(curAttsForFile[af][1] || '').trim().toLowerCase();
+          var attFidClean = attFid.replace(/[-\s]/g, '');
+          for (var k2 = 0; k2 < toDelete.length; k2++) {
+            if (attFid && (attFid === toDelete[k2] || attFidClean === toDelete[k2])) {
+              try {
+                var dLink = String(curAttsForFile[af][7] || '');
+                if (dLink && dLink.indexOf('id=') > -1) {
+                  var driveFid = dLink.split('id=')[1].split('&')[0];
+                  DriveApp.getFileById(driveFid).setTrashed(true);
+                }
+              } catch (edF) {}
+              attachSheet.deleteRow(af + 1);
+              break;
+            }
+          }
+        }
+      } catch (eAttF) {}
       // Persist deleted file IDs in Universal_Settings so any new mobile app install immediately knows they were deleted
       try {
         var setSheet = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
@@ -867,8 +907,8 @@ function doPost(e) {
     }
 
     // Handle Direct Chat / Call Message Deletion (Immediately removes message row from Chat_And_Calls tab)
-    if (data.action === 'DELETE_MESSAGE' || (data.deletedMessageIds && data.deletedMessageIds.length > 0)) {
-      var toDeleteMsgs = data.deletedMessageIds || [data.messageId].filter(Boolean);
+    if (data.action === 'DELETE_MESSAGE' || data.action === 'DELETE_CHAT' || (data.deletedMessageIds && data.deletedMessageIds.length > 0) || (data.deletedChatIds && data.deletedChatIds.length > 0)) {
+      var toDeleteMsgs = data.deletedChatIds || data.deletedMessageIds || [data.chatId, data.messageId].filter(Boolean);
       var curMsgs = chatSheet.getDataRange().getValues();
       for (var dm = curMsgs.length - 1; dm >= 1; dm--) {
         var msgIdVal = String(curMsgs[dm][0] || '').trim();
@@ -909,8 +949,64 @@ function doPost(e) {
         }
       } catch (errMsgDel) {}
 
-      if (data.action === 'DELETE_MESSAGE') {
+      if (data.action === 'DELETE_MESSAGE' || data.action === 'DELETE_CHAT') {
         return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted chat message row from sheet." }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Attachment / Photo Deletion (Immediately removes photo row from Attachments tab & trashes from Drive)
+    if (data.action === 'DELETE_ATTACHMENT' || (data.deletedAttachmentIds && data.deletedAttachmentIds.length > 0)) {
+      var toDeleteAtts = data.deletedAttachmentIds || [data.attachmentId].filter(Boolean);
+      var curAtts = attachSheet.getDataRange().getValues();
+      for (var da = curAtts.length - 1; da >= 1; da--) {
+        var attIdVal = String(curAtts[da][0] || '').trim();
+        for (var a = 0; a < toDeleteAtts.length; a++) {
+          var targetAtt = String(toDeleteAtts[a] || '').trim();
+          if (targetAtt && attIdVal.toLowerCase() === targetAtt.toLowerCase()) {
+            try {
+              var dLink = String(curAtts[da][7] || '');
+              if (dLink && dLink.indexOf('id=') > -1) {
+                var driveFid = dLink.split('id=')[1].split('&')[0];
+                DriveApp.getFileById(driveFid).setTrashed(true);
+              }
+            } catch (ed) {}
+            attachSheet.deleteRow(da + 1);
+            break;
+          }
+        }
+      }
+      // Persist deleted attachment IDs in Universal_Settings so other client devices delete them too
+      try {
+        var setSheetAtt = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetAtt) {
+          var sValsAtt = setSheetAtt.getDataRange().getValues();
+          var delAttRowIdx = -1;
+          var curDelAttVal = '';
+          for (var sar = 1; sar < sValsAtt.length; sar++) {
+            if (String(sValsAtt[sar][0] || '').trim().toLowerCase() === 'deleted_attachment_ids') {
+              delAttRowIdx = sar + 1;
+              curDelAttVal = String(sValsAtt[sar][1] || '').trim();
+              break;
+            }
+          }
+          var allDelAtts = curDelAttVal ? curDelAttVal.split(',') : [];
+          toDeleteAtts.forEach(function(tda) {
+            var clTda = String(tda || '').trim();
+            if (clTda && allDelAtts.indexOf(clTda) === -1) allDelAtts.push(clTda);
+          });
+          var newDelAttStr = allDelAtts.join(',');
+          if (delAttRowIdx > -1) {
+            setSheetAtt.getRange(delAttRowIdx, 2).setValue(newDelAttStr);
+            setSheetAtt.getRange(delAttRowIdx, 5).setValue(new Date().toISOString());
+          } else {
+            setSheetAtt.appendRow(['deleted_attachment_ids', newDelAttStr, 'Universal Deleted Attachment IDs', 'App_Sync', new Date().toISOString()]);
+          }
+        }
+      } catch (errAttDel) {}
+
+      if (data.action === 'DELETE_ATTACHMENT') {
+        return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "Deleted attachment row from sheet." }))
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -1302,17 +1398,32 @@ function doPost(e) {
       var fileExistingData = fileSheet.getDataRange().getValues();
       var headers = fileExistingData.length > 0 ? fileExistingData[0].map(function(h) { return String(h || '').trim().toLowerCase(); }) : [];
       var hasSlCol = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial');
+      var colFid = -1;
+      var colCc = -1;
+      for (var h = 0; h < headers.length; h++) {
+        var cleanH = headers[h].replace(/[^a-z0-9]/g, '');
+        if (cleanH === 'fileid' || cleanH === 'customerid') colFid = h;
+        if (cleanH === 'ccnumber' || cleanH === 'cardnumber' || cleanH === 'ccno' || cleanH === 'cc') colCc = h;
+      }
+      if (colFid === -1) colFid = hasSlCol ? 2 : 1;
+      if (colCc === -1) colCc = hasSlCol ? 1 : 0;
+
       var fileIdRowMap = {};
       for (var r = 1; r < fileExistingData.length; r++) {
         var rowVals = fileExistingData[r];
-        for (var c = 0; c < Math.min(rowVals.length, 6); c++) {
-          var val = String(rowVals[c] || '').trim();
-          if (val) {
-            fileIdRowMap[val] = r + 1;
-            fileIdRowMap[val.toLowerCase()] = r + 1;
-            fileIdRowMap[val.replace(/[-\s]/g, '')] = r + 1;
-            fileIdRowMap[val.replace(/[-\s]/g, '').toLowerCase()] = r + 1;
-          }
+        var rCc = colCc > -1 && colCc < rowVals.length ? String(rowVals[colCc] || '').trim() : '';
+        var rFid = colFid > -1 && colFid < rowVals.length ? String(rowVals[colFid] || '').trim() : '';
+        if (rFid) {
+          fileIdRowMap[rFid] = r + 1;
+          fileIdRowMap[rFid.toLowerCase()] = r + 1;
+          fileIdRowMap[rFid.replace(/[-\s]/g, '')] = r + 1;
+          fileIdRowMap[rFid.replace(/[-\s]/g, '').toLowerCase()] = r + 1;
+        }
+        if (rCc) {
+          fileIdRowMap[rCc] = r + 1;
+          fileIdRowMap[rCc.toLowerCase()] = r + 1;
+          fileIdRowMap[rCc.replace(/[-\s]/g, '')] = r + 1;
+          fileIdRowMap[rCc.replace(/[-\s]/g, '').toLowerCase()] = r + 1;
         }
       }
 
@@ -1705,13 +1816,113 @@ function onEdit(e) {
     var row = range.getRow();
     if (row <= 1) return; // Header row ignored
 
-    var nowStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+    var now = new Date();
+    var nowStr = Utilities.formatDate(now, "GMT+6", "yyyy-MM-dd HH:mm:ss");
+    var ss = sheet.getParent();
+    var smsSheet = ss.getSheetByName('SMS_Notifications') || getOrCreateSheet(ss, 'SMS_Notifications', [
+      'Notification ID', 'Recipient RM Code', 'Recipient Name', 'Recipient Mobile',
+      'Triggered By Role', 'Triggered By Code', 'Action Type', 'Target ID',
+      'Message Text', 'Delivery Status', 'Timestamp'
+    ], '#991B1B');
+
+    // Clean stale notifications (>15 seconds old) on every edit
+    cleanStaleSheetSms(smsSheet);
 
     if (sheetName === 'Customer_Files' || sheetName === 'Files') {
       sheet.getRange(row, 18).setValue(nowStr); // Last Updated
       sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
+
+      // Extract customer details to generate targeted notification for assigned RM
+      var rowValues = sheet.getRange(row, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0];
+      var headers = sheet.getRange(1, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+      var colMap = {};
+      for (var c = 0; c < headers.length; c++) {
+        var cleanH = headers[c].replace(/[^a-z0-9]/g, '');
+        colMap[cleanH] = c;
+      }
+      function getEditVal(candidates, defaultVal) {
+        for (var i = 0; i < candidates.length; i++) {
+          var k = candidates[i].replace(/[^a-z0-9]/g, '');
+          if (colMap.hasOwnProperty(k)) {
+            var v = rowValues[colMap[k]];
+            if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+          }
+        }
+        return defaultVal !== undefined ? defaultVal : '';
+      }
+
+      var ccNumber = getEditVal(['ccnumber', 'cc number', 'cc_number', 'card number', 'ccno', 'cc'], '');
+      var fileId = getEditVal(['fileid', 'file id', 'file_id', 'customer id', 'customerid'], ccNumber);
+      var custName = getEditVal(['customer name', 'customername', 'name', 'client name'], 'Customer');
+      var assignedRm = getEditVal(['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], '').toUpperCase();
+      var appStatus = getEditVal(['application status', 'applicationstatus', 'status', 'file status'], 'Updated');
+      var cpvStatus = getEditVal(['cpv status', 'cpvstatus'], '');
+
+      if (assignedRm && (fileId || ccNumber)) {
+        // Unique notification ID created for sheet data change
+        var smsId = "SMS_NOTIF_" + now.getTime() + "_" + Math.floor(Math.random() * 1000);
+        var msgText = "File Update: " + (fileId || ccNumber) + " (" + custName + ") status: " + appStatus + (cpvStatus ? " [CPV: " + cpvStatus + "]" : "") + ". Sheet data modified.";
+
+        // Look up RM mobile & name from RM_Details if available
+        var rmName = assignedRm;
+        var rmMobile = "";
+        try {
+          var rmSheet = ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory');
+          if (rmSheet) {
+            var rmData = rmSheet.getDataRange().getValues();
+            for (var ri = 1; ri < rmData.length; ri++) {
+              if (String(rmData[ri][0] || '').trim().toUpperCase() === assignedRm) {
+                rmName = String(rmData[ri][1] || assignedRm).trim();
+                rmMobile = String(rmData[ri][2] || '').trim();
+                break;
+              }
+            }
+          }
+        } catch (eRm) {}
+
+        // Notification row has 15 second lifespan in the tab
+        smsSheet.appendRow([
+          smsId,
+          assignedRm,
+          rmName,
+          rmMobile,
+          'Sheet_Admin',
+          'SHEET',
+          'UPDATE',
+          fileId || ccNumber,
+          msgText,
+          'DELIVERED',
+          nowStr
+        ]);
+      }
     } else if (sheetName === 'RM_Details' || sheetName === 'RM_Directory') {
       sheet.getRange(row, 14).setValue(nowStr); // Last Updated
+      var rmRowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+      var targetRm = String(rmRowVals[0] || '').trim().toUpperCase();
+      var targetName = String(rmRowVals[1] || targetRm).trim();
+      var targetMobile = String(rmRowVals[2] || '').trim();
+      var ccTarget = rmRowVals[7] || '';
+      var corpTarget = rmRowVals[8] || '';
+      var b2bTarget = rmRowVals[9] || '';
+
+      if (targetRm) {
+        var smsIdRm = "SMS_NOTIF_" + now.getTime() + "_" + Math.floor(Math.random() * 1000);
+        var msgTextRm = "Attention " + targetName + ": Your RM data/sales targets were modified in Google Sheets (CC: " + ccTarget + ", Corp: " + corpTarget + ", B2B: " + b2bTarget + ").";
+
+        smsSheet.appendRow([
+          smsIdRm,
+          targetRm,
+          targetName,
+          targetMobile,
+          'Sheet_Admin',
+          'SHEET',
+          'UPDATE',
+          targetRm,
+          msgTextRm,
+          'DELIVERED',
+          nowStr
+        ]);
+      }
     } else if (sheetName === 'Universal_Settings' || sheetName === 'Settings') {
       sheet.getRange(row, 4).setValue('Manual_Sheet_Edit'); // Last Updated By
       sheet.getRange(row, 5).setValue(nowStr); // Last Updated At

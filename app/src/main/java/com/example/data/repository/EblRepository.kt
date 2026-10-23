@@ -1450,10 +1450,18 @@ class EblRepository(
       }
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
+      val delArr = org.json.JSONArray().apply {
+        put(chatId)
+        put(chatId.uppercase())
+        put(chatId.lowercase())
+      }
+
       val payload = org.json.JSONObject().apply {
         put("action", "DELETE_CHAT")
         put("chatId", chatId)
-        put("deletedChatIds", org.json.JSONArray().apply { put(chatId) })
+        put("messageId", chatId)
+        put("deletedChatIds", delArr)
+        put("deletedMessageIds", delArr)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -1477,7 +1485,25 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     database.customerFileDao().softDeleteFile(fileId, currentUser.rmCode, now)
     deletedFileIdsCache.add(fileId.lowercase())
-    if (file.ccNumber.isNotBlank()) deletedFileIdsCache.add(file.ccNumber.lowercase())
+    deletedFileIdsCache.add(fileId.uppercase())
+    if (file.ccNumber.isNotBlank()) {
+      deletedFileIdsCache.add(file.ccNumber.lowercase())
+      deletedFileIdsCache.add(file.ccNumber.uppercase())
+    }
+
+    // Also delete any local photo attachments linked to this file
+    try {
+      val fileAtts = database.fileAttachmentDao().getAttachmentsForFile(fileId)
+      for (att in fileAtts) {
+        database.fileAttachmentDao().deleteAttachment(att.attachmentId)
+        if (att.storagePath.isNotBlank()) {
+          try {
+            val f = java.io.File(att.storagePath)
+            if (f.exists()) f.delete()
+          } catch (_: Exception) {}
+        }
+      }
+    } catch (_: Exception) {}
 
     // Store in persistent deleted_file_ids setting
     val currentDel = database.appSettingDao().getSetting("deleted_file_ids")?.settingValue ?: ""
@@ -1726,13 +1752,25 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
 
+    val existing = database.fileAttachmentDao().getAttachmentById(attachmentId)
+    if (existing != null && existing.storagePath.isNotBlank()) {
+      try {
+        val f = java.io.File(existing.storagePath)
+        if (f.exists()) f.delete()
+      } catch (_: Exception) {}
+    }
+
     database.fileAttachmentDao().deleteAttachment(attachmentId)
+    database.fileAttachmentDao().deleteAttachment(attachmentId.uppercase())
+    database.fileAttachmentDao().deleteAttachment(attachmentId.lowercase())
 
     val now = DateUtils.currentDhakaMillis()
     deletedAttachmentIdsCache.add(attachmentId)
     deletedAttachmentIdsCache.add(attachmentId.uppercase())
+    deletedAttachmentIdsCache.add(attachmentId.lowercase())
+
     val currentDel = database.appSettingDao().getSetting("deleted_attachment_ids")?.settingValue ?: ""
-    val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + attachmentId).distinct().joinToString(",")
+    val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + attachmentId + attachmentId.uppercase() + attachmentId.lowercase()).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_attachment_ids", updatedDel, currentUser.rmCode, now)
     )
@@ -4251,30 +4289,49 @@ class EblRepository(
       val existing = database.customerFileDao().getFileByAnyId(targetId)
         ?: (if (ccNumber.isNotBlank()) database.customerFileDao().getFileByAnyId(ccNumber) else null)
 
-      if (existing != null && existing.isDeleted) {
-        // Record was deleted in app or sheet; do NOT resurrect or re-enable it!
+      val isTombstoneDeleted = targetId.lowercase() in deletedIdsSet ||
+                               (ccNumber.isNotBlank() && ccNumber.lowercase() in deletedIdsSet) ||
+                               (fileId.isNotBlank() && fileId.lowercase() in deletedIdsSet) ||
+                               targetId.lowercase() in deletedFileIdsCache ||
+                               (fileId.isNotBlank() && fileId.lowercase() in deletedFileIdsCache)
+
+      if (isTombstoneDeleted) {
+        if (existing != null && !existing.isDeleted) {
+          database.customerFileDao().softDeleteFile(existing.fileId, "Local_Delete", now)
+          updatedCount++
+        }
         continue
       }
-      if (targetId.lowercase() in deletedIdsSet || (ccNumber.isNotBlank() && ccNumber.lowercase() in deletedIdsSet) || targetId.lowercase() in deletedFileIdsCache) {
-        continue
-      }
+
       val appStatus = obj.optString("applicationStatus", existing?.applicationStatus ?: "Submitted")
       val activeStatus = obj.optString("activeStatus", existing?.activeStatus ?: "Y")
       val isExplicitlyDeleted = obj.optBoolean("isDeleted", false) ||
                                 appStatus.equals("DELETED", ignoreCase = true) ||
                                 activeStatus.equals("DELETED", ignoreCase = true)
+
       if (isExplicitlyDeleted) {
         if (existing != null && !existing.isDeleted) {
           database.customerFileDao().softDeleteFile(existing.fileId, "GoogleSheets_Sync", now)
+          updatedCount++
         }
         continue
       }
+
+      if (existing != null && existing.isDeleted) {
+        // Record was deleted in app or marked deleted; preserve deletion!
+        continue
+      }
+
       val remarks = obj.optString("remarks", existing?.remarks ?: "")
       val pendingDocs = obj.optString("pendingDocuments", existing?.pendingDocuments ?: "")
       val rmCode = obj.optString("assignedRmCode", existing?.assignedRmCode ?: "104393").trim().uppercase()
       val custName = obj.optString("customerName", existing?.customerName ?: "Customer")
+      val sheetSubAddress = obj.optString("submissionAddress", "").trim()
+      val sheetLat = if (obj.has("submissionLat")) obj.optDouble("submissionLat", 0.0) else 0.0
+      val sheetLng = if (obj.has("submissionLng")) obj.optDouble("submissionLng", 0.0) else 0.0
 
       if (existing != null) {
+
         val sheetUpdatedBy = obj.optString("updatedBy", "")
         val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
         val wasRecentlyEditedLocally = (now - existing.updatedAt < 6_000) && (existing.updatedBy != "GoogleSheets_Sync")
@@ -4282,7 +4339,6 @@ class EblRepository(
           continue
         }
 
-        val custName = obj.optString("customerName", existing.customerName)
         val compName = obj.optString("companyName", existing.companyName)
         val offAddr = obj.optString("officeAddress", existing.officeAddress)
         val mob = obj.optString("mobile", existing.mobile)
@@ -4325,6 +4381,9 @@ class EblRepository(
             ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
             assignedRmCode = if (rmCode.isNotBlank()) rmCode else existing.assignedRmCode,
             serialNumber = if (sheetSl.isNotBlank()) sheetSl else existing.serialNumber,
+            submissionAddress = if (sheetSubAddress.isNotBlank()) sheetSubAddress else existing.submissionAddress,
+            submissionLatitude = if (sheetLat != 0.0) sheetLat else existing.submissionLatitude,
+            submissionLongitude = if (sheetLng != 0.0) sheetLng else existing.submissionLongitude,
             updatedAt = now,
             updatedBy = "GoogleSheets_Sync",
             isSynced = true
@@ -4333,20 +4392,8 @@ class EblRepository(
           updatedCount++
         }
       } else {
-        // New file row added in Google Sheets - prevent duplicate mobile numbers
-        val sheetMobile = obj.optString("mobile", "").trim()
-        val normSheetMobile = sheetMobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0')
-        if (normSheetMobile.length >= 6) {
-          val isDuplicate = database.customerFileDao().getAllActiveFiles().any { f ->
-            f.mobile.replace(Regex("[^0-9]"), "").removePrefix("88").trimStart('0') == normSheetMobile
-          }
-          if (isDuplicate) {
-            // Skip inserting duplicate mobile number from sheet
-            continue
-          }
-        }
-
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", ""))
+        val sheetMobile = obj.optString("mobile", "").trim()
         val newFile = CustomerFileEntity(
           fileId = targetId,
           customerName = custName,
@@ -4364,6 +4411,9 @@ class EblRepository(
           remarks = remarks,
           cpvStatus = obj.optString("cpvStatus", "Pending"),
           serialNumber = sheetSl,
+          submissionAddress = if (sheetSubAddress.isNotBlank()) sheetSubAddress else null,
+          submissionLatitude = if (sheetLat != 0.0) sheetLat else null,
+          submissionLongitude = if (sheetLng != 0.0) sheetLng else null,
           createdAt = DateUtils.parseDateTime(obj.optString("createdAt")) ?: now,
           updatedAt = DateUtils.parseDateTime(obj.optString("updatedAt")) ?: now,
           createdBy = "GoogleSheets",
@@ -4579,7 +4629,18 @@ class EblRepository(
     database.communicationDao().deleteMessage(id)
     deletedChatIdsCache.add(id)
     deletedChatIdsCache.add(id.uppercase())
-    syncChatDeletionToGoogleSheets(id)
+    deletedChatIdsCache.add(id.lowercase())
+
+    val currentDelChats = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
+    val updatedDelChats = (currentDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + id + id.uppercase() + id.lowercase()).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("deleted_chat_ids", updatedDelChats, currentUser?.rmCode ?: "RM", now)
+    )
+
+    applicationScope.launch {
+      syncChatDeletionToGoogleSheets(id)
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 
@@ -4763,7 +4824,10 @@ class EblRepository(
     deletedEventIdsCache.add(eventId.lowercase())
 
     // Synchronize Event deletion directly to Google Sheets
-    syncEventDeletionToGoogleSheets(eventId)
+    applicationScope.launch {
+      syncEventDeletionToGoogleSheets(eventId)
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 
@@ -4890,6 +4954,14 @@ class EblRepository(
       return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can delete important documents."))
     }
 
+    val doc = database.importantDocumentDao().getDocumentById(docId)
+    if (doc != null && doc.storagePath.isNotBlank()) {
+      try {
+        val f = java.io.File(doc.storagePath)
+        if (f.exists()) f.delete()
+      } catch (_: Exception) {}
+    }
+
     val now = DateUtils.currentDhakaMillis()
     database.importantDocumentDao().softDeleteDocument(docId, now)
     database.importantDocumentDao().permanentDeleteDocument(docId)
@@ -4918,7 +4990,10 @@ class EblRepository(
     deletedDocIdsCache.add(docId.lowercase())
 
     // Synchronize Document deletion directly to Google Sheets
-    syncDocumentDeletionToGoogleSheets(docId)
+    applicationScope.launch {
+      syncDocumentDeletionToGoogleSheets(docId)
+      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 }

@@ -166,8 +166,31 @@ object DateUtils {
 
   fun parseDateTime(dateStr: String?): Long? {
     if (dateStr.isNullOrBlank()) return null
-    val trimmed = dateStr.trim()
+    var trimmed = dateStr.trim()
     trimmed.toLongOrNull()?.let { return it }
+
+    // Strip JS timezone name in parentheses if present:
+    // e.g. "Fri Oct 23 2026 17:31:00 GMT+0600 (Bangladesh Standard Time)" -> "Fri Oct 23 2026 17:31:00 GMT+0600"
+    if (trimmed.contains("(") && trimmed.contains(")")) {
+      trimmed = trimmed.substringBefore("(").trim()
+    }
+
+    // Try Instant parse (e.g. ISO 8601 with Z or offset)
+    try {
+      return Instant.parse(trimmed).toEpochMilli()
+    } catch (_: Exception) {}
+
+    // Try standard JS Date format: "Fri Oct 23 2026 17:31:00 GMT+0600"
+    try {
+      val jsFormatter = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", java.util.Locale.ENGLISH)
+      return java.time.ZonedDateTime.parse(trimmed, jsFormatter).toInstant().toEpochMilli()
+    } catch (_: Exception) {}
+
+    try {
+      val jsFormatterNoSec = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm 'GMT'Z", java.util.Locale.ENGLISH)
+      return java.time.ZonedDateTime.parse(trimmed, jsFormatterNoSec).toInstant().toEpochMilli()
+    } catch (_: Exception) {}
+
     val patterns = listOf(
       "yyyy-MM-dd HH:mm:ss",
       "yyyy-MM-dd HH:mm",
@@ -186,7 +209,7 @@ object DateUtils {
     )
     for (p in patterns) {
       try {
-        val formatter = DateTimeFormatter.ofPattern(p)
+        val formatter = DateTimeFormatter.ofPattern(p, java.util.Locale.ENGLISH)
         if (p == "yyyy-MM-dd" || p == "dd/MM/yyyy" || p == "dd-MM-yyyy") {
           val ld = LocalDate.parse(trimmed, formatter)
           return ld.atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
