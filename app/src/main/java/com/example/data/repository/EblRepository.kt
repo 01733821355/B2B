@@ -3862,8 +3862,10 @@ class EblRepository(
   private suspend fun processSheetSmsNotifications(sheetSmsJson: JSONArray): Int {
     var count = 0
     val currentUser = authRepository.currentUser.value
-    val userRmCode = currentUser?.rmCode?.trim()?.uppercase() ?: ""
-    val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR"
+    val dbLastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue?.trim()?.uppercase() ?: ""
+    val userRmCode = (currentUser?.rmCode?.trim()?.uppercase() ?: "").ifBlank { dbLastRm }
+    val effectiveUser = if (currentUser != null) currentUser else if (userRmCode.isNotBlank()) database.userDao().getUser(userRmCode) else null
+    val isPrivileged = effectiveUser?.role == "ADMIN" || effectiveUser?.role == "MENTOR"
     val now = DateUtils.currentDhakaMillis()
 
     val delSmsSetting = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""

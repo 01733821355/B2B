@@ -169,9 +169,6 @@ fun EblMainApp(viewModel: AppViewModel) {
     if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
       neededPermissions.add(Manifest.permission.ACCESS_COARSE_LOCATION)
     }
-    if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.SEND_SMS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-      neededPermissions.add(Manifest.permission.SEND_SMS)
-    }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
         neededPermissions.add(Manifest.permission.POST_NOTIFICATIONS)

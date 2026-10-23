@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -49,14 +50,19 @@ class BackgroundSyncWorker(
         } catch (_: Exception) {}
       }
 
+      // Schedule next fast check so that when app is closed, sheet SMS notifications are caught promptly
+      scheduleNextFastSync(appContext)
+
       Result.success()
     } catch (_: Exception) {
+      scheduleNextFastSync(appContext)
       Result.retry()
     }
   }
 
   companion object {
     private const val WORK_NAME = "EblBackgroundSyncWorker"
+    private const val FAST_WORK_NAME = "EblFastBackgroundSync"
 
     fun schedulePeriodicSync(context: Context) {
       try {
@@ -75,6 +81,27 @@ class BackgroundSyncWorker(
           WORK_NAME,
           ExistingPeriodicWorkPolicy.UPDATE,
           workRequest
+        )
+
+        scheduleNextFastSync(context)
+      } catch (_: Exception) {}
+    }
+
+    fun scheduleNextFastSync(context: Context) {
+      try {
+        val constraints = Constraints.Builder()
+          .setRequiredNetworkType(NetworkType.CONNECTED)
+          .build()
+
+        val fastWork = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
+          .setConstraints(constraints)
+          .setInitialDelay(20, TimeUnit.SECONDS)
+          .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+          FAST_WORK_NAME,
+          ExistingWorkPolicy.REPLACE,
+          fastWork
         )
       } catch (_: Exception) {}
     }

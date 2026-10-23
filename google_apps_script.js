@@ -55,8 +55,8 @@ function cleanStaleSheetSms(smsSheet) {
         } catch (e) {}
       }
       var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-      // Sheet keeps notification only for ~10 seconds transit buffer
-      if (ageMs > 10000 || ageMs < -60000) {
+      // Sheet keeps notification only for 15 seconds transit buffer; auto-deletes after 15s
+      if (ageMs > 15000 || ageMs < -60000) {
         toDelete.push(r + 1);
       }
     }
@@ -341,9 +341,9 @@ function extractAllSheetSms(sheet) {
       sentTimestamp: timeStr
     });
 
-    // Sheet holds notification for 10-second transit window; then purges automatically
+    // Sheet holds notification for 15-second transit window; then purges automatically
     var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-    if (ageMs > 10000 || ageMs < -60000) {
+    if (ageMs > 15000 || ageMs < -60000) {
       rowsToDelete.push(r + 1);
     }
   }
@@ -1603,13 +1603,100 @@ function onEdit(e) {
     var row = range.getRow();
     if (row <= 1) return; // Header row ignored
 
-    var nowStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+    var now = new Date();
+    var nowStr = Utilities.formatDate(now, "GMT+6", "yyyy-MM-dd HH:mm:ss");
+    var ss = sheet.getParent();
+    var smsSheet = ss.getSheetByName('SMS_Notifications') || getOrCreateSheet(ss, 'SMS_Notifications', [
+      'Notification ID', 'Recipient RM Code', 'Recipient Name', 'Recipient Mobile',
+      'Triggered By Role', 'Triggered By Code', 'Action Type', 'Target ID',
+      'Message Text', 'Delivery Status', 'Timestamp'
+    ], '#991B1B');
+
+    // Clean stale notifications (>15 seconds old) on every edit
+    cleanStaleSheetSms(smsSheet);
 
     if (sheetName === 'Customer_Files' || sheetName === 'Files') {
       sheet.getRange(row, 18).setValue(nowStr); // Last Updated
       sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
+
+      // Extract customer details to generate targeted notification for assigned RM
+      var rowValues = sheet.getRange(row, 1, 1, 20).getValues()[0];
+      var headers = sheet.getRange(1, 1, 1, 20).getValues()[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+      var hasSl = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial');
+      var offset = hasSl ? 1 : 0;
+
+      var ccNumber = String(rowValues[offset] || '').trim();
+      var fileId = String(rowValues[offset + 1] || ccNumber || '').trim();
+      var custName = String(rowValues[offset + 2] || 'Customer').trim();
+      var assignedRm = String(rowValues[offset + 10] || '').trim().toUpperCase();
+      var appStatus = String(rowValues[offset + 8] || 'Updated').trim();
+      var cpvStatus = String(rowValues[offset + 13] || '').trim();
+
+      if (assignedRm && (fileId || ccNumber)) {
+        // Unique notification ID created for sheet data change
+        var smsId = "SMS_NOTIF_" + now.getTime() + "_" + Math.floor(Math.random() * 1000);
+        var msgText = "File Update: " + (fileId || ccNumber) + " (" + custName + ") status: " + appStatus + (cpvStatus ? " [CPV: " + cpvStatus + "]" : "") + ". Sheet data modified.";
+
+        // Look up RM mobile & name from RM_Details if available
+        var rmName = assignedRm;
+        var rmMobile = "";
+        try {
+          var rmSheet = ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory');
+          if (rmSheet) {
+            var rmData = rmSheet.getDataRange().getValues();
+            for (var ri = 1; ri < rmData.length; ri++) {
+              if (String(rmData[ri][0] || '').trim().toUpperCase() === assignedRm) {
+                rmName = String(rmData[ri][1] || assignedRm).trim();
+                rmMobile = String(rmData[ri][2] || '').trim();
+                break;
+              }
+            }
+          }
+        } catch (eRm) {}
+
+        // Notification row has 15 second lifespan in the tab
+        smsSheet.appendRow([
+          smsId,
+          assignedRm,
+          rmName,
+          rmMobile,
+          'Sheet_Admin',
+          'SHEET',
+          'UPDATE',
+          fileId || ccNumber,
+          msgText,
+          'DELIVERED',
+          nowStr
+        ]);
+      }
     } else if (sheetName === 'RM_Details' || sheetName === 'RM_Directory') {
       sheet.getRange(row, 14).setValue(nowStr); // Last Updated
+      var rmRowVals = sheet.getRange(row, 1, 1, 14).getValues()[0];
+      var targetRm = String(rmRowVals[0] || '').trim().toUpperCase();
+      var targetName = String(rmRowVals[1] || targetRm).trim();
+      var targetMobile = String(rmRowVals[2] || '').trim();
+      var ccTarget = rmRowVals[7] || '';
+      var corpTarget = rmRowVals[8] || '';
+      var b2bTarget = rmRowVals[9] || '';
+
+      if (targetRm) {
+        var smsIdRm = "SMS_NOTIF_" + now.getTime() + "_" + Math.floor(Math.random() * 1000);
+        var msgTextRm = "Attention " + targetName + ": Your RM data/sales targets were modified in Google Sheets (CC: " + ccTarget + ", Corp: " + corpTarget + ", B2B: " + b2bTarget + ").";
+
+        smsSheet.appendRow([
+          smsIdRm,
+          targetRm,
+          targetName,
+          targetMobile,
+          'Sheet_Admin',
+          'SHEET',
+          'UPDATE',
+          targetRm,
+          msgTextRm,
+          'DELIVERED',
+          nowStr
+        ]);
+      }
     } else if (sheetName === 'Universal_Settings' || sheetName === 'Settings') {
       sheet.getRange(row, 4).setValue('Manual_Sheet_Edit'); // Last Updated By
       sheet.getRange(row, 5).setValue(nowStr); // Last Updated At
