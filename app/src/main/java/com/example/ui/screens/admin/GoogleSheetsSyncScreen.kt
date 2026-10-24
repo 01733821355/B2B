@@ -1063,7 +1063,7 @@ function doPost(e) {
     }
 
     // Handle Direct Document Upsert (Immediately syncs doc metadata & drive link to Important_Documents tab)
-    if (data.action === 'UPSERT_DOCUMENT' && (data.document || (data.importantDocuments && data.importantDocuments.length > 0))) {
+    if ((data.action === 'UPSERT_DOCUMENT' || data.action === 'UPSERT_DOC') && (data.document || (data.importantDocuments && data.importantDocuments.length > 0))) {
       var docU = data.document || data.importantDocuments[0];
       var docIdU = String(docU.docId || '').trim();
       if (docIdU) {
@@ -1109,14 +1109,15 @@ function doPost(e) {
           status: "SUCCESS",
           message: "Upserted Document to sheet.",
           docId: docIdU,
-          fileUri: docDriveLinkU
+          fileUri: docDriveLinkU,
+          storagePath: docStorageU
         })).setMimeType(ContentService.MimeType.JSON);
       }
     }
 
     // Handle Direct Chat / Communication Upsert (Immediately syncs chat message to Chat_And_Calls tab)
-    if (data.action === 'UPSERT_MESSAGE' && (data.message || (data.chatMessages && data.chatMessages.length > 0))) {
-      var msgU = data.message || data.chatMessages[0];
+    if ((data.action === 'UPSERT_MESSAGE' || data.action === 'UPSERT_CHAT') && (data.chatMessage || data.message || (data.chatMessages && data.chatMessages.length > 0))) {
+      var msgU = data.chatMessage || data.message || data.chatMessages[0];
       var msgIdU = String(msgU.id || '').trim();
       if (msgIdU) {
         var curMsgsU = chatSheet.getDataRange().getValues();
@@ -1147,6 +1148,127 @@ function doPost(e) {
           status: "SUCCESS",
           message: "Upserted Chat message to sheet.",
           id: msgIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Attachment Upsert (Immediately syncs attachment photo/doc metadata & drive link to Attachments tab)
+    if ((data.action === 'UPSERT_ATTACHMENT' || data.action === 'UPSERT_FILE_ATTACHMENT') && (data.attachment || (data.attachments && data.attachments.length > 0))) {
+      var attU = data.attachment || data.attachments[0];
+      var attIdU = String(attU.attachmentId || '').trim();
+      if (attIdU) {
+        var curAttsU = attachSheet.getDataRange().getValues();
+        var foundAttRow = 0;
+        for (var au = 1; au < curAttsU.length; au++) {
+          if (String(curAttsU[au][0] || '').trim().toLowerCase() === attIdU.toLowerCase()) {
+            foundAttRow = au + 1;
+            break;
+          }
+        }
+        var attDriveLinkU = attU.fileUri || attU.driveLink || '';
+        if (attU.fileBase64 && (!attDriveLinkU || attDriveLinkU.indexOf('http') !== 0)) {
+          var aResU = saveFileToDrive(attU.fileBase64, attU.fileName, attU.fileType);
+          if (aResU && aResU.success) {
+            attDriveLinkU = aResU.url;
+          }
+        }
+        var attRowU = [
+          attIdU,
+          attU.fileId || '',
+          attU.fileName || '',
+          attU.category || '',
+          attU.fileSize || attU.fileSizeBytes || 0,
+          attU.uploadedBy || '',
+          attU.uploadedAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
+          attDriveLinkU
+        ];
+        if (foundAttRow > 0) {
+          attachSheet.getRange(foundAttRow, 1, 1, attRowU.length).setValues([attRowU]);
+        } else {
+          attachSheet.appendRow(attRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Attachment to sheet.",
+          attachmentId: attIdU,
+          fileUrl: attDriveLinkU,
+          driveUrl: attDriveLinkU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Team Event Upsert (Immediately syncs event to Team_Events tab)
+    if ((data.action === 'UPSERT_EVENT' || data.action === 'CREATE_EVENT') && (data.event || (data.events && data.events.length > 0))) {
+      var evU = data.event || data.events[0];
+      var evIdU = String(evU.eventId || '').trim();
+      if (evIdU) {
+        var curEvtsU = eventSheet.getDataRange().getValues();
+        var foundEvRow = 0;
+        for (var eu = 1; eu < curEvtsU.length; eu++) {
+          if (String(curEvtsU[eu][0] || '').trim().toLowerCase() === evIdU.toLowerCase()) {
+            foundEvRow = eu + 1;
+            break;
+          }
+        }
+        var evRowU = [
+          evIdU,
+          evU.title || '',
+          evU.description || '',
+          evU.creatorRmCode || '',
+          evU.creatorName || '',
+          evU.targetDate || '',
+          evU.allowedFields || 'CUSTOMERS,COUNT,DATE,LOCATION,REMARKS',
+          evU.status || 'ACTIVE',
+          evU.createdAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
+          evU.closeTime || ''
+        ];
+        if (foundEvRow > 0) {
+          eventSheet.getRange(foundEvRow, 1, 1, evRowU.length).setValues([evRowU]);
+        } else {
+          eventSheet.appendRow(evRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Team Event to sheet.",
+          eventId: evIdU
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // Handle Direct Event Response / Requisition Upsert (Immediately syncs response to Event_Submissions tab)
+    if ((data.action === 'UPSERT_EVENT_RESPONSE' || data.action === 'SUBMIT_EVENT_RESPONSE') && (data.eventResponse || (data.eventResponses && data.eventResponses.length > 0))) {
+      var resU = data.eventResponse || data.eventResponses[0];
+      var resIdU = String(resU.responseId || '').trim();
+      if (resIdU) {
+        var curRespsU = respSheet.getDataRange().getValues();
+        var foundResRow = 0;
+        for (var ru = 1; ru < curRespsU.length; ru++) {
+          if (String(curRespsU[ru][0] || '').trim().toLowerCase() === resIdU.toLowerCase()) {
+            foundResRow = ru + 1;
+            break;
+          }
+        }
+        var resRowU = [
+          resIdU,
+          resU.eventId || '',
+          resU.rmCode || '',
+          resU.rmName || '',
+          resU.filesCount || 1,
+          resU.requestedDate || '',
+          resU.location || '',
+          resU.remarks || '',
+          resU.customerEntriesJson || '',
+          resU.submittedAt || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss")
+        ];
+        if (foundResRow > 0) {
+          respSheet.getRange(foundResRow, 1, 1, resRowU.length).setValues([resRowU]);
+        } else {
+          respSheet.appendRow(resRowU);
+        }
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "SUCCESS",
+          message: "Upserted Event Response to sheet.",
+          responseId: resIdU
         })).setMimeType(ContentService.MimeType.JSON);
       }
     }
@@ -1405,16 +1527,27 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Handle Direct RM Password Update (or insert new RM row if not found in sheet)
-    if (data.action === 'UPDATE_RM_PASSWORD') {
-      var targetRmCode = String(data.rmCode || '').trim().toUpperCase();
+    // Handle Direct RM Profile, Role Switching, Status & Password Update (or insert new RM row if not found in sheet)
+    if (data.action === 'UPDATE_RM_PASSWORD' || data.action === 'UPSERT_RM' || data.action === 'UPDATE_RM_PROFILE' || data.action === 'APPROVE_RM' || data.action === 'REJECT_RM') {
+      var targetRmCode = String(data.rmCode || (data.rm && data.rm.rmCode) || '').trim().toUpperCase();
       var curRmsP = rmSheet.getDataRange().getValues();
       var foundRm = false;
+      var nowTimeStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+      var updateTime = data.updatedAt || nowTimeStr;
       for (var pr = 1; pr < curRmsP.length; pr++) {
         if (String(curRmsP[pr][0] || '').trim().toUpperCase() === targetRmCode) {
-          rmSheet.getRange(pr + 1, 11).setValue(data.passwordHash || '');
-          rmSheet.getRange(pr + 1, 12).setValue(data.salt || '');
-          rmSheet.getRange(pr + 1, 14).setValue(data.updatedAt || '');
+          if (data.name) rmSheet.getRange(pr + 1, 2).setValue(data.name);
+          if (data.mobile) rmSheet.getRange(pr + 1, 3).setValue(data.mobile);
+          if (data.email) rmSheet.getRange(pr + 1, 4).setValue(data.email);
+          if (data.officeAddress) rmSheet.getRange(pr + 1, 5).setValue(data.officeAddress);
+          if (data.role) rmSheet.getRange(pr + 1, 6).setValue(data.role);
+          if (data.accountStatus || data.status) rmSheet.getRange(pr + 1, 7).setValue(data.accountStatus || data.status);
+          if (data.creditCardTarget !== undefined) rmSheet.getRange(pr + 1, 8).setValue(Number(data.creditCardTarget) || 15);
+          if (data.corporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 9).setValue(Number(data.corporateCardTarget) || 5);
+          if (data.b2bTarget !== undefined) rmSheet.getRange(pr + 1, 10).setValue(Number(data.b2bTarget) || 2);
+          if (data.passwordHash) rmSheet.getRange(pr + 1, 11).setValue(data.passwordHash);
+          if (data.salt) rmSheet.getRange(pr + 1, 12).setValue(data.salt);
+          rmSheet.getRange(pr + 1, 14).setValue(updateTime);
           foundRm = true;
           break;
         }
@@ -1426,16 +1559,18 @@ function doPost(e) {
           data.mobile || '',
           data.email || '',
           data.officeAddress || '',
-          'RM',
-          'ACTIVE',
-          15, 5, 2,
+          data.role || 'RM',
+          data.accountStatus || data.status || 'ACTIVE',
+          data.creditCardTarget !== undefined ? Number(data.creditCardTarget) : 15,
+          data.corporateCardTarget !== undefined ? Number(data.corporateCardTarget) : 5,
+          data.b2bTarget !== undefined ? Number(data.b2bTarget) : 2,
           data.passwordHash || '',
           data.salt || '',
-          data.updatedAt || new Date().toISOString(),
-          data.updatedAt || new Date().toISOString()
+          data.createdAt || updateTime,
+          updateTime
         ]);
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM Password & Profile synchronized in sheet." }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details, role and credentials synchronized in sheet." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

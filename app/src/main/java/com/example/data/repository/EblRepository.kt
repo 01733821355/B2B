@@ -1343,6 +1343,7 @@ class EblRepository(
       val payload = org.json.JSONObject().apply {
         put("action", "UPSERT_CHAT")
         put("chatMessage", mJson)
+        put("message", mJson)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
@@ -2007,6 +2008,9 @@ class EblRepository(
     val existing = database.userDao().getUser(rmCode)
       ?: return@withContext Result.failure(Exception("RM not found."))
     database.userDao().updateStatus(rmCode, "ACTIVE")
+    applicationScope.launch {
+      syncRmPasswordToGoogleSheets(rmCode, existing.passwordHash, existing.salt)
+    }
 
     // Notify approved RM that they can now log in
     context?.let { ctx ->
@@ -2028,7 +2032,13 @@ class EblRepository(
     if (currentUser.role != "MENTOR") {
       return@withContext Result.failure(Exception("Only Mentor can reject RM accounts."))
     }
+    val existing = database.userDao().getUser(rmCode)
     database.userDao().updateStatus(rmCode, "INACTIVE")
+    if (existing != null) {
+      applicationScope.launch {
+        syncRmPasswordToGoogleSheets(rmCode, existing.passwordHash, existing.salt)
+      }
+    }
     Result.success(Unit)
   }
 
@@ -2041,6 +2051,7 @@ class EblRepository(
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
       val targetUser = database.userDao().getUser(rmCode.trim())
+      val targetTarget = database.rmTargetDao().getTargetForRm(rmCode.trim())
       val payload = org.json.JSONObject().apply {
         put("action", "UPDATE_RM_PASSWORD")
         put("rmCode", rmCode.trim().uppercase())
@@ -2050,9 +2061,14 @@ class EblRepository(
         put("mobile", targetUser?.mobile ?: "")
         put("email", targetUser?.email ?: "")
         put("officeAddress", targetUser?.officeAddress ?: "")
+        put("role", targetUser?.role ?: "RM")
+        put("accountStatus", targetUser?.accountStatus ?: "ACTIVE")
+        put("creditCardTarget", targetTarget?.creditCardTarget ?: 15)
+        put("corporateCardTarget", targetTarget?.corporateCardTarget ?: 5)
+        put("b2bTarget", targetTarget?.b2bTarget ?: 2)
         put("updatedAt", DateUtils.formatDateTime(DateUtils.currentDhakaMillis()))
-        put("spreadsheetId", currentStatus.spreadsheetId)
-        put("secretKey", currentStatus.syncSecretKey)
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
@@ -2309,6 +2325,12 @@ class EblRepository(
     )
 
     database.userDao().updateStatus(rmCode, newStatus)
+    val updatedUser = database.userDao().getUser(rmCode)
+    if (updatedUser != null) {
+      applicationScope.launch {
+        syncRmPasswordToGoogleSheets(rmCode, updatedUser.passwordHash, updatedUser.salt)
+      }
+    }
     Result.success(Unit)
   }
 
@@ -3434,6 +3456,7 @@ class EblRepository(
 
         val hasChanges = existing.name != name || existing.mobile != mobile ||
                          existing.email != email || existing.officeAddress != office ||
+                         existing.role != role ||
                          existing.accountStatus != status || hasLocationUpdate ||
                          (obj.has("isOnline") && existing.isOnline != sheetIsOnline) ||
                          (!isRecentLocalPassChange && sheetHash.isNotBlank() && existing.passwordHash != hashToUse)
@@ -3444,6 +3467,7 @@ class EblRepository(
               mobile = mobile,
               email = email,
               officeAddress = office,
+              role = role,
               accountStatus = status,
               passwordHash = hashToUse,
               salt = saltToUse,
@@ -3691,16 +3715,10 @@ class EblRepository(
             key.equals("UI_FONT_COLOR", true) ||
             key.equals("UI_TEXT_SCALE", true)) {
           val prefKey = if (key.equals("APP_ACTIVE_THEME", true)) "app_active_theme" else key.lowercase()
-          val localPrefVal = try {
-            context?.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)?.getString(prefKey, null)
-          } catch (_: Exception) { null }
-          if (!localPrefVal.isNullOrBlank() && !localPrefVal.equals(value, ignoreCase = true)) {
-            // Local user selected a value! Push it back to sheet and do not overwrite locally with stale remote data!
-            applicationScope.launch {
-              syncSettingUpsertToGoogleSheets(key, localPrefVal)
-            }
-            continue
-          }
+          try {
+            context?.getSharedPreferences("theme_prefs", Context.MODE_PRIVATE)
+              ?.edit()?.putString(prefKey, value)?.apply()
+          } catch (_: Exception) {}
         }
 
         if (existing == null || existing.settingValue != value) {
