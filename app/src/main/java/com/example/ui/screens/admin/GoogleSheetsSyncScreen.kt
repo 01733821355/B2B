@@ -120,16 +120,67 @@ function authorizeDrivePermissions() {
   return "Google Drive Authorized Successfully!";
 }
 
+function initialSetup() {
+  return setupAllSheets();
+}
+
+function runSetup() {
+  return setupAllSheets();
+}
+
+function setupAllSheets() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (!ss) {
+    try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+  }
+  if (!ss) {
+    Logger.log("ERROR: Spreadsheet could not be opened.");
+    return "Spreadsheet not found";
+  }
+
+  getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
+  getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Credit Card Target', 'Corporate Card Target', 'B2B Target', 'Password Hash', 'Salt', 'Created At', 'Last Updated'], '#1E3A8A');
+  getOrCreateSheet(ss, 'Universal_Settings', ['Setting Key', 'Setting Value', 'Description', 'Last Updated By', 'Last Updated At'], '#065F46');
+  getOrCreateSheet(ss, 'Audit_Trail', ['Log ID', 'User / RM Code', 'Role', 'Action Type', 'Target ID / File ID', 'Details', 'Timestamp'], '#7C2D12');
+  getOrCreateSheet(ss, 'Attachments', ['Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp', 'Drive Link'], '#4C1D95');
+  getOrCreateSheet(ss, 'SMS_Notifications', ['Notification ID', 'Recipient RM Code', 'Recipient Name', 'Recipient Mobile', 'Triggered By Role', 'Triggered By Code', 'Action Type', 'Target ID', 'Message Text', 'Delivery Status', 'Timestamp'], '#991B1B');
+  getOrCreateSheet(ss, 'RM_Location_Logs', ['RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Source Action'], '#0F766E');
+  getOrCreateSheet(ss, 'Important_Documents', ['Doc ID', 'Title', 'Category', 'Description', 'File Name', 'File Type', 'File Size (Bytes)', 'File URI', 'Storage Path', 'Uploaded By', 'Uploader Name', 'Uploader Role', 'Created At', 'Last Updated'], '#047857');
+  getOrCreateSheet(ss, 'Chat_And_Calls', ['Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp'], '#1D4ED8');
+  getOrCreateSheet(ss, 'Team_Events', ['Event ID', 'Title', 'Description', 'Creator RM', 'Creator Name', 'Target Date', 'Allowed Fields', 'Status', 'Created At', 'Close Time'], '#7E22CE');
+  getOrCreateSheet(ss, 'Event_Submissions', ['Response ID', 'Event ID', 'RM Code', 'RM Name', 'Files Count', 'Requested Date', 'Location', 'Remarks', 'Customer Entries JSON', 'Submitted At'], '#B45309');
+
+  try { authorizeDrivePermissions(); } catch (e) {}
+  Logger.log("All 11 Sheets & Drive configured successfully!");
+  return "All 11 Sheets & Drive configured successfully!";
+}
+
 function getOrCreateSheet(ss, sheetName, headers, headerColor) {
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  }
+  if (!ss) {
+    try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+  }
+  if (!ss) {
+    Logger.log("Spreadsheet not available.");
+    return null;
+  }
+  if (!sheetName) {
+    setupAllSheets();
+    return ss.getActiveSheet();
+  }
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
     sheet = ss.insertSheet(sheetName);
-    sheet.appendRow(headers);
-    var hr = sheet.getRange(1, 1, 1, headers.length);
-    hr.setBackground(headerColor || '#0A192F')
-      .setFontColor('#FFFFFF')
-      .setFontWeight('bold');
-    sheet.setFrozenRows(1);
+    if (headers && headers.length > 0) {
+      sheet.appendRow(headers);
+      var hr = sheet.getRange(1, 1, 1, headers.length);
+      hr.setBackground(headerColor || '#0A192F')
+        .setFontColor('#FFFFFF')
+        .setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
   }
   return sheet;
 }
