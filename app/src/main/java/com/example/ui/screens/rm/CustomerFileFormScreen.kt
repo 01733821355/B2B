@@ -388,6 +388,7 @@ fun CustomerFileFormScreen(
   val attachments by attachmentsFlow.collectAsState(initial = emptyList())
   var showAddAttachmentDialog by remember { mutableStateOf(false) }
   var previewAttachment by remember { mutableStateOf<FileAttachmentEntity?>(null) }
+  var isSaving by remember { mutableStateOf(false) }
 
   // Auto-capture real-time location when Add or Edit form is opened
   LaunchedEffect(Unit) {
