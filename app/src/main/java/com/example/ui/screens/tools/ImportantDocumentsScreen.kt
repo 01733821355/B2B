@@ -125,7 +125,7 @@ fun ImportantDocumentsScreen(
   LaunchedEffect(Unit) {
     isSyncing = true
     try {
-      viewModel.triggerGoogleSheetsSync()
+      viewModel.pullDataFromGoogleSheets()
     } catch (_: Exception) {}
     isSyncing = false
   }
@@ -216,7 +216,7 @@ fun ImportantDocumentsScreen(
           onClick = {
             coroutineScope.launch {
               isSyncing = true
-              viewModel.triggerGoogleSheetsSync()
+              viewModel.pullDataFromGoogleSheets()
               isSyncing = false
               Toast.makeText(context, "গুগল শিট থেকে ডকুমেন্টস সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
             }

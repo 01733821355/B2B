@@ -1264,7 +1264,7 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (data.action === 'FETCH_SHEET_DATA') {
+    if (data.action === 'FETCH_SHEET_DATA' || data.action === 'GET_ALL_DATA' || data.isAutoPullOnly === true || data.isPullOnly === true) {
       return handleFetchAllData();
     }
 
@@ -1341,6 +1341,32 @@ function doPost(e) {
         var row = hasSlCol ? [sl || (index + 1)].concat(baseRow) : baseRow;
 
         if (targetRowIndex) {
+          // PROTECTION: Prevent stale passive app data from overwriting newer sheet data or manual edits
+          var isExplicitCommand = data.action === 'UPSERT_CUSTOMER_FILE' || data.isExplicitCommand === true || data.isExplicitPushCommand === true;
+          var existingRow = fileExistingData[targetRowIndex - 1];
+          if (existingRow && !isExplicitCommand) {
+            var colLastUpdated = hasSlCol ? 18 : 17;
+            var existingTimeStr = String(existingRow[colLastUpdated] || '').trim();
+            var incomingTimeStr = String(f.updatedAt || '').trim();
+            var existingTime = 0;
+            if (existingTimeStr) {
+              try {
+                var ep = Date.parse(existingTimeStr.replace(/-/g, '/'));
+                if (!isNaN(ep)) existingTime = ep;
+              } catch (e) {}
+            }
+            var incomingTime = 0;
+            if (incomingTimeStr) {
+              try {
+                var ip = Date.parse(incomingTimeStr.replace(/-/g, '/'));
+                if (!isNaN(ip)) incomingTime = ip;
+              } catch (e) {}
+            }
+            // If Google Sheets row is newer than incoming app data during a batch push, preserve sheet row and skip overwrite!
+            if (existingTime > 0 && incomingTime > 0 && existingTime > incomingTime) {
+              return;
+            }
+          }
           fileSheet.getRange(targetRowIndex, 1, 1, row.length).setValues([row]);
         } else {
           fileSheet.appendRow(row);

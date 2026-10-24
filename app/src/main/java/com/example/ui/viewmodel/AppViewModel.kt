@@ -281,12 +281,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   )
 
   val selectedThemeMode: StateFlow<String> = combine(appSettings, _manualThemeFlow) { list, manual ->
-    if (!manual.isNullOrBlank()) {
+    val universal = list.find { it.settingKey.equals("APP_ACTIVE_THEME", ignoreCase = true) }?.settingValue
+    if (!universal.isNullOrBlank()) {
+      universal
+    } else if (!manual.isNullOrBlank()) {
       manual
     } else {
-      list.find { it.settingKey == "APP_ACTIVE_THEME" }?.settingValue ?: "AUTO"
+      "AUTO"
     }
-  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), _manualThemeFlow.value ?: "AUTO")
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "AUTO")
 
   val universalFontStyle: StateFlow<String> = appSettings.map { list ->
     list.find { it.settingKey == "UI_FONT_STYLE" }?.settingValue ?: "DEFAULT_SANS"
@@ -829,7 +832,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
           val updatedUser = database.userDao().getUser(clean)
           if (updatedUser != null) {
             eblRepository.syncRmPasswordToGoogleSheets(clean, updatedUser.passwordHash, updatedUser.salt)
-            eblRepository.triggerGoogleSheetsSync()
           }
         }
         onResult(true, "Password changed successfully! You must use this new password on your next login.")
@@ -1247,8 +1249,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   fun triggerSyncNow() {
     viewModelScope.launch {
-      _uiMessage.emit("Starting Google Sheets synchronization...")
-      val res = eblRepository.triggerGoogleSheetsSync()
+      _uiMessage.emit("Starting Google Sheets push...")
+      val res = eblRepository.triggerGoogleSheetsSync(isExplicitPushCommand = true)
       res.onSuccess { msg ->
         _uiMessage.emit(msg)
       }.onFailure { err ->
@@ -1259,7 +1261,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   fun triggerGoogleSheetsSync(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     viewModelScope.launch {
-      val res = eblRepository.triggerGoogleSheetsSync()
+      val res = eblRepository.triggerGoogleSheetsSync(isExplicitPushCommand = true)
       res.onSuccess { msg ->
         _uiMessage.emit(msg)
         onResult(true, msg)
@@ -1377,7 +1379,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       isRefreshing.value = true
       try {
-        eblRepository.triggerGoogleSheetsSync()
         eblRepository.pullDataFromGoogleSheets()
       } catch (_: Exception) {} finally {
         isRefreshing.value = false

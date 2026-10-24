@@ -1308,13 +1308,8 @@ fun DocumentChecklistSenderTab(
   val allAvailablePresets = remember(customPresetsList, dynamicallyAddedPresets.toList()) {
     (defaultPresets + customPresetsList + dynamicallyAddedPresets).distinct()
   }
-  val presetOptions = remember(allAvailablePresets, visibilityMap, currentUser.role) {
-    if (currentUser.role == "RM") {
-      val filtered = allAvailablePresets.filter { isVisibleForRm(it) }
-      if (filtered.isNotEmpty()) filtered else defaultPresets
-    } else {
-      allAvailablePresets
-    }
+  val presetOptions = remember(allAvailablePresets) {
+    allAvailablePresets
   }
 
   var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
@@ -3138,7 +3133,6 @@ fun DocumentChecklistSenderTab(
               val updatedStr = singleChecklistItems.map { it.title }.joinToString("\n")
               viewModel?.savePresetRow(selectedPreset, updatedStr)
               viewModel?.updateSetting(cleanKey, updatedStr)
-              viewModel?.triggerGoogleSheetsSync()
             }
             editingItemTarget = null
           },
@@ -3180,7 +3174,6 @@ fun DocumentChecklistSenderTab(
               }.toString()
               viewModel?.updateSetting("CHECKLIST_CORP_COMPANY_DOCS", corporateCompanyItems.map { it.title }.joinToString("\n"))
               viewModel?.updateSetting("CHECKLIST_CORP_DOCS", corpJson)
-              viewModel?.triggerGoogleSheetsSync()
             }
             editingCorpCompanyTarget = null
           },
@@ -3222,7 +3215,6 @@ fun DocumentChecklistSenderTab(
               }.toString()
               viewModel?.updateSetting("CHECKLIST_CORP_EMPLOYEE_DOCS", corporateEmployeeItems.map { it.title }.joinToString("\n"))
               viewModel?.updateSetting("CHECKLIST_CORP_DOCS", corpJson)
-              viewModel?.triggerGoogleSheetsSync()
             }
             editingCorpEmployeeTarget = null
           },
@@ -3287,9 +3279,6 @@ fun DocumentChecklistSenderTab(
               itemsList.forEachIndexed { i, doc ->
                 singleChecklistItems.add(ChecklistItem(id = i + 1, title = doc, isChecked = true))
               }
-
-              // Trigger sync to Google Sheets immediately so all RMs receive it!
-              viewModel?.triggerGoogleSheetsSync()
 
               showCreatePresetDialog = false
               Toast.makeText(context, "✓ নতুন প্রিসেট '$cleanName' সফলভাবে তৈরি ও সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()

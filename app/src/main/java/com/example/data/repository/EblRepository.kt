@@ -354,7 +354,6 @@ class EblRepository(
 
     applicationScope.launch {
       syncTargetUpsertToGoogleSheets(rmCode, cleanQ, year, creditCardTarget, corporateCardTarget, b2bTarget)
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -839,12 +838,11 @@ class EblRepository(
 
     updatePendingSyncCount()
 
-    // Automatically trigger immediate customer file sync and full background sync
+    // Synchronize this specific customer file entry with Google Sheets
     applicationScope.launch {
       try {
         syncCustomerFileUpsertToGoogleSheets(entity)
       } catch (_: Exception) {}
-      triggerGoogleSheetsSync()
     }
 
     Result.success(entity)
@@ -879,7 +877,7 @@ class EblRepository(
         put("submissionAddress", file.submissionAddress ?: "")
         put("submissionLat", file.submissionLatitude ?: 0.0)
         put("submissionLng", file.submissionLongitude ?: 0.0)
-        put("updatedAt", DateUtils.formatDateTime(file.updatedAt))
+        put("updatedAt", DateUtils.formatDateTimeWithSeconds(file.updatedAt))
         put("updatedBy", file.updatedBy)
       }
 
@@ -887,6 +885,7 @@ class EblRepository(
 
       val payload = org.json.JSONObject().apply {
         put("action", "UPSERT_CUSTOMER_FILE")
+        put("isExplicitCommand", true)
         put("file", fObj)
         put("files", filesArr)
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
@@ -1560,7 +1559,6 @@ class EblRepository(
     }
 
     updatePendingSyncCount()
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -1618,7 +1616,6 @@ class EblRepository(
     }
 
     updatePendingSyncCount()
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -1680,7 +1677,6 @@ class EblRepository(
     }
 
     updatePendingSyncCount()
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -1743,7 +1739,6 @@ class EblRepository(
         com.example.util.AttachmentHelper.fileToBase64(targetFile)
       } else null
       syncAttachmentUpsertToGoogleSheets(attachment, b64)
-      triggerGoogleSheetsSync()
     }
     Result.success(attachment)
   }
@@ -1777,7 +1772,6 @@ class EblRepository(
 
     applicationScope.launch {
       syncAttachmentDeletionToGoogleSheets(attachmentId, fileId)
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -1889,7 +1883,6 @@ class EblRepository(
 
     applicationScope.launch {
       syncRmPasswordToGoogleSheets(cleanRmCode, hash, salt)
-      triggerGoogleSheetsSync()
     }
 
     Result.success(newUser)
@@ -1991,18 +1984,17 @@ class EblRepository(
       )
     )
 
+    val uSalt = updated.salt
+    val uHash = updated.passwordHash
     if (!newPassword.isNullOrBlank()) {
-      val uSalt = updated.salt
-      val uHash = updated.passwordHash
       database.appSettingDao().insertOrUpdateSetting(
         AppSettingEntity("RM_PASS_UPDATED_AT_${rmCode.trim().uppercase()}", now.toString(), currentUser.rmCode, now)
       )
-      applicationScope.launch {
-        syncRmPasswordToGoogleSheets(rmCode, uHash, uSalt)
-      }
+    }
+    applicationScope.launch {
+      syncRmPasswordToGoogleSheets(rmCode, uHash, uSalt)
     }
 
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -2027,7 +2019,6 @@ class EblRepository(
       )
     }
 
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -2038,7 +2029,6 @@ class EblRepository(
       return@withContext Result.failure(Exception("Only Mentor can reject RM accounts."))
     }
     database.userDao().updateStatus(rmCode, "INACTIVE")
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -2116,7 +2106,6 @@ class EblRepository(
 
     applicationScope.launch {
       syncRmPasswordToGoogleSheets(rmCode, hash, salt)
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -2161,7 +2150,6 @@ class EblRepository(
       syncSettingUpsertToGoogleSheets("CHECKLIST_REGARDS_TEMPLATE", regardsTemplate)
       if (corporateDocsJson.isNotBlank()) syncSettingUpsertToGoogleSheets("CHECKLIST_CORP_DOCS", corporateDocsJson)
       if (enhancementDocsJson.isNotBlank()) syncSettingUpsertToGoogleSheets("CHECKLIST_ENHANCE_DOCS", enhancementDocsJson)
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -2216,7 +2204,6 @@ class EblRepository(
       syncSettingUpsertToGoogleSheets(cleanName, itemsText.trim())
       syncSettingUpsertToGoogleSheets(legacyKey, itemsText.trim())
       syncSettingUpsertToGoogleSheets("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString())
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -2278,7 +2265,10 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("App Name", cleanName, currentUser.rmCode, now)
     )
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("app_custom_name", cleanName)
+      syncSettingUpsertToGoogleSheets("App Name", cleanName)
+    }
     Result.success(Unit)
   }
 
@@ -2319,7 +2309,6 @@ class EblRepository(
     )
 
     database.userDao().updateStatus(rmCode, newStatus)
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -2494,7 +2483,11 @@ class EblRepository(
     )
 
     updatePendingSyncCount()
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch {
+      try {
+        syncCustomerFileUpsertToGoogleSheets(updated)
+      } catch (_: Exception) {}
+    }
 
     Result.success(Unit)
   }
@@ -2541,7 +2534,6 @@ class EblRepository(
     }
     applicationScope.launch {
       syncSettingUpsertToGoogleSheets(key, value)
-      triggerGoogleSheetsSync()
     }
     Result.success(Unit)
   }
@@ -2563,7 +2555,6 @@ class EblRepository(
       AppSettingEntity("deleted_preset_keys", updatedDel, currentUser.rmCode, DateUtils.currentDhakaMillis())
     )
     syncSettingDeletionToGoogleSheets(key)
-    applicationScope.launch { triggerGoogleSheetsSync() }
     Result.success(Unit)
   }
 
@@ -2589,7 +2580,7 @@ class EblRepository(
       lastSyncMessage = "Linked to Google Sheet ($extractedId). Real-time auto-sync active."
     )
     database.appSettingDao().insertOrUpdateSyncStatus(updated)
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch { pullDataFromGoogleSheets() }
     Result.success(extractedId)
   }
 
@@ -2648,7 +2639,7 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { triggerGoogleSheetsSync() }
+    applicationScope.launch { syncSettingUpsertToGoogleSheets("FILE_STATUSES_LIST", finalVal) }
     Result.success(Unit)
   }
 
@@ -2741,17 +2732,31 @@ class EblRepository(
       )
     }
 
-    // Trigger instant background sync to Google Sheets so ALL users (RM, Admin, Mentor) see the change live!
+    // Sync only this updated customer file to Google Sheets, without dumping all local records
     applicationScope.launch {
-      triggerGoogleSheetsSync()
+      try {
+        syncCustomerFileUpsertToGoogleSheets(updated)
+      } catch (_: Exception) {}
     }
 
     Result.success(updated)
   }
 
-  suspend fun triggerGoogleSheetsSync(): Result<String> = withContext(Dispatchers.IO) {
+  suspend fun triggerGoogleSheetsSync(isExplicitPushCommand: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
+    // User requirement: "App thaka sheet a auto sync bondho koro without command komo data sheet ajabe na but sheet thaka data auto app acole ashbe"
+    // Without explicit push command, NO app data is pushed to Google Sheets.
+    // Automatically pull latest data from Google Sheets into the app instead.
+    if (!isExplicitPushCommand) {
+      return@withContext pullDataFromGoogleSheets()
+    }
+
+    // 1. Pull latest sheet data first so that we have the latest records and timestamps from Google Sheets
+    try {
+      pullDataFromGoogleSheets()
+    } catch (_: Exception) {}
+
     val currentUser = authRepository.currentUser.value
-    val syncedBy = currentUser?.rmCode ?: "APP_BACKGROUND_SYNC"
+    val syncedBy = currentUser?.rmCode ?: "APP_MANUAL_PUSH"
 
     val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
     val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
@@ -2767,8 +2772,10 @@ class EblRepository(
     )
 
     try {
+      val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
       val allFiles = database.customerFileDao().getAllActiveFiles()
-      val filesToPush = allFiles.filter {
+      val candidateFiles = if (unsyncedFiles.isNotEmpty()) unsyncedFiles else allFiles
+      val filesToPush = candidateFiles.filter {
         !it.isDeleted &&
         !it.fileId.startsWith("demo_", ignoreCase = true) &&
         !(it.fileId.startsWith("cust-00", ignoreCase = true) && it.customerName.contains("Sample Customer", ignoreCase = true)) &&
@@ -4571,7 +4578,44 @@ class EblRepository(
         timestamp = now
       )
     )
-    applicationScope.launch { triggerGoogleSheetsSync() }
+
+    // Synchronize live GPS location ping with Google Sheets (RM_Details and RM_Location_Logs)
+    applicationScope.launch {
+      syncLocationPingToGoogleSheets(rmCode, latitude, longitude, address, sourceAction)
+    }
+  }
+
+  suspend fun syncLocationPingToGoogleSheets(
+    rmCode: String,
+    lat: Double,
+    lng: Double,
+    address: String,
+    sourceAction: String
+  ): Unit = withContext(Dispatchers.IO) {
+    try {
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+      if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
+
+      val user = database.userDao().getUser(rmCode)
+      val payload = org.json.JSONObject().apply {
+        put("action", "SYNC_LOCATION")
+        put("rmCode", rmCode.trim().uppercase())
+        put("userName", user?.name ?: rmCode)
+        put("latitude", lat)
+        put("longitude", lng)
+        put("address", address)
+        put("sourceAction", sourceAction)
+        put("timestamp", DateUtils.formatDateTimeWithSeconds(DateUtils.currentDhakaMillis()))
+        put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
+        put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
+      }
+      val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
+      val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
+      httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+    } catch (_: Exception) {}
   }
 
   fun getAllUsersFlow(): Flow<List<UserEntity>> {
@@ -4618,7 +4662,6 @@ class EblRepository(
     database.communicationDao().insertMessage(msg)
     applicationScope.launch {
       syncChatUpsertToGoogleSheets(msg)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(msg)
   }
@@ -4639,7 +4682,6 @@ class EblRepository(
 
     applicationScope.launch {
       syncChatDeletionToGoogleSheets(id)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -4684,7 +4726,6 @@ class EblRepository(
     )
     applicationScope.launch {
       syncEventUpsertToGoogleSheets(event)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(event)
   }
@@ -4726,7 +4767,6 @@ class EblRepository(
     database.communicationDao().insertEvent(updated)
     applicationScope.launch {
       syncEventUpsertToGoogleSheets(updated)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -4764,7 +4804,6 @@ class EblRepository(
     database.communicationDao().insertOrUpdateResponse(resp)
     applicationScope.launch {
       syncEventResponseUpsertToGoogleSheets(resp)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -4826,7 +4865,6 @@ class EblRepository(
     // Synchronize Event deletion directly to Google Sheets
     applicationScope.launch {
       syncEventDeletionToGoogleSheets(eventId)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -4938,9 +4976,6 @@ class EblRepository(
 
     // Direct synchronization of Document upsert to Google Sheets
     syncDocumentUpsertToGoogleSheets(entity)
-    CoroutineScope(Dispatchers.IO).launch {
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
-    }
 
     Result.success(entity)
   }
@@ -4992,7 +5027,6 @@ class EblRepository(
     // Synchronize Document deletion directly to Google Sheets
     applicationScope.launch {
       syncDocumentDeletionToGoogleSheets(docId)
-      try { triggerGoogleSheetsSync() } catch (_: Exception) {}
     }
     Result.success(Unit)
   }

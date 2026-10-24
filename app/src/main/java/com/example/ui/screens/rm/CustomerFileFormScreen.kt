@@ -321,14 +321,16 @@ fun CustomerFileFormScreen(
         isDetectingLocation = true
         try {
           val result = LocationHelper.getCurrentLocation(context)
-          officeAddress = result.address
+          if (officeAddress.isBlank() || editFileId == null) {
+            officeAddress = result.address
+          }
           locationDetectionSuccess = true
           viewModel.updateUserLocation(
             rmCode = currentUser.rmCode,
             lat = result.latitude,
             lng = result.longitude,
             address = result.address,
-            sourceAction = "GPS_AUTO_DETECT",
+            sourceAction = if (editFileId != null) "DATA_EDIT_SCREEN_OPEN" else "DATA_ADD_SCREEN_OPEN",
             fileId = fileId
           )
         } catch (e: Exception) {
@@ -387,7 +389,10 @@ fun CustomerFileFormScreen(
   var showAddAttachmentDialog by remember { mutableStateOf(false) }
   var previewAttachment by remember { mutableStateOf<FileAttachmentEntity?>(null) }
 
-  var isSaving by remember { mutableStateOf(false) }
+  // Auto-capture real-time location when Add or Edit form is opened
+  LaunchedEffect(Unit) {
+    triggerLocationDetection()
+  }
 
   // Auto-assign sequential SL for new file
   LaunchedEffect(allActiveFiles, editFileId) {
@@ -461,13 +466,21 @@ fun CustomerFileFormScreen(
       var currentLng: Double? = null
       var currentAddr: String? = null
 
-      // Automatically capture RM's location when creating or submitting file
+      // Automatically capture RM's location when creating or updating file
       if (LocationHelper.hasLocationPermission(context)) {
         try {
           val loc = LocationHelper.getCurrentLocation(context)
           currentLat = loc.latitude
           currentLng = loc.longitude
           currentAddr = loc.address
+          viewModel.updateUserLocation(
+            rmCode = currentUser.rmCode,
+            lat = loc.latitude,
+            lng = loc.longitude,
+            address = loc.address,
+            sourceAction = if (existingFile != null) "DATA_EDIT_SAVE" else "DATA_ADD_SAVE",
+            fileId = existingFile?.fileId ?: fileId
+          )
         } catch (_: Exception) {}
       }
 

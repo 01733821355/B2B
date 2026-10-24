@@ -149,18 +149,32 @@ fun EblMainApp(viewModel: AppViewModel) {
       scope.launch {
         try {
           val loc = com.example.util.LocationHelper.getCurrentLocation(context)
-          currentUser?.let { u ->
-            viewModel.updateUserLocation(u.rmCode, loc.latitude, loc.longitude, loc.address, "STARTUP_GPS_BEACON")
+          val uCode = currentUser?.rmCode ?: lastLoggedRmCode
+          if (uCode.isNotBlank()) {
+            viewModel.updateUserLocation(uCode, loc.latitude, loc.longitude, loc.address, "APP_OPEN_GPS")
           }
         } catch (_: Exception) {}
       }
     }
   }
 
-  // Request SMS, Location, and Notifications together on app launch
+  // Request SMS, Location, and Notifications together on app launch & capture immediate startup GPS
   LaunchedEffect(Unit) {
     NotificationHelper.createNotificationChannels(context)
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(context.applicationContext)
+
+    // Requirement: Rm real time location jokhon app open hobe tokhonoi auto nia nibe
+    if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+      scope.launch {
+        try {
+          val loc = com.example.util.LocationHelper.getCurrentLocation(context)
+          val uCode = currentUser?.rmCode ?: lastLoggedRmCode
+          if (uCode.isNotBlank()) {
+            viewModel.updateUserLocation(uCode, loc.latitude, loc.longitude, loc.address, "APP_OPEN_GPS")
+          }
+        } catch (_: Exception) {}
+      }
+    }
 
     val neededPermissions = mutableListOf<String>()
     if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
@@ -180,18 +194,25 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
-  // Requirement 3: app background a location auto nibe abong mentorer page update hobe
+  // Real-time location auto-beacon when user is active
   LaunchedEffect(currentUser?.rmCode) {
     val userCode = currentUser?.rmCode
     if (!userCode.isNullOrBlank()) {
+      // Immediate location ping on user login/session restore
+      if (com.example.util.LocationHelper.hasLocationPermission(context)) {
+        try {
+          val loc = com.example.util.LocationHelper.getCurrentLocation(context)
+          viewModel.updateUserLocation(userCode, loc.latitude, loc.longitude, loc.address, "LOGIN_GPS_BEACON")
+        } catch (_: Exception) {}
+      }
       while (true) {
+        kotlinx.coroutines.delay(60_000) // auto beacon every 60 seconds
         if (com.example.util.LocationHelper.hasLocationPermission(context)) {
           try {
             val loc = com.example.util.LocationHelper.getCurrentLocation(context)
             viewModel.updateUserLocation(userCode, loc.latitude, loc.longitude, loc.address, "AUTO_BACKGROUND_BEACON")
           } catch (_: Exception) {}
         }
-        kotlinx.coroutines.delay(60_000) // auto beacon every 60 seconds
       }
     }
   }
