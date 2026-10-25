@@ -37,10 +37,16 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.draw.clip
 import com.example.data.model.FileAttachmentEntity
 import com.example.ui.common.AttachmentViewerDialog
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import androidx.core.content.ContextCompat
+import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
@@ -122,6 +128,82 @@ fun CustomerDetailDialog(
   var selectedUploadCategory by remember { mutableStateOf("Status Update Photo") }
   var uploadDocNameInput by remember { mutableStateOf("") }
   var isProcessingAttachmentUpload by remember { mutableStateOf(false) }
+
+  var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+  var tempCameraFile by remember { mutableStateOf<File?>(null) }
+
+  val cameraLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.TakePicture()
+  ) { success ->
+    if (success && tempCameraUri != null) {
+      val uri = tempCameraUri!!
+      scope.launch {
+        isProcessingAttachmentUpload = true
+        try {
+          val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+            context = context,
+            sourceUri = uri,
+            preferredCategory = selectedUploadCategory
+          )
+          val docName = if (uploadDocNameInput.isBlank()) saved.fileName else uploadDocNameInput.trim()
+          viewModel.addAttachment(
+            fileId = file.fileId,
+            category = selectedUploadCategory,
+            fileName = docName,
+            fileType = saved.fileType,
+            fileSizeBytes = saved.fileSizeBytes,
+            fileUri = saved.fileUri,
+            localFile = saved.file
+          )
+          showAddAttachmentModal = false
+          uploadDocNameInput = ""
+        } catch (e: Exception) {
+          Toast.makeText(context, "Camera upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+          isProcessingAttachmentUpload = false
+          tempCameraFile?.delete()
+          tempCameraUri = null
+          tempCameraFile = null
+        }
+      }
+    } else {
+      tempCameraFile?.delete()
+      tempCameraUri = null
+      tempCameraFile = null
+    }
+  }
+
+  val cameraPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { isGranted ->
+    if (isGranted) {
+      try {
+        val (uri, fileObj) = com.example.util.AttachmentHelper.createTempCameraUri(context, "doc_photo")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+      }
+    } else {
+      Toast.makeText(context, "Camera permission is required to capture photos.", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun launchCameraFlow() {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+      try {
+        val (uri, fileObj) = com.example.util.AttachmentHelper.createTempCameraUri(context, "doc_photo")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        Toast.makeText(context, "Could not open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+      }
+    } else {
+      cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+  }
 
   val photoPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickVisualMedia()
@@ -790,6 +872,26 @@ fun CustomerDetailDialog(
           }
 
           Spacer(modifier = Modifier.height(14.dp))
+
+          // 1. Prominent Camera Capture Button
+          Button(
+            onClick = { launchCameraFlow() },
+            enabled = !isProcessingAttachmentUpload,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(40.dp)
+              .testTag("btn_capture_camera_photo")
+          ) {
+            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // 2. Secondary Options: Gallery Photo & Document File
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -803,11 +905,14 @@ fun CustomerDetailDialog(
               enabled = !isProcessingAttachmentUpload,
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(38.dp)
+              modifier = Modifier
+                .weight(1f)
+                .height(38.dp)
+                .testTag("btn_pick_photo_gallery")
             ) {
               Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Pick Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("গ্যালারি (Gallery)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -817,11 +922,14 @@ fun CustomerDetailDialog(
               enabled = !isProcessingAttachmentUpload,
               colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
               shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(38.dp)
+              modifier = Modifier
+                .weight(1f)
+                .height(38.dp)
+                .testTag("btn_pick_doc_file")
             ) {
               Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Pick Doc / PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("ফাইল (Doc/PDF)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
         }

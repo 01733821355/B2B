@@ -28,6 +28,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class SavedAttachmentResult(
   val file: File,
@@ -39,6 +42,19 @@ data class SavedAttachmentResult(
 )
 
 object AttachmentHelper {
+
+  /**
+   * Creates a temporary file in cache and returns a FileProvider content URI
+   * for capturing a photo via ActivityResultContracts.TakePicture.
+   */
+  fun createTempCameraUri(context: Context, prefix: String = "cam_photo"): Pair<Uri, File> {
+    val cameraDir = File(context.cacheDir, "camera").apply { mkdirs() }
+    val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+    val file = File(cameraDir, "${prefix}_${timeStamp}.jpg")
+    val authority = "${context.packageName}.fileprovider"
+    val uri = FileProvider.getUriForFile(context, authority, file)
+    return Pair(uri, file)
+  }
 
   /**
    * Copies any incoming Content or File Uri to persistent app-internal storage.

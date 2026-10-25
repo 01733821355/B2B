@@ -1622,19 +1622,19 @@ fun CustomerFileFormScreen(
           Text("Choose File Source from Device:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
           Spacer(modifier = Modifier.height(8.dp))
 
-          // 1. Pick PDF / Word / Any Document from Phone Storage
+          // 1. Camera Capture Button
           Button(
             onClick = {
               selectedCategoryForUpload = catInput
               showAddAttachmentDialog = false
-              generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+              launchCameraCapture(catInput)
             },
-            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            modifier = Modifier.fillMaxWidth().testTag("btn_pick_document_file")
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            modifier = Modifier.fillMaxWidth().testTag("btn_pick_camera_photo")
           ) {
-            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("PDF / Word / ফাইল নির্বাচন করুন", fontSize = 12.sp)
+            Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -1651,7 +1651,24 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("ছবি / গ্যালারি থেকে নির্বাচন করুন", fontSize = 12.sp)
+            Text("গ্যালারি থেকে ছবি নির্বাচন করুন (Gallery)", fontSize = 12.sp)
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          // 3. Pick PDF / Word / Any Document from Phone Storage
+          Button(
+            onClick = {
+              selectedCategoryForUpload = catInput
+              showAddAttachmentDialog = false
+              generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+            modifier = Modifier.fillMaxWidth().testTag("btn_pick_document_file")
+          ) {
+            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("PDF / Word / ফাইল নির্বাচন করুন (Files)", fontSize = 12.sp)
           }
 
           Spacer(modifier = Modifier.height(14.dp))

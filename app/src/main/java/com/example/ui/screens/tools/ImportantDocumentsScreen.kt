@@ -5,6 +5,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import java.io.File
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -708,6 +713,78 @@ fun UploadOrEditDocDialog(
     "Other"
   )
 
+  var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+  var tempCameraFile by remember { mutableStateOf<File?>(null) }
+
+  val cameraLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.TakePicture()
+  ) { success ->
+    if (success && tempCameraUri != null) {
+      val uri = tempCameraUri!!
+      coroutineScope.launch {
+        isPickingFile = true
+        try {
+          val saved = AttachmentHelper.saveUriToInternalStorage(
+            context = context,
+            sourceUri = uri,
+            preferredCategory = category
+          )
+          selectedFileName = saved.fileName
+          selectedFileType = saved.fileType
+          selectedFileSizeBytes = saved.fileSizeBytes
+          selectedFileUri = saved.fileUri
+          selectedStoragePath = saved.storagePath
+          if (title.isBlank()) {
+            title = saved.fileName.substringBeforeLast('.')
+          }
+        } catch (e: Exception) {
+          errorMessage = "Failed to capture photo: ${e.message}"
+        } finally {
+          isPickingFile = false
+          tempCameraFile?.delete()
+          tempCameraUri = null
+          tempCameraFile = null
+        }
+      }
+    } else {
+      tempCameraFile?.delete()
+      tempCameraUri = null
+      tempCameraFile = null
+    }
+  }
+
+  val cameraPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { isGranted ->
+    if (isGranted) {
+      try {
+        val (uri, fileObj) = AttachmentHelper.createTempCameraUri(context, "doc_photo")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        errorMessage = "Could not open camera: ${e.message}"
+      }
+    } else {
+      Toast.makeText(context, "Camera permission is required to capture photos.", Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun launchCameraFlow() {
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+      try {
+        val (uri, fileObj) = AttachmentHelper.createTempCameraUri(context, "doc_photo")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        errorMessage = "Could not open camera: ${e.message}"
+      }
+    } else {
+      cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+  }
+
   // Photo / Picture Picker
   val photoPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickVisualMedia()
@@ -869,9 +946,22 @@ fun UploadOrEditDocDialog(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // File Selection Section (Picture or PDF)
-        Text("Attach File (Picture or PDF) *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+        // File Selection Section (Camera, Picture, or PDF)
+        Text("Attach File (Camera, Picture, or PDF) *", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
         Spacer(modifier = Modifier.height(6.dp))
+
+        Button(
+          onClick = { launchCameraFlow() },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+          shape = RoundedCornerShape(8.dp),
+          modifier = Modifier.fillMaxWidth().height(38.dp).testTag("btn_pick_camera")
+        ) {
+          Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
 
         Row(
           modifier = Modifier.fillMaxWidth(),
