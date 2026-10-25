@@ -2889,7 +2889,11 @@ class EblRepository(
   suspend fun updateFileStatus(
     fileId: String,
     newStatus: String,
-    newRemarks: String? = null
+    newRemarks: String? = null,
+    newCpvStatus: String? = null,
+    newCpvRemarks: String? = null,
+    newCpvDate: String? = null,
+    newCpvAddress: String? = null
   ): Result<CustomerFileEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
@@ -2899,14 +2903,25 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("Customer file not found."))
 
     if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR" && !existing.assignedRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
-      return@withContext Result.failure(Exception("Access Denied: Only Administrator or Mentor can update file status."))
+      return@withContext Result.failure(Exception("Access Denied: Only Administrator, Mentor or assigned RM can update file status."))
     }
 
     val now = DateUtils.currentDhakaMillis()
+    val updatedAppStatus = if (newStatus.isNotBlank()) newStatus.trim() else existing.applicationStatus
     val updatedRemarks = if (!newRemarks.isNullOrBlank()) newRemarks.trim() else existing.remarks
+    val updatedCpvStatus = if (!newCpvStatus.isNullOrBlank()) newCpvStatus.trim() else existing.cpvStatus
+    val updatedCpvRemarks = if (!newCpvRemarks.isNullOrBlank()) newCpvRemarks.trim() else existing.cpvRemarks
+    val updatedCpvDate = if (!newCpvDate.isNullOrBlank()) newCpvDate.trim() else existing.cpvDate
+    val updatedCpvAddress = if (!newCpvAddress.isNullOrBlank()) newCpvAddress.trim() else existing.cpvAddress
+
     val updated = existing.copy(
-      applicationStatus = newStatus.trim(),
+      applicationStatus = updatedAppStatus,
       remarks = updatedRemarks,
+      cpvStatus = updatedCpvStatus,
+      cpvRemarks = updatedCpvRemarks,
+      cpvDate = updatedCpvDate,
+      cpvAddress = updatedCpvAddress,
+      cpvLastUpdatedBy = currentUser.rmCode,
       updatedAt = now,
       updatedBy = currentUser.rmCode,
       isSynced = false
@@ -2922,7 +2937,7 @@ class EblRepository(
         role = currentUser.role,
         action = "UPDATE_STATUS",
         fileId = existing.fileId,
-        details = "Status updated from '${existing.applicationStatus}' to '$newStatus' by ${currentUser.role} (${currentUser.name})",
+        details = "Status updated: AppStatus='${existing.applicationStatus}'->'$updatedAppStatus', CPV='${existing.cpvStatus}'->'$updatedCpvStatus' by ${currentUser.role} (${currentUser.name})",
         timestamp = now
       )
     )
@@ -2932,8 +2947,18 @@ class EblRepository(
     val rmMobile = targetRmUser?.mobile ?: ""
     val rmName = targetRmUser?.name ?: updated.assignedRmCode
     val formattedTime = DateUtils.formatDateTime(now)
-    val prevStatus = existing.applicationStatus
-    val presStatus = newStatus
+    val prevStatus = when {
+      existing.applicationStatus != updatedAppStatus && existing.cpvStatus != updatedCpvStatus ->
+        "${existing.applicationStatus} (CPV: ${existing.cpvStatus})"
+      existing.cpvStatus != updatedCpvStatus -> "CPV: ${existing.cpvStatus}"
+      else -> existing.applicationStatus
+    }
+    val presStatus = when {
+      existing.applicationStatus != updatedAppStatus && existing.cpvStatus != updatedCpvStatus ->
+        "$updatedAppStatus (CPV: $updatedCpvStatus)"
+      existing.cpvStatus != updatedCpvStatus -> "CPV: $updatedCpvStatus"
+      else -> updatedAppStatus
+    }
     val changePerson = "${currentUser.name.ifBlank { currentUser.rmCode }} (${currentUser.role})"
     val fileType = updated.productType.ifBlank { "Credit Card" }
     val smsMessage = "Dear $rmName your $fileType file customer name '${updated.customerName}' is change by $changePerson from '$prevStatus' to '$presStatus' time is $formattedTime"
@@ -4677,7 +4702,7 @@ class EblRepository(
 
         val sheetUpdatedBy = obj.optString("updatedBy", "")
         val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
-        val wasRecentlyEditedLocally = (now - existing.updatedAt < 6_000) && (existing.updatedBy != "GoogleSheets_Sync")
+        val wasRecentlyEditedLocally = (!existing.isSynced || now - existing.updatedAt < 60_000) && (existing.updatedBy != "GoogleSheets_Sync")
         if (wasRecentlyEditedLocally && !isManualSheetEdit) {
           continue
         }
@@ -4687,7 +4712,8 @@ class EblRepository(
         val mob = obj.optString("mobile", existing.mobile)
         val em = obj.optString("email", existing.email)
         val prodType = obj.optString("productType", existing.productType)
-        val cpvStatus = obj.optString("cpvStatus", existing.cpvStatus)
+        val sheetCpv = obj.optString("cpvStatus", "").trim()
+        val cpvStatus = if (sheetCpv.isNotBlank()) sheetCpv else existing.cpvStatus
         val cpvRemarks = if (obj.has("cpvRemarks")) obj.optString("cpvRemarks", existing.cpvRemarks) else existing.cpvRemarks
         val remarksVal = if (obj.has("remarks")) obj.optString("remarks", existing.remarks) else existing.remarks
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", existing.serialNumber))

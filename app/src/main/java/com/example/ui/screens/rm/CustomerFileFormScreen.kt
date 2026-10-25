@@ -993,8 +993,10 @@ fun CustomerFileFormScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Status Update Photos Upload Box
-        val statusPhotos = attachments.filter { it.category == "Status Update Photo" }
+        // Status Update Attachments Upload Box (Camera, Photo, Document)
+        val statusAttachments = attachments.filter {
+          it.category == "Status Update Photo" || it.category == "Status Update Document"
+        }
         Surface(
           shape = RoundedCornerShape(10.dp),
           color = Color(0xFFF0F9FF),
@@ -1010,44 +1012,76 @@ fun CustomerFileFormScreen(
               Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Status Update Photos", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0369A1))
+                Text("Status Update Attachments", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0369A1))
               }
               Text(
-                text = if (statusPhotos.isEmpty()) "Optional photo proofs" else "✓ ${statusPhotos.size} photo(s)",
+                text = if (statusAttachments.isEmpty()) "Optional proofs" else "✓ ${statusAttachments.size} attached",
                 fontSize = 11.sp,
-                color = if (statusPhotos.isEmpty()) Color.Gray else Color(0xFF0284C7),
-                fontWeight = if (statusPhotos.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
+                color = if (statusAttachments.isEmpty()) Color.Gray else Color(0xFF0284C7),
+                fontWeight = if (statusAttachments.isNotEmpty()) FontWeight.Bold else FontWeight.Normal
               )
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-              text = "Upload sanction letter, query slips, client receipts, or verification photos for status '$selectedApplicationStatus'.",
+              text = "Attach sanction letter, query slips, receipts, or proofs for '$selectedApplicationStatus' (Camera, Photo or Document):",
               fontSize = 10.sp,
               color = Color.DarkGray
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            OutlinedButton(
-              onClick = {
-                statusPhotoPickerLauncher.launch(
-                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-              },
-              shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.fillMaxWidth().testTag("upload_status_photos_btn")
+            // 3 Buttons: Camera, Photo, Document
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-              Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("Upload Status Photo(s) [Multiple]", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+              OutlinedButton(
+                onClick = { launchCameraCapture("Status Update Photo") },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).height(38.dp).testTag("btn_status_camera")
+              ) {
+                Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("ক্যামেরা", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
+              }
+
+              OutlinedButton(
+                onClick = {
+                  statusPhotoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                  )
+                },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).height(38.dp).testTag("btn_status_photo")
+              ) {
+                Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("ছবি", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+              }
+
+              OutlinedButton(
+                onClick = {
+                  selectedCategoryForUpload = "Status Update Document"
+                  generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+                },
+                shape = RoundedCornerShape(8.dp),
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f).height(38.dp).testTag("btn_status_document")
+              ) {
+                Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("ডকুমেন্ট", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+              }
             }
 
-            if (statusPhotos.isNotEmpty()) {
+            if (statusAttachments.isNotEmpty()) {
               Spacer(modifier = Modifier.height(8.dp))
               FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
               ) {
-                statusPhotos.forEach { photo ->
+                statusAttachments.forEach { photo ->
                   Surface(
                     shape = RoundedCornerShape(8.dp),
                     color = Color.White,
@@ -1058,7 +1092,12 @@ fun CustomerFileFormScreen(
                       modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                       verticalAlignment = Alignment.CenterVertically
                     ) {
-                      Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
+                      Icon(
+                        if (photo.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
+                        contentDescription = null,
+                        tint = Color(0xFF0284C7),
+                        modifier = Modifier.size(14.dp)
+                      )
                       Spacer(modifier = Modifier.width(4.dp))
                       Text(photo.fileName.take(16) + if (photo.fileName.length > 16) "..." else "", fontSize = 10.sp)
                       Spacer(modifier = Modifier.width(4.dp))
@@ -1468,11 +1507,22 @@ fun CustomerFileFormScreen(
 
         Spacer(modifier = Modifier.height(14.dp))
 
-        // Two Action Buttons matching screenshot: Upload CPV Photo & Upload CPV Report / Doc
+        // 3 Action Buttons for CPV: Camera, CPV Photo, and CPV Document
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(8.dp)
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
+          OutlinedButton(
+            onClick = { launchCameraCapture("CPV Photo") },
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.weight(1f).height(38.dp).testTag("upload_cpv_camera_btn")
+          ) {
+            Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF9333EA), modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("ক্যামেরা", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9333EA))
+          }
+
           OutlinedButton(
             onClick = {
               cpvMultiPhotoPickerLauncher.launch(
@@ -1480,30 +1530,35 @@ fun CustomerFileFormScreen(
               )
             },
             shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.weight(1f).testTag("upload_cpv_photo_btn")
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.weight(1f).height(38.dp).testTag("upload_cpv_photo_btn")
           ) {
-            Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Upload CPV Photos", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("CPV ছবি", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
           }
 
           OutlinedButton(
-            onClick = { showAddAttachmentDialog = true },
+            onClick = {
+              selectedCategoryForUpload = "CPV Document"
+              generalDocumentPickerLauncher.launch(arrayOf("*/*"))
+            },
             shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.weight(1f).testTag("upload_cpv_doc_btn")
+            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            modifier = Modifier.weight(1f).height(38.dp).testTag("upload_cpv_doc_btn")
           ) {
-            Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Upload CPV Doc", fontSize = 11.sp)
+            Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
+            Spacer(modifier = Modifier.width(3.dp))
+            Text("CPV ফাইল", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
           }
         }
 
-        // CPV Photos Preview Flow
-        val cpvPhotosInCard = attachments.filter { it.category == "CPV Photo" }
-        if (cpvPhotosInCard.isNotEmpty()) {
+        // CPV Attachments Preview Flow (Photos & Docs)
+        val cpvAttachmentsInCard = attachments.filter { it.category == "CPV Photo" || it.category == "CPV Document" }
+        if (cpvAttachmentsInCard.isNotEmpty()) {
           Spacer(modifier = Modifier.height(10.dp))
           Text(
-            text = "✓ ${cpvPhotosInCard.size} Verification Photo(s) Attached:",
+            text = "✓ ${cpvAttachmentsInCard.size} Verification Attachment(s) Added:",
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF7E22CE)
@@ -1513,27 +1568,32 @@ fun CustomerFileFormScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            cpvPhotosInCard.forEach { photo ->
+            cpvAttachmentsInCard.forEach { att ->
               Surface(
                 shape = RoundedCornerShape(8.dp),
                 color = Color(0xFFFAF5FF),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC084FC)),
-                modifier = Modifier.clickable { previewAttachment = photo }
+                modifier = Modifier.clickable { previewAttachment = att }
               ) {
                 Row(
                   modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF9333EA), modifier = Modifier.size(14.dp))
+                  Icon(
+                    if (att.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
+                    contentDescription = null,
+                    tint = Color(0xFF9333EA),
+                    modifier = Modifier.size(14.dp)
+                  )
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text(photo.fileName.take(16) + if (photo.fileName.length > 16) "..." else "", fontSize = 10.sp, color = Color(0xFF581C87))
+                  Text(att.fileName.take(16) + if (att.fileName.length > 16) "..." else "", fontSize = 10.sp, color = Color(0xFF581C87))
                   Spacer(modifier = Modifier.width(4.dp))
                   Icon(
                     Icons.Default.Close,
                     contentDescription = "Remove",
                     tint = Color.Red,
                     modifier = Modifier.size(14.dp).clickable {
-                      viewModel.deleteAttachment(photo.attachmentId, fileId)
+                      viewModel.deleteAttachment(att.attachmentId, fileId)
                     }
                   )
                 }

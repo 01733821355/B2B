@@ -294,7 +294,7 @@ function extractAllSheetFiles(sheet) {
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
       cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks'], ''),
       remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
-      cpvStatus: getVal(row, ['cpv status', 'cpvstatus'], 'Pending'),
+      cpvStatus: getVal(row, ['cpv status', 'cpvstatus'], ''),
       submissionAddress: getVal(row, ['gps submission address', 'submission address', 'gps address', 'submissionaddress'], ''),
       submissionLat: parseFloat(getVal(row, ['gps lat', 'submission lat', 'lat', 'latitude'], '0')) || 0.0,
       submissionLng: parseFloat(getVal(row, ['gps lng', 'submission lng', 'lng', 'longitude'], '0')) || 0.0,

@@ -121,7 +121,9 @@ fun CustomerDetailDialog(
   val availableStatuses by viewModel.fileStatusOptions.collectAsState()
   var showUpdateStatusDialog by remember { mutableStateOf(false) }
   var selectedNewStatus by remember(file.applicationStatus) { mutableStateOf(file.applicationStatus) }
+  var selectedNewCpvStatus by remember(file.cpvStatus) { mutableStateOf(file.cpvStatus) }
   var statusRemarksInput by remember(file.remarks) { mutableStateOf(file.remarks) }
+  var cpvRemarksInput by remember(file.cpvRemarks) { mutableStateOf(file.cpvRemarks) }
   var isUpdatingStatus by remember { mutableStateOf(false) }
 
   var showAddAttachmentModal by remember { mutableStateOf(false) }
@@ -445,8 +447,34 @@ fun CustomerDetailDialog(
             Spacer(modifier = Modifier.height(14.dp))
           }
 
-          // CPV Details
-          Text("Contact Point Verification (CPV):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+          // CPV Details Header with Quick Edit CPV Action
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Text("Contact Point Verification (CPV):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == file.assignedRmCode) {
+              OutlinedButton(
+                onClick = {
+                  selectedNewStatus = file.applicationStatus
+                  selectedNewCpvStatus = file.cpvStatus
+                  statusRemarksInput = file.remarks
+                  cpvRemarksInput = file.cpvRemarks
+                  showUpdateStatusDialog = true
+                },
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier
+                  .height(26.dp)
+                  .testTag("btn_edit_cpv_status")
+              ) {
+                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("Edit CPV / Status", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+              }
+            }
+          }
           Spacer(modifier = Modifier.height(4.dp))
           Card(
             modifier = Modifier.fillMaxWidth(),
@@ -720,30 +748,39 @@ fun CustomerDetailDialog(
     )
   }
 
-  // Update Status Dialog (Admin, Mentor & RM)
+  // Update Status & CPV Dialog (Admin, Mentor & RM)
   if (showUpdateStatusDialog) {
+    val cpvStatusOptions = listOf("Pending", "Completed", "Failed", "Not Required")
+    val statusAttachments = attachments.filter {
+      it.category == "Status & CPV Update" || it.category == "Status Update Photo" || it.category == "CPV Photo"
+    }
+
     AlertDialog(
       onDismissRequest = { if (!isUpdatingStatus) showUpdateStatusDialog = false },
       title = {
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Edit, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Update Application Status", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+          Text("Update Status & CPV Verification", fontWeight = FontWeight.Bold, fontSize = 16.sp)
         }
       },
       text = {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Column(
+          modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+        ) {
           Text(
             text = "Customer: ${file.customerName} (${file.fileId})",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             color = EblNavyDark
           )
-          Spacer(modifier = Modifier.height(6.dp))
-          Text("Select new status (Synced to Google Sheets for all RMs):", fontSize = 11.sp, color = Color.Gray)
           Spacer(modifier = Modifier.height(10.dp))
 
-          // Status Chips selection
+          // 1. Application Status Section
+          Text("1. Application Status (ফাইল স্ট্যাটাস):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(6.dp))
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -763,12 +800,138 @@ fun CustomerDetailDialog(
             }
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // 2. CPV Status Section
+          Text("2. CPV Status (ভেরিফিকেশন স্ট্যাটাস):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
+          Spacer(modifier = Modifier.height(6.dp))
+          FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            cpvStatusOptions.forEach { cpvOpt ->
+              val isSelected = selectedNewCpvStatus.equals(cpvOpt, ignoreCase = true)
+              val chipColor = when (cpvOpt) {
+                "Completed" -> Color(0xFF15803D)
+                "Failed" -> Color(0xFFDC2626)
+                "Not Required" -> Color(0xFF4B5563)
+                else -> Color(0xFFB45309)
+              }
+              FilterChip(
+                selected = isSelected,
+                onClick = { selectedNewCpvStatus = cpvOpt },
+                label = {
+                  Text(
+                    text = cpvOpt,
+                    fontSize = 11.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                  )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                  selectedContainerColor = chipColor,
+                  selectedLabelColor = Color.White
+                )
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // 3. Status & CPV Attachments (Camera, Photo, Document)
+          Text("3. Attach Proof / Photo / Document:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(6.dp))
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            // Camera Button
+            OutlinedButton(
+              onClick = {
+                selectedUploadCategory = "Status & CPV Update"
+                launchCameraFlow()
+              },
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+              modifier = Modifier.weight(1f).height(36.dp)
+            ) {
+              Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(15.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("ক্যামেরা", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
+            }
+
+            // Photo Button
+            OutlinedButton(
+              onClick = {
+                selectedUploadCategory = "Status & CPV Update"
+                photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+              },
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+              modifier = Modifier.weight(1f).height(36.dp)
+            ) {
+              Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(15.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("ছবি", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+            }
+
+            // Document Button
+            OutlinedButton(
+              onClick = {
+                selectedUploadCategory = "Status & CPV Update"
+                docPickerLauncher.launch(arrayOf("*/*"))
+              },
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+              modifier = Modifier.weight(1f).height(36.dp)
+            ) {
+              Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text("ডকুমেন্ট", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+            }
+          }
+
+          if (statusAttachments.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text("✓ ${statusAttachments.size} Proof Attachment(s) Added", fontSize = 10.sp, color = Color(0xFF059669), fontWeight = FontWeight.SemiBold)
+            Spacer(modifier = Modifier.height(4.dp))
+            FlowRow(
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              statusAttachments.forEach { att ->
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFF1F5F9),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                  modifier = Modifier.clickable { selectedAttachmentForView = att }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(
+                      if (att.fileType.contains("pdf")) Icons.Default.Description else Icons.Default.Image,
+                      contentDescription = null,
+                      tint = EblNavyPrimary,
+                      modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(att.fileName.take(14) + if (att.fileName.length > 14) "..." else "", fontSize = 9.sp)
+                  }
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // 4. Remarks Input
           OutlinedTextField(
             value = statusRemarksInput,
             onValueChange = { statusRemarksInput = it },
-            label = { Text("Admin Remarks / Update Notes", fontSize = 11.sp) },
-            placeholder = { Text("e.g. Approved with condition, verified by admin...", fontSize = 11.sp) },
+            label = { Text("Remarks & Notes", fontSize = 11.sp) },
+            placeholder = { Text("e.g. CPV physically verified at office, client available...", fontSize = 11.sp) },
             modifier = Modifier.fillMaxWidth(),
             maxLines = 3
           )
@@ -778,11 +941,17 @@ fun CustomerDetailDialog(
         Button(
           onClick = {
             isUpdatingStatus = true
-            viewModel.updateFileStatus(file.fileId, selectedNewStatus, statusRemarksInput) { success, err ->
+            viewModel.updateFileStatus(
+              fileId = file.fileId,
+              newStatus = selectedNewStatus,
+              newRemarks = statusRemarksInput,
+              newCpvStatus = selectedNewCpvStatus,
+              newCpvRemarks = cpvRemarksInput.ifBlank { statusRemarksInput }
+            ) { success, err ->
               isUpdatingStatus = false
               if (success) {
                 showUpdateStatusDialog = false
-                Toast.makeText(context, "Status updated to '$selectedNewStatus' and synced!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Status & CPV updated and synced!", Toast.LENGTH_SHORT).show()
                 onDismiss()
               } else {
                 Toast.makeText(context, err ?: "Failed to update status", Toast.LENGTH_SHORT).show()

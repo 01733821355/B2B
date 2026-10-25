@@ -1368,12 +1368,25 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fileId: String,
     newStatus: String,
     newRemarks: String? = null,
+    newCpvStatus: String? = null,
+    newCpvRemarks: String? = null,
+    newCpvDate: String? = null,
+    newCpvAddress: String? = null,
     onDone: (Boolean, String?) -> Unit = { _, _ -> }
   ) {
     viewModelScope.launch {
-      val res = eblRepository.updateFileStatus(fileId, newStatus, newRemarks)
-      res.onSuccess {
-        _uiMessage.emit("Customer file status updated to '$newStatus'.")
+      val res = eblRepository.updateFileStatus(
+        fileId = fileId,
+        newStatus = newStatus,
+        newRemarks = newRemarks,
+        newCpvStatus = newCpvStatus,
+        newCpvRemarks = newCpvRemarks,
+        newCpvDate = newCpvDate,
+        newCpvAddress = newCpvAddress
+      )
+      res.onSuccess { updated ->
+        val cpvMsg = if (!newCpvStatus.isNullOrBlank()) " [CPV: ${updated.cpvStatus}]" else ""
+        _uiMessage.emit("Customer file status updated to '${updated.applicationStatus}'$cpvMsg.")
         onDone(true, null)
       }.onFailure { err ->
         _uiMessage.emit("Failed to update status: ${err.message}")
