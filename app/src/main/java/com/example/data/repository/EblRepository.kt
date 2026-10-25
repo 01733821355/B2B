@@ -156,31 +156,53 @@ class EblRepository(
         val knownNonPresetKeywords = listOf(
           "OFFICE", "LAT", "LNG", "RADIUS", "ADDRESS", "BANK", "APP_NAME", "APPLICATION_NAME",
           "COMPANY", "SUPPORT", "PHONE", "EMAIL", "URL", "TERMS", "POLICY", "PASSWORD", "SECRET",
-          "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS"
+          "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS",
+          "THEME", "SCALE", "FONT", "COLOR", "STYLE", "TEXT_SCALE", "COLOR_THEME", "ACTIVE_THEME", "CUSTOM_NAME"
         )
+        val delPresetsSetting = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
+        val delPresetSet = delPresetsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
+        deletedPresetKeysCache.addAll(delPresetSet)
+
         val customPresetSetting = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")
         if (customPresetSetting != null && customPresetSetting.settingValue.isNotBlank()) {
           try {
-            val arr = org.json.JSONArray(customPresetSetting.settingValue)
+            val raw = customPresetSetting.settingValue
+            val arr = if (raw.startsWith("[")) org.json.JSONArray(raw) else org.json.JSONArray(raw.split(",").map { it.trim().trim('"', '[', ']') })
             val cleanedList = mutableListOf<String>()
             for (i in 0 until arr.length()) {
-              val item = arr.getString(i).trim()
+              val item = arr.getString(i).trim().trim('"', '[', ']')
               val itemUpper = item.uppercase()
+              val cleanKey = "CHECKLIST_CUSTOM_" + item.replace("\\s+".toRegex(), "_").uppercase()
+              val legacyKey = "CHECKLIST_PRESET_" + item.replace("\\s+".toRegex(), "_").uppercase()
               val isBogus = knownNonPresetKeywords.any { kw -> itemUpper.contains(kw) }
-              if (!isBogus && item.isNotBlank()) {
+              val isDeleted = itemUpper in delPresetSet || cleanKey in delPresetSet || legacyKey in delPresetSet
+
+              if (!isBogus && !isDeleted && item.isNotBlank()) {
                 cleanedList.add(item)
-              } else if (isBogus) {
-                val cleanKey = "CHECKLIST_CUSTOM_" + item.replace("\\s+".toRegex(), "_").uppercase()
-                val legacyKey = "CHECKLIST_PRESET_" + item.replace("\\s+".toRegex(), "_").uppercase()
+              } else {
                 database.appSettingDao().deleteSetting(cleanKey)
                 database.appSettingDao().deleteSetting(legacyKey)
-                database.appSettingDao().deleteSetting(item)
+                if (isBogus) {
+                  // Only delete raw setting if it's not a legitimate app setting (like APP_ACTIVE_THEME)
+                  if (!item.equals("APP_ACTIVE_THEME", true) && !item.equals("UI_TEXT_SCALE", true) && !item.equals("UI_COLOR_THEME", true)) {
+                    database.appSettingDao().deleteSetting(item)
+                  }
+                }
               }
             }
             database.appSettingDao().insertOrUpdateSetting(
               AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(cleanedList.distinct()).toString(), "Sanitization", DateUtils.currentDhakaMillis())
             )
           } catch (_: Exception) {}
+        }
+
+        // Explicitly purge rogue checklist keys from app_settings
+        listOf(
+          "CHECKLIST_CUSTOM_UI_COLOR_THEME", "CHECKLIST_PRESET_UI_COLOR_THEME",
+          "CHECKLIST_CUSTOM_UI_TEXT_SCALE", "CHECKLIST_PRESET_UI_TEXT_SCALE",
+          "CHECKLIST_CUSTOM_APP_ACTIVE_THEME", "CHECKLIST_PRESET_APP_ACTIVE_THEME"
+        ).forEach { rogueKey ->
+          database.appSettingDao().deleteSetting(rogueKey)
         }
       } catch (_: Exception) {}
     }
@@ -2229,23 +2251,40 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("Unauthorized. Please log in first."))
     val cleanName = presetName.trim()
     val cleanKey = presetKey.trim().uppercase()
-    val legacyKey = "CHECKLIST_PRESET_" + cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val keySuffix = cleanName.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_").uppercase()
+    val legacyKey = "CHECKLIST_PRESET_" + keySuffix
+    val customKey = "CHECKLIST_CUSTOM_" + keySuffix
 
     database.appSettingDao().deleteSetting(cleanName)
     database.appSettingDao().deleteSetting(cleanKey)
     database.appSettingDao().deleteSetting(legacyKey)
+    database.appSettingDao().deleteSetting(customKey)
 
     val currentCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
-    val updatedCustom = currentCustom.split(",").map { it.trim() }.filter {
-      it.isNotBlank() && !it.equals(cleanName, true) && !it.equals(cleanKey, true)
-    }.joinToString(",")
+    val customList = if (currentCustom.startsWith("[")) {
+      try {
+        val arr = org.json.JSONArray(currentCustom)
+        (0 until arr.length()).map { arr.getString(it).trim().trim('"', '[', ']') }
+      } catch (_: Exception) {
+        currentCustom.split(",").map { it.trim().trim('"', '[', ']') }
+      }
+    } else {
+      currentCustom.split(",").map { it.trim().trim('"', '[', ']') }
+    }.filter { it.isNotBlank() }
+
+    val updatedCustomList = customList.filter { item ->
+      !item.equals(cleanName, true) && !item.equals(cleanKey, true) &&
+      !item.equals(legacyKey, true) && !item.equals(customKey, true) &&
+      !item.replace(" ", "_").equals(keySuffix, true)
+    }
+    val updatedCustomJson = org.json.JSONArray(updatedCustomList.distinct()).toString()
     val now = DateUtils.currentDhakaMillis()
     database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedCustom, currentUser.rmCode, now)
+      AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", updatedCustomJson, currentUser.rmCode, now)
     )
 
     val currentDel = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
-    val toAdd = listOf(cleanName, cleanKey, legacyKey).filter { it.isNotBlank() }
+    val toAdd = listOf(cleanName, cleanKey, legacyKey, customKey, keySuffix).filter { it.isNotBlank() }
     val updatedDel = (currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() } + toAdd).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_preset_keys", updatedDel, currentUser.rmCode, now)
@@ -2255,7 +2294,32 @@ class EblRepository(
       deletedPresetKeysCache.add(it.uppercase())
     }
 
-    syncPresetDeletionToGoogleSheets(cleanName, cleanKey)
+    // Clean from CHECKLIST_PRESETS_VISIBILITY
+    val currentVis = database.appSettingDao().getSetting("CHECKLIST_PRESETS_VISIBILITY")?.settingValue ?: ""
+    var updatedVisJson: String? = null
+    if (currentVis.startsWith("{")) {
+      try {
+        val vJson = org.json.JSONObject(currentVis)
+        toAdd.forEach {
+          vJson.remove(it)
+          vJson.remove(it.uppercase())
+        }
+        updatedVisJson = vJson.toString()
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity("CHECKLIST_PRESETS_VISIBILITY", updatedVisJson, currentUser.rmCode, now)
+        )
+      } catch (_: Exception) {}
+    }
+
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("CHECKLIST_CUSTOM_PRESETS_LIST", updatedCustomJson)
+      syncSettingUpsertToGoogleSheets("deleted_preset_keys", updatedDel)
+      if (updatedVisJson != null) {
+        syncSettingUpsertToGoogleSheets("CHECKLIST_PRESETS_VISIBILITY", updatedVisJson)
+      }
+      syncPresetDeletionToGoogleSheets(cleanName, cleanKey)
+      syncPresetDeletionToGoogleSheets(legacyKey, customKey)
+    }
     Result.success(Unit)
   }
 
@@ -3705,8 +3769,13 @@ class EblRepository(
         }
       } else {
         val delPresetsSetting = database.appSettingDao().getSetting("deleted_preset_keys")?.settingValue ?: ""
-        val delPresetSet = (delPresetsSetting.split(",").map { it.trim().uppercase() } + deletedPresetKeysCache.map { it.uppercase() }).toSet()
-        if (key.uppercase() in delPresetSet || key.removePrefix("CHECKLIST_CUSTOM_").replace("_", " ").uppercase() in delPresetSet) {
+        val delPresetSet = (delPresetsSetting.split(",").map { it.trim().uppercase() } + deletedPresetKeysCache.map { it.uppercase() }).filter { it.isNotBlank() }.toSet()
+        val keyUpper = key.uppercase()
+        val friendlyName = key.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ").trim()
+
+        if (keyUpper in delPresetSet || friendlyName.uppercase() in delPresetSet) {
+          database.appSettingDao().deleteSetting(key)
+          database.appSettingDao().deleteSetting(friendlyName)
           continue
         }
 
@@ -3721,11 +3790,32 @@ class EblRepository(
           } catch (_: Exception) {}
         }
 
-        if (existing == null || existing.settingValue != value) {
+        // Sanitize incoming CHECKLIST_CUSTOM_PRESETS_LIST to strip out deleted presets and rogue settings
+        val valueToSave = if (key == "CHECKLIST_CUSTOM_PRESETS_LIST") {
+          try {
+            val raw = value.trim()
+            val arr = if (raw.startsWith("[")) org.json.JSONArray(raw) else org.json.JSONArray(raw.split(",").map { it.trim().trim('"', '[', ']') })
+            val clean = mutableListOf<String>()
+            for (ci in 0 until arr.length()) {
+              val itm = arr.getString(ci).trim().trim('"', '[', ']')
+              val itmUpper = itm.uppercase()
+              val itmKey1 = "CHECKLIST_CUSTOM_" + itm.replace("\\s+".toRegex(), "_").uppercase()
+              val itmKey2 = "CHECKLIST_PRESET_" + itm.replace("\\s+".toRegex(), "_").uppercase()
+              val isBogus = listOf("THEME", "SCALE", "FONT", "COLOR", "STYLE", "STATUS", "PASSWORD", "APP_NAME").any { itmUpper.contains(it) }
+              val isDeleted = itmUpper in delPresetSet || itmKey1 in delPresetSet || itmKey2 in delPresetSet
+              if (!isBogus && !isDeleted && itm.isNotBlank()) {
+                clean.add(itm)
+              }
+            }
+            org.json.JSONArray(clean.distinct()).toString()
+          } catch (_: Exception) { value }
+        } else value
+
+        if (existing == null || existing.settingValue != valueToSave) {
           database.appSettingDao().insertOrUpdateSetting(
             AppSettingEntity(
               settingKey = key,
-              settingValue = value,
+              settingValue = valueToSave,
               updatedBy = "GoogleSheets_Universal",
               updatedAt = now
             )
@@ -3753,22 +3843,24 @@ class EblRepository(
               AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
             )
           } else if (key.startsWith("CHECKLIST_PRESET_") || key.startsWith("CHECKLIST_CUSTOM_")) {
-            if (key != "CHECKLIST_CUSTOM_PRESETS_LIST" && key != "CHECKLIST_PRESETS_VISIBILITY" &&
+            val nonKeywords = listOf("THEME", "SCALE", "FONT", "COLOR", "STYLE", "STATUS", "PASSWORD", "APP_NAME")
+            val isRogue = nonKeywords.any { friendlyName.uppercase().contains(it) || keyUpper.contains(it) }
+            if (!isRogue &&
+                key != "CHECKLIST_CUSTOM_PRESETS_LIST" && key != "CHECKLIST_PRESETS_VISIBILITY" &&
                 key != "CHECKLIST_CORP_COMPANY_DOCS" && key != "CHECKLIST_CORP_EMPLOYEE_DOCS" &&
                 key != "CHECKLIST_SALARIED_DOCS" && key != "CHECKLIST_BUSINESS_DOCS" &&
                 key != "CHECKLIST_LOAN_DOCS" && key != "CHECKLIST_ENHANCE_DOCS" &&
                 key != "CHECKLIST_HEADER_TEMPLATE" && key != "CHECKLIST_REGARDS_TEMPLATE") {
-              val friendly = key.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ")
-              if (friendly.uppercase() !in delPresetSet && key.uppercase() !in delPresetSet) {
+              if (friendlyName.uppercase() !in delPresetSet && keyUpper !in delPresetSet) {
                 val existingCustom = database.appSettingDao().getSetting("CHECKLIST_CUSTOM_PRESETS_LIST")?.settingValue ?: ""
                 val customList = try {
                   val arr = org.json.JSONArray(existingCustom)
-                  (0 until arr.length()).map { arr.getString(it).trim() }
+                  (0 until arr.length()).map { arr.getString(it).trim().trim('"', '[', ']') }
                 } catch (_: Exception) {
-                  existingCustom.split(",").map { it.trim() }
+                  existingCustom.split(",").map { it.trim().trim('"', '[', ']') }
                 }.filter { it.isNotBlank() }
-                if (friendly !in customList) {
-                  val updatedList = (customList + friendly).distinct()
+                if (friendlyName !in customList) {
+                  val updatedList = (customList + friendlyName).filter { it.uppercase() !in delPresetSet }.distinct()
                   database.appSettingDao().insertOrUpdateSetting(
                     AppSettingEntity("CHECKLIST_CUSTOM_PRESETS_LIST", org.json.JSONArray(updatedList).toString(), "GoogleSheets_Universal", now)
                   )

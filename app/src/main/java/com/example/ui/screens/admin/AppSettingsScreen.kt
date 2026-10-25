@@ -413,24 +413,37 @@ fun AppSettingsScreen(
     val nonPresetKeywords = setOf(
       "OFFICE", "LAT", "LNG", "RADIUS", "ADDRESS", "BANK", "APP_NAME", "APPLICATION_NAME",
       "COMPANY", "SUPPORT", "PHONE", "EMAIL", "URL", "TERMS", "POLICY", "PASSWORD", "SECRET",
-      "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS"
+      "TOMBSTONE", "DELETED", "SYNC", "MAINTENANCE", "VERSION", "PORT", "IP", "HOURS", "STATUS",
+      "THEME", "SCALE", "FONT", "COLOR", "STYLE", "TEXT_SCALE", "COLOR_THEME", "ACTIVE_THEME", "CUSTOM_NAME"
     )
 
-    // Gather any additional custom checklist items stored in Universal Settings (excluding non-preset keys)
-    val customChecklistPresets = remember(settings) {
+    fun normalizePresetName(s: String): String = s.lowercase().replace("[^a-z0-9]".toRegex(), "")
+
+    val deletedPresetKeys = remember(settings) {
+      settings.find { it.settingKey == "deleted_preset_keys" }
+        ?.settingValue?.split(",")?.map { it.trim().uppercase() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    }
+
+    // Gather any additional custom checklist items stored in Universal Settings (excluding non-preset and deleted keys)
+    val customChecklistPresets = remember(settings, deletedPresetKeys) {
+      val defaultNormSet = defaultChecklistPresets.map { normalizePresetName(it.second) }.toSet()
+      val defaultKeySet = defaultChecklistPresets.map { it.first.uppercase() }.toSet()
+
       val customListRaw = settings.find { it.settingKey == "CHECKLIST_CUSTOM_PRESETS_LIST" }?.settingValue ?: ""
       val customNames = if (customListRaw.startsWith("[")) {
         try {
           val arr = org.json.JSONArray(customListRaw)
-          (0 until arr.length()).map { arr.getString(it).trim() }.filter { it.isNotBlank() }
+          (0 until arr.length()).map { arr.getString(it).trim().trim('"', '[', ']') }.filter { it.isNotBlank() }
         } catch (_: Exception) {
-          customListRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+          customListRaw.split(",").map { it.trim().trim('"', '[', ']') }.filter { it.isNotBlank() }
         }
       } else {
-        customListRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        customListRaw.split(",").map { it.trim().trim('"', '[', ']') }.filter { it.isNotBlank() }
       }.filter { name ->
         val upper = name.uppercase()
-        !nonPresetKeywords.any { kw -> upper.contains(kw) }
+        val norm = normalizePresetName(name)
+        !nonPresetKeywords.any { kw -> upper.contains(kw) } &&
+        norm !in defaultNormSet && upper !in deletedPresetKeys
       }
 
       val presetsFromList = customNames.map { name ->
@@ -452,15 +465,23 @@ fun AppSettingsScreen(
         it.settingKey != "CHECKLIST_ENHANCE_DOCS" &&
         it.settingKey != "CHECKLIST_HEADER_TEMPLATE" &&
         it.settingKey != "CHECKLIST_REGARDS_TEMPLATE" &&
+        it.settingKey.uppercase() !in defaultKeySet &&
+        it.settingKey.uppercase() !in deletedPresetKeys &&
         !nonPresetKeywords.any { kw -> it.settingKey.uppercase().contains(kw) }
       }.map {
         val friendly = it.settingKey.removePrefix("CHECKLIST_CUSTOM_").removePrefix("CHECKLIST_PRESET_").replace("_", " ")
         Triple(it.settingKey, friendly, it.settingValue)
+      }.filter {
+        val norm = normalizePresetName(it.second)
+        norm !in defaultNormSet && it.second.uppercase() !in deletedPresetKeys
       }
 
-      (presetsFromList + presetsFromKeys).distinctBy { it.second.lowercase() }
+      (presetsFromList + presetsFromKeys).distinctBy { normalizePresetName(it.second) }
     }
-    val checklistPresets = defaultChecklistPresets + customChecklistPresets
+
+    val checklistPresets = remember(defaultChecklistPresets, customChecklistPresets) {
+      (defaultChecklistPresets + customChecklistPresets).distinctBy { normalizePresetName(it.second) }
+    }
 
     val visibilitySetting = settings.find { it.settingKey == "CHECKLIST_PRESETS_VISIBILITY" }?.settingValue.orEmpty()
     val visibilityMap = remember(visibilitySetting) {
@@ -479,11 +500,34 @@ fun AppSettingsScreen(
       } else emptyMap()
     }
 
+    fun getPresetAliases(key: String, title: String): List<String> {
+      val aliases = mutableListOf(key, title, key.uppercase(), title.uppercase())
+      val cleanKey = "CHECKLIST_CUSTOM_" + title.replace("\\s+".toRegex(), "_").uppercase()
+      val legacyKey = "CHECKLIST_PRESET_" + title.replace("\\s+".toRegex(), "_").uppercase()
+      aliases.add(cleanKey)
+      aliases.add(legacyKey)
+      val norm = normalizePresetName(title)
+      if (norm.contains("enhance") || norm.contains("limit")) {
+        aliases.addAll(listOf("CHECKLIST_ENHANCE_DOCS", "Limit Enhancement Docs", "Credit Card Limit Enhance", "Credit Card Limit Enhancement", "CHECKLIST_CUSTOM_CREDIT_CARD_LIMIT_ENHANCE", "CHECKLIST_PRESET_CREDIT_CARD_LIMIT_ENHANCE"))
+      } else if (norm.contains("corporate") || norm.contains("corp")) {
+        aliases.addAll(listOf("Corporate Card", "CHECKLIST_CORP_COMPANY_DOCS", "CHECKLIST_CORP_EMPLOYEE_DOCS", "Corporate Card (Company)", "Corporate Card (Employee)", "CORPORATE CARD EMPLOYEE", "CHECKLIST_CUSTOM_CORPORATE_CARD"))
+      } else if (norm.contains("salaried")) {
+        aliases.addAll(listOf("CHECKLIST_SALARIED_DOCS", "Salaried Credit Card", "New Credit Card (Salaried)", "NEW CREDIT CARD SALARIED", "NEW CREDIT CARD (SALARIED)", "CHECKLIST_CUSTOM_NEW_CREDIT_CARD_SALARIED", "CHECKLIST_PRESET_NEW_CREDIT_CARD_SALARIED"))
+      } else if (norm.contains("business")) {
+        aliases.addAll(listOf("CHECKLIST_BUSINESS_DOCS", "Business Person Credit Card", "New Credit Card (Business Person)", "CHECKLIST_CUSTOM_NEW_CREDIT_CARD_BUSINESS_PERSON"))
+      } else if (norm.contains("loan")) {
+        aliases.addAll(listOf("CHECKLIST_LOAN_DOCS", "Loan Application Docs", "Personal / Auto / Home Loan", "CHECKLIST_CUSTOM_PERSONAL_AUTO_HOME_LOAN"))
+      } else if (norm.contains("pending")) {
+        aliases.addAll(listOf("PENDING_DOCS_LIST", "Pending Docs Checklist", "CHECKLIST_CUSTOM_PENDING_DOCS_CHECKLIST"))
+      }
+      return aliases.distinct()
+    }
+
     fun isPresetVisibleToAll(key: String, title: String): Boolean {
-      if (visibilityMap.containsKey(key)) return visibilityMap[key] != false
-      if (visibilityMap.containsKey(key.uppercase())) return visibilityMap[key.uppercase()] != false
-      if (visibilityMap.containsKey(title)) return visibilityMap[title] != false
-      if (visibilityMap.containsKey(title.uppercase())) return visibilityMap[title.uppercase()] != false
+      val aliases = getPresetAliases(key, title)
+      for (a in aliases) {
+        if (visibilityMap[a] == false || visibilityMap[a.uppercase()] == false) return false
+      }
       return true
     }
 
@@ -493,8 +537,11 @@ fun AppSettingsScreen(
       } catch (_: Exception) {
         org.json.JSONObject()
       }
-      json.put(key, isVisible)
-      json.put(title, isVisible)
+      val aliases = getPresetAliases(key, title)
+      for (a in aliases) {
+        json.put(a, isVisible)
+        json.put(a.uppercase(), isVisible)
+      }
       val newStr = json.toString()
       viewModel.updateSetting("CHECKLIST_PRESETS_VISIBILITY", newStr)
     }
@@ -660,8 +707,13 @@ fun AppSettingsScreen(
             color = Color.Gray
           )
           Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            val isCustomCategory = selectedPresetKey.startsWith("CHECKLIST_CUSTOM_")
-            if (isCustomCategory) {
+            val corePresetKeys = setOf(
+              "PENDING_DOCS_LIST", "CHECKLIST_ENHANCE_DOCS", "CHECKLIST_CORP_COMPANY_DOCS",
+              "CHECKLIST_CORP_EMPLOYEE_DOCS", "CHECKLIST_SALARIED_DOCS", "CHECKLIST_BUSINESS_DOCS",
+              "CHECKLIST_LOAN_DOCS", "CHECKLIST_HEADER_TEMPLATE", "CHECKLIST_REGARDS_TEMPLATE"
+            )
+            val canDeleteCategory = selectedPresetKey !in corePresetKeys
+            if (canDeleteCategory) {
               androidx.compose.material3.OutlinedButton(
                 onClick = { showDeletePresetDialog = true },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),

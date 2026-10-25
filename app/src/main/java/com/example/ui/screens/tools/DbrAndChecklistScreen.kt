@@ -1297,22 +1297,60 @@ fun DocumentChecklistSenderTab(
   }
 
   fun isVisibleForRm(presetName: String): Boolean {
-    val key1 = "CHECKLIST_CUSTOM_" + presetName.replace("\\s+".toRegex(), "_").uppercase()
-    val key2 = "CHECKLIST_PRESET_" + presetName.replace("\\s+".toRegex(), "_").uppercase()
-    if (visibilityMap[presetName] == false || visibilityMap[presetName.uppercase()] == false) return false
-    if (visibilityMap[key1] == false || visibilityMap[key2] == false) return false
+    val aliases = mutableListOf(
+      presetName,
+      presetName.uppercase(),
+      "CHECKLIST_CUSTOM_" + presetName.replace("\\s+".toRegex(), "_").uppercase(),
+      "CHECKLIST_PRESET_" + presetName.replace("\\s+".toRegex(), "_").uppercase()
+    )
+    val norm = presetName.lowercase().replace("[^a-z0-9]".toRegex(), "")
+    if (norm.contains("enhance") || norm.contains("limit")) {
+      aliases.addAll(listOf("CHECKLIST_ENHANCE_DOCS", "Limit Enhancement Docs", "Credit Card Limit Enhance", "Credit Card Limit Enhancement", "CHECKLIST_CUSTOM_CREDIT_CARD_LIMIT_ENHANCE", "CHECKLIST_PRESET_CREDIT_CARD_LIMIT_ENHANCE"))
+    } else if (norm.contains("corporate") || norm.contains("corp")) {
+      aliases.addAll(listOf("Corporate Card", "CHECKLIST_CORP_COMPANY_DOCS", "CHECKLIST_CORP_EMPLOYEE_DOCS", "Corporate Card (Company)", "Corporate Card (Employee)", "CORPORATE CARD EMPLOYEE", "CHECKLIST_CUSTOM_CORPORATE_CARD"))
+    } else if (norm.contains("salaried")) {
+      aliases.addAll(listOf("CHECKLIST_SALARIED_DOCS", "Salaried Credit Card", "New Credit Card (Salaried)", "NEW CREDIT CARD SALARIED", "NEW CREDIT CARD (SALARIED)", "CHECKLIST_CUSTOM_NEW_CREDIT_CARD_SALARIED", "CHECKLIST_PRESET_NEW_CREDIT_CARD_SALARIED"))
+    } else if (norm.contains("business")) {
+      aliases.addAll(listOf("CHECKLIST_BUSINESS_DOCS", "Business Person Credit Card", "New Credit Card (Business Person)", "CHECKLIST_CUSTOM_NEW_CREDIT_CARD_BUSINESS_PERSON"))
+    } else if (norm.contains("loan")) {
+      aliases.addAll(listOf("CHECKLIST_LOAN_DOCS", "Loan Application Docs", "Personal / Auto / Home Loan", "CHECKLIST_CUSTOM_PERSONAL_AUTO_HOME_LOAN"))
+    } else if (norm.contains("pending")) {
+      aliases.addAll(listOf("PENDING_DOCS_LIST", "Pending Docs Checklist", "CHECKLIST_CUSTOM_PENDING_DOCS_CHECKLIST"))
+    }
+
+    for (a in aliases) {
+      if (visibilityMap[a] == false || visibilityMap[a.uppercase()] == false) return false
+    }
     return true
   }
 
   val dynamicallyAddedPresets = remember { mutableStateListOf<String>() }
-  val allAvailablePresets = remember(customPresetsList, dynamicallyAddedPresets.toList()) {
-    (defaultPresets + customPresetsList + dynamicallyAddedPresets).distinct()
+  val allAvailablePresets = remember(customPresetsList, dynamicallyAddedPresets.toList(), appSettingsList) {
+    val deletedPresets = appSettingsList.find { it.settingKey == "deleted_preset_keys" }
+      ?.settingValue?.split(",")?.map { it.trim().uppercase() }?.filter { it.isNotBlank() }?.toSet() ?: emptySet()
+    (defaultPresets + customPresetsList + dynamicallyAddedPresets).distinct().filter { name ->
+      val upper = name.uppercase()
+      val key1 = "CHECKLIST_CUSTOM_" + name.replace("\\s+".toRegex(), "_").uppercase()
+      val key2 = "CHECKLIST_PRESET_" + name.replace("\\s+".toRegex(), "_").uppercase()
+      upper !in deletedPresets && key1 !in deletedPresets && key2 !in deletedPresets
+    }
   }
-  val presetOptions = remember(allAvailablePresets) {
-    allAvailablePresets
+  val isPrivilegedUser = currentUser.role.equals("ADMIN", ignoreCase = true) || currentUser.role.equals("MENTOR", ignoreCase = true)
+  val presetOptions = remember(allAvailablePresets, visibilityMap, isPrivilegedUser) {
+    if (!isPrivilegedUser) {
+      allAvailablePresets.filter { isVisibleForRm(it) }
+    } else {
+      allAvailablePresets
+    }
   }
 
-  var selectedPreset by remember { mutableStateOf(presetOptions[0]) }
+  var selectedPreset by remember { mutableStateOf(presetOptions.firstOrNull() ?: "Credit Card Limit Enhance") }
+
+  LaunchedEffect(presetOptions, isPrivilegedUser) {
+    if (!isPrivilegedUser && !isVisibleForRm(selectedPreset) && presetOptions.isNotEmpty()) {
+      selectedPreset = presetOptions[0]
+    }
+  }
   var presetExpanded by remember { mutableStateOf(false) }
   var isPullRefreshing by remember { mutableStateOf(false) }
 
@@ -2324,15 +2362,16 @@ fun DocumentChecklistSenderTab(
               onDismissRequest = { presetExpanded = false }
             ) {
               presetOptions.forEach { opt ->
+                val isVis = isVisibleForRm(opt)
+                if (!isPrivilegedUser && !isVis) return@forEach
                 DropdownMenuItem(
                   text = {
-                    val isVis = isVisibleForRm(opt)
                     Column {
                       Text(
-                        text = if (currentUser.role != "RM" && !isVis) "$opt 🔒 (Only Admin)" else opt,
+                        text = if (isPrivilegedUser && !isVis) "$opt 🔒 (Only Admin)" else opt,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.sp,
-                        color = if (currentUser.role != "RM" && !isVis) Color(0xFFB45309) else Color.Unspecified
+                        color = if (isPrivilegedUser && !isVis) Color(0xFFB45309) else Color.Unspecified
                       )
                       if (opt == "Corporate Card") {
                         Text("2-Part: Company Docs & Employee Docs", fontSize = 10.sp, color = Color.Gray)
