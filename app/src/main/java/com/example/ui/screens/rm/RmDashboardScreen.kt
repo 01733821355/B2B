@@ -115,6 +115,7 @@ fun RmDashboardScreen(
   }
 
   var selectedKpiQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
+  val isAnnual = selectedKpiQuarter.equals("Annual", ignoreCase = true)
   val currentQuarterTargets = target?.getTargetForQuarter(selectedKpiQuarter) ?: Triple(20, 10, 15)
   val ccTarget = currentQuarterTargets.first
   val corpTarget = currentQuarterTargets.second
@@ -434,7 +435,6 @@ fun RmDashboardScreen(
                 )
               }
             }
-            val isAnnual = selectedKpiQuarter.equals("Annual", ignoreCase = true)
             Surface(
               shape = RoundedCornerShape(6.dp),
               color = Color(0xFFEFF6FF),
