@@ -18,6 +18,7 @@ import com.example.data.repository.EblRepository
 import com.example.util.DateUtils
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -1155,6 +1156,48 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _uiMessage.emit("Failed to set targets: ${err.message}")
         onResult(false, err.message)
       }
+    }
+  }
+
+  val targetCriteriaOptions: StateFlow<List<String>> = eblRepository.getTargetCriteriaOptionsFlow()
+    .stateIn(
+      scope = viewModelScope,
+      started = SharingStarted.WhileSubscribed(5000),
+      initialValue = listOf("Credit Card", "Corporate Card", "B2B")
+    )
+
+  fun addTargetCriterion(name: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.addTargetCriterion(name)
+      res.onSuccess {
+        _uiMessage.emit("New target criteria '$name' added successfully.")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to add target criteria: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun deleteTargetCriterion(name: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteTargetCriterion(name)
+      res.onSuccess {
+        _uiMessage.emit("Target criteria '$name' deleted.")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to delete target criteria: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun getRmCustomTargetsFlow(rmCode: String): Flow<Map<String, Int>> =
+    eblRepository.getRmCustomTargetsFlow(rmCode)
+
+  fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>) {
+    viewModelScope.launch {
+      eblRepository.saveRmCustomTargets(rmCode, targets)
     }
   }
 

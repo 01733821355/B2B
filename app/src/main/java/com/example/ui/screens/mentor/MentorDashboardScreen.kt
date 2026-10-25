@@ -1153,15 +1153,25 @@ fun MentorDashboardScreen(
   // Set RM Quarter Targets Dialog for Mentor
   if (mentorTargetSettingRow != null) {
     val row = mentorTargetSettingRow!!
+    val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
+    val customTargets by viewModel.getRmCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
+
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = row.rmCode,
       rmName = row.rmName,
       currentTarget = row.target,
+      allCriteria = targetCriteria,
+      onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
+      onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
+      initialCustomTargets = customTargets,
       onDismiss = { mentorTargetSettingRow = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
           if (success) mentorTargetSettingRow = null
         }
+      },
+      onSaveCustomTargets = { customMap ->
+        viewModel.saveRmCustomTargets(row.rmCode, customMap)
       }
     )
   }

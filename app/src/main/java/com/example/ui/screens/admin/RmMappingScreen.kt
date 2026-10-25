@@ -759,15 +759,25 @@ fun RmMappingScreen(
     var corpTargetInput by remember { mutableStateOf((existingTarget?.corporateCardTarget ?: 10).toString()) }
     var b2bTargetInput by remember { mutableStateOf((existingTarget?.b2bTarget ?: 15).toString()) }
 
+    val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
+    val customTargets by viewModel.getRmCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyMap())
+
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = settingTargetsRm!!.rmCode,
       rmName = settingTargetsRm!!.name,
       currentTarget = existingTarget,
+      allCriteria = targetCriteria,
+      onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
+      onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
+      initialCustomTargets = customTargets,
       onDismiss = { settingTargetsRm = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(settingTargetsRm!!.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
           if (success) settingTargetsRm = null
         }
+      },
+      onSaveCustomTargets = { customMap ->
+        viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap)
       }
     )
   }

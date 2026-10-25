@@ -1,8 +1,12 @@
 package com.example.ui.screens.rm
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -240,6 +244,80 @@ fun CustomerFileFormScreen(
       }
     }
   }
+
+  var tempCameraUri by remember { mutableStateOf<Uri?>(null) }
+  var tempCameraFile by remember { mutableStateOf<File?>(null) }
+
+  val cameraLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.TakePicture()
+  ) { success ->
+    val currentUri = tempCameraUri
+    val currentFile = tempCameraFile
+    if (success && currentUri != null) {
+      coroutineScope.launch {
+        try {
+          val saved = AttachmentHelper.saveUriToInternalStorage(
+            context = context,
+            sourceUri = currentUri,
+            preferredCategory = selectedCategoryForUpload
+          )
+          viewModel.addAttachment(
+            fileId = fileId,
+            category = selectedCategoryForUpload,
+            fileName = saved.fileName,
+            fileType = saved.fileType,
+            fileSizeBytes = saved.fileSizeBytes,
+            fileUri = saved.fileUri,
+            localFile = saved.file
+          )
+        } catch (e: Exception) {
+          android.widget.Toast.makeText(context, "Camera photo failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        } finally {
+          currentFile?.delete()
+          tempCameraUri = null
+          tempCameraFile = null
+        }
+      }
+    } else {
+      currentFile?.delete()
+      tempCameraUri = null
+      tempCameraFile = null
+    }
+  }
+
+  val cameraPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestPermission()
+  ) { isGranted ->
+    if (isGranted) {
+      try {
+        val (uri, fileObj) = AttachmentHelper.createTempCameraUri(context, "doc_${selectedCategoryForUpload.replace(" ", "_")}")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "Could not open camera: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+      }
+    } else {
+      android.widget.Toast.makeText(context, "Camera permission is required to capture photos.", android.widget.Toast.LENGTH_SHORT).show()
+    }
+  }
+
+  fun launchCameraCapture(category: String) {
+    selectedCategoryForUpload = category
+    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+      try {
+        val (uri, fileObj) = AttachmentHelper.createTempCameraUri(context, "doc_${category.replace(" ", "_")}")
+        tempCameraUri = uri
+        tempCameraFile = fileObj
+        cameraLauncher.launch(uri)
+      } catch (e: Exception) {
+        android.widget.Toast.makeText(context, "Could not open camera: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+      }
+    } else {
+      cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    }
+  }
+
   var customerName by remember { mutableStateOf("") }
   var companyName by remember { mutableStateOf("") }
   var officeAddress by remember { mutableStateOf("") }

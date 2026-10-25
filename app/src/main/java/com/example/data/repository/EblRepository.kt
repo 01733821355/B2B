@@ -2776,6 +2776,116 @@ class EblRepository(
     Result.success(Unit)
   }
 
+  // -------------------------------------------------------------
+  // Target Criteria Management (Admin add/delete, visible to all RMs)
+  // -------------------------------------------------------------
+  fun getTargetCriteriaOptionsFlow(): Flow<List<String>> {
+    return database.appSettingDao().getSettingFlow("TARGET_CRITERIA_LIST").map { setting: AppSettingEntity? ->
+      val raw = setting?.settingValue
+      if (!raw.isNullOrBlank()) {
+        val list = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        if (list.isEmpty()) listOf("Credit Card", "Corporate Card", "B2B") else list
+      } else {
+        listOf("Credit Card", "Corporate Card", "B2B")
+      }
+    }
+  }
+
+  suspend fun getTargetCriteriaOptions(): List<String> = withContext(Dispatchers.IO) {
+    val setting = database.appSettingDao().getSetting("TARGET_CRITERIA_LIST")
+    val raw = setting?.settingValue
+    if (!raw.isNullOrBlank()) {
+      val list = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+      if (list.isEmpty()) listOf("Credit Card", "Corporate Card", "B2B") else list
+    } else {
+      listOf("Credit Card", "Corporate Card", "B2B")
+    }
+  }
+
+  suspend fun addTargetCriterion(newCriterion: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    if (currentUser?.role != "ADMIN" && currentUser?.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Administrator or Mentor can add target criteria."))
+    }
+    val clean = newCriterion.trim()
+    if (clean.isBlank()) return@withContext Result.failure(Exception("Criterion name cannot be blank."))
+    val current = getTargetCriteriaOptions().toMutableList()
+    if (!current.any { it.equals(clean, ignoreCase = true) }) {
+      current.add(clean)
+      val joined = current.joinToString(", ")
+      val now = DateUtils.currentDhakaMillis()
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity(
+          settingKey = "TARGET_CRITERIA_LIST",
+          settingValue = joined,
+          updatedBy = currentUser.rmCode,
+          updatedAt = now
+        )
+      )
+      applicationScope.launch { syncSettingUpsertToGoogleSheets("TARGET_CRITERIA_LIST", joined) }
+    }
+    Result.success(Unit)
+  }
+
+  suspend fun deleteTargetCriterion(criterion: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    if (currentUser?.role != "ADMIN" && currentUser?.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Only Administrator or Mentor can delete target criteria."))
+    }
+    val current = getTargetCriteriaOptions().toMutableList()
+    val removed = current.removeAll { it.equals(criterion.trim(), ignoreCase = true) }
+    if (removed) {
+      val joined = if (current.isEmpty()) "Credit Card, Corporate Card, B2B" else current.joinToString(", ")
+      val now = DateUtils.currentDhakaMillis()
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity(
+          settingKey = "TARGET_CRITERIA_LIST",
+          settingValue = joined,
+          updatedBy = currentUser.rmCode,
+          updatedAt = now
+        )
+      )
+      applicationScope.launch { syncSettingUpsertToGoogleSheets("TARGET_CRITERIA_LIST", joined) }
+    }
+    Result.success(Unit)
+  }
+
+  fun getRmCustomTargetsFlow(rmCode: String): Flow<Map<String, Int>> {
+    return database.appSettingDao().getSettingFlow("RM_CUSTOM_TARGETS_${rmCode.trim().uppercase()}").map { setting ->
+      val raw = setting?.settingValue
+      if (raw.isNullOrBlank()) emptyMap() else {
+        try {
+          val obj = org.json.JSONObject(raw)
+          val map = mutableMapOf<String, Int>()
+          val keys = obj.keys()
+          while (keys.hasNext()) {
+            val k = keys.next()
+            map[k] = obj.optInt(k, 0)
+          }
+          map
+        } catch (_: Exception) {
+          emptyMap()
+        }
+      }
+    }
+  }
+
+  suspend fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>) = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val json = org.json.JSONObject(targets).toString()
+    val now = DateUtils.currentDhakaMillis()
+    val key = "RM_CUSTOM_TARGETS_${rmCode.trim().uppercase()}"
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = key,
+        settingValue = json,
+        updatedBy = currentUser?.rmCode ?: "ADMIN",
+        updatedAt = now
+      )
+    )
+    applicationScope.launch { syncSettingUpsertToGoogleSheets(key, json) }
+  }
+
   suspend fun updateFileStatus(
     fileId: String,
     newStatus: String,

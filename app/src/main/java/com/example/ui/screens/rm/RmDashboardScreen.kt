@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
@@ -76,6 +77,7 @@ import com.example.ui.viewmodel.KpiStats
 import com.example.util.DateUtils
 import kotlinx.coroutines.launch
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun RmDashboardScreen(
   user: UserEntity,
@@ -89,6 +91,8 @@ fun RmDashboardScreen(
   onFileClick: (CustomerFileEntity) -> Unit,
   onDownloadReport: () -> Unit,
   target: RmTargetEntity? = null,
+  targetCriteria: List<String> = listOf("Credit Card", "Corporate Card", "B2B"),
+  customTargets: Map<String, Int> = emptyMap(),
   unreadSmsCount: Int = 0,
   onOpenSmsInbox: () -> Unit = {},
   onOpenDbrChecklist: () -> Unit = {},
@@ -650,6 +654,45 @@ fun RmDashboardScreen(
                   maxLines = 1,
                   softWrap = false
                 )
+              }
+            }
+          }
+
+          // Custom Criteria Targets (Set by Admin, visible to RM)
+          val extraCriteria = targetCriteria.filter { crit ->
+            val norm = crit.trim().lowercase()
+            norm != "credit card" && norm != "corporate card" && norm != "b2b"
+          }
+
+          if (extraCriteria.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(10.dp))
+            androidx.compose.foundation.layout.FlowRow(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              extraCriteria.forEach { crit ->
+                val targetVal = customTargets[crit] ?: 10
+                Surface(
+                  shape = RoundedCornerShape(10.dp),
+                  color = Color(0xFFFFFBEB),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                  modifier = Modifier.fillMaxWidth(0.48f)
+                ) {
+                  Column(modifier = Modifier.padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                      Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), maxLines = 1, softWrap = false)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.Bottom) {
+                      Text("Target:", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD97706))
+                    }
+                  }
+                }
               }
             }
           }

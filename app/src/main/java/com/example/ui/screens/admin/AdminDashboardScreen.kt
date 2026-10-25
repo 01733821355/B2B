@@ -399,15 +399,25 @@ fun AdminDashboardScreen(
   // Set RM Targets Dialog for Admin
   if (targetSettingRow != null) {
     val row = targetSettingRow!!
+    val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
+    val customTargets by viewModel.getRmCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
+
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = row.rmCode,
       rmName = row.rmName,
       currentTarget = row.target,
+      allCriteria = targetCriteria,
+      onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
+      onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
+      initialCustomTargets = customTargets,
       onDismiss = { targetSettingRow = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
           if (success) targetSettingRow = null
         }
+      },
+      onSaveCustomTargets = { customMap ->
+        viewModel.saveRmCustomTargets(row.rmCode, customMap)
       }
     )
   }

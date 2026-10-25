@@ -15,9 +15,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
@@ -26,12 +29,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -54,8 +59,13 @@ fun QuarterTargetSettingDialog(
   rmCode: String,
   rmName: String,
   currentTarget: RmTargetEntity?,
+  allCriteria: List<String> = listOf("Credit Card", "Corporate Card", "B2B"),
+  onAddCriteria: ((String) -> Unit)? = null,
+  onDeleteCriteria: ((String) -> Unit)? = null,
+  initialCustomTargets: Map<String, Int> = emptyMap(),
   onDismiss: () -> Unit,
-  onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit
+  onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
+  onSaveCustomTargets: ((Map<String, Int>) -> Unit)? = null
 ) {
   var selectedQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
   var selectedYear by remember { mutableStateOf(2026) }
@@ -66,6 +76,15 @@ fun QuarterTargetSettingDialog(
   var ccInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.first.toString()) }
   var corpInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.second.toString()) }
   var b2bInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.third.toString()) }
+
+  val customTargetInputs = remember(selectedQuarter, initialCustomTargets) {
+    mutableStateMapOf<String, String>().apply {
+      initialCustomTargets.forEach { (k, v) -> put(k, v.toString()) }
+    }
+  }
+
+  var showAddCriteriaRow by remember { mutableStateOf(false) }
+  var newCriteriaNameInput by remember { mutableStateOf("") }
 
   val quarters = listOf(
     Pair("Q1", "Q1 (Jan-Mar)"),
@@ -93,13 +112,18 @@ fun QuarterTargetSettingDialog(
           }
         }
         Column {
-          Text("Set Target (বার্ষিক ও কোয়ার্টার লক্ষ্যমাত্রা)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+          Text("Set Target (লক্ষ্যমাত্রা নির্ধারণ)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
           Text("$rmName (RM $rmCode)", fontSize = 11.sp, color = Color.Gray)
         }
       }
     },
     text = {
-      Column(modifier = Modifier.fillMaxWidth()) {
+      val verticalScrollState = rememberScrollState()
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .verticalScroll(verticalScrollState)
+      ) {
         // Annual Target Summary Banner
         val annCc = currentTarget?.annualCreditCardTarget ?: 80
         val annCorp = currentTarget?.annualCorporateCardTarget ?: 40
@@ -231,6 +255,98 @@ fun QuarterTargetSettingDialog(
           singleLine = true
         )
 
+        // Dynamic Custom Criteria List (Added by Admin)
+        val customCriteria = allCriteria.filter { crit ->
+          val norm = crit.trim().lowercase()
+          norm != "credit card" && norm != "corporate card" && norm != "b2b"
+        }
+
+        if (customCriteria.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(12.dp))
+          Text("অন্যান্য টার্গেট ক্রাইটেরিয়া (Custom Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Spacer(modifier = Modifier.height(6.dp))
+
+          customCriteria.forEach { crit ->
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              OutlinedTextField(
+                value = customTargetInputs[crit] ?: "",
+                onValueChange = { customTargetInputs[crit] = it.filter { ch -> ch.isDigit() } },
+                label = { Text("$crit Target ($periodLabel)") },
+                placeholder = { Text("e.g. 10") },
+                leadingIcon = { Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.weight(1f).testTag("input_custom_target_${crit.replace(" ", "_")}"),
+                singleLine = true
+              )
+              if (onDeleteCriteria != null) {
+                Spacer(modifier = Modifier.width(6.dp))
+                IconButton(
+                  onClick = { onDeleteCriteria(crit) },
+                  modifier = Modifier.size(40.dp).testTag("btn_delete_criteria_${crit.replace(" ", "_")}")
+                ) {
+                  Icon(Icons.Default.Delete, contentDescription = "Delete Criteria", tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+                }
+              }
+            }
+          }
+        }
+
+        // Add New Target Criteria Section for Admin
+        Spacer(modifier = Modifier.height(10.dp))
+        if (showAddCriteriaRow) {
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFF0FDF4),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+              Text("নতুন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Target Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+              Spacer(modifier = Modifier.height(6.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                OutlinedTextField(
+                  value = newCriteriaNameInput,
+                  onValueChange = { newCriteriaNameInput = it },
+                  placeholder = { Text("e.g. CASA, SME, Auto Loan", fontSize = 11.sp) },
+                  modifier = Modifier.weight(1f).testTag("input_new_criteria_name"),
+                  singleLine = true
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                  onClick = {
+                    if (newCriteriaNameInput.isNotBlank()) {
+                      onAddCriteria?.invoke(newCriteriaNameInput.trim())
+                      newCriteriaNameInput = ""
+                      showAddCriteriaRow = false
+                    }
+                  },
+                  colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+                  shape = RoundedCornerShape(8.dp),
+                  modifier = Modifier.testTag("btn_confirm_add_criteria")
+                ) {
+                  Text("Add", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+              }
+            }
+          }
+        } else if (onAddCriteria != null) {
+          OutlinedButton(
+            onClick = { showAddCriteriaRow = true },
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().height(38.dp).testTag("btn_show_add_criteria")
+          ) {
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = EblNavyPrimary)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("+ নতুন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Criteria)", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
+          }
+        }
+
         Spacer(modifier = Modifier.height(6.dp))
         Text(
           text = if (selectedQuarter == "ALL")
@@ -249,6 +365,11 @@ fun QuarterTargetSettingDialog(
           val corp = corpInput.toIntOrNull() ?: 10
           val b2b = b2bInput.toIntOrNull() ?: 15
           onSave(selectedQuarter, selectedYear, cc, corp, b2b)
+          val customMap = customTargetInputs.mapNotNull { (k, v) ->
+            val num = v.toIntOrNull()
+            if (num != null) k to num else null
+          }.toMap()
+          onSaveCustomTargets?.invoke(customMap)
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
