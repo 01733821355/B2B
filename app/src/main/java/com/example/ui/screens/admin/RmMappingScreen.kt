@@ -416,12 +416,19 @@ fun RmMappingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Text(
-                  text = "Targets -> CC: ${thisTarget?.creditCardTarget ?: 20} | Corp: ${thisTarget?.corporateCardTarget ?: 10} | B2B: ${thisTarget?.b2bTarget ?: 15}",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Medium,
-                  color = EblNavyDark
-                )
+                Column {
+                  Text(
+                    text = "Qtr Target: CC ${thisTarget?.creditCardTarget ?: 20} • Corp ${thisTarget?.corporateCardTarget ?: 10} • B2B ${thisTarget?.b2bTarget ?: 15}",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = EblNavyDark
+                  )
+                  Text(
+                    text = "Annual Goal: CC ${thisTarget?.annualCreditCardTarget ?: ((thisTarget?.creditCardTarget ?: 20) * 4)} • Corp ${thisTarget?.annualCorporateCardTarget ?: ((thisTarget?.corporateCardTarget ?: 10) * 4)} • B2B ${thisTarget?.annualB2bTarget ?: ((thisTarget?.b2bTarget ?: 15) * 4)}",
+                    fontSize = 10.sp,
+                    color = Color(0xFF64748B)
+                  )
+                }
                 if (currentUser.role == "ADMIN") {
                   Text(
                     text = "Set Target",

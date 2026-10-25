@@ -434,13 +434,14 @@ fun RmDashboardScreen(
                 )
               }
             }
+            val isAnnual = selectedKpiQuarter.equals("Annual", ignoreCase = true)
             Surface(
               shape = RoundedCornerShape(6.dp),
               color = Color(0xFFEFF6FF),
               border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
             ) {
               Text(
-                text = "$selectedKpiQuarter 2026 Target",
+                text = if (isAnnual) "2026 বার্ষিক লক্ষ্যমাত্রা (Annual)" else "$selectedKpiQuarter 2026 Target",
                 fontSize = 11.sp,
                 color = Color(0xFF1D4ED8),
                 fontWeight = FontWeight.Bold,
@@ -453,22 +454,77 @@ fun RmDashboardScreen(
 
           Spacer(modifier = Modifier.height(10.dp))
 
+          // Annual Target Summary Banner
+          val annualCc = target?.annualCreditCardTarget ?: (20 * 4)
+          val annualCorp = target?.annualCorporateCardTarget ?: (10 * 4)
+          val annualB2b = target?.annualB2bTarget ?: (15 * 4)
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFF1F5F9),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Column {
+                Text(
+                  text = "📅 2026 বার্ষিক লক্ষ্যমাত্রা (Annual Goal):",
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark
+                )
+                Text(
+                  text = "মোট: CC $annualCc • Corp $annualCorp • B2B $annualB2b",
+                  fontSize = 10.sp,
+                  color = Color(0xFF475569)
+                )
+              }
+              Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = if (isAnnual) EblNavyPrimary else Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isAnnual) EblNavyPrimary else Color(0xFFCBD5E1)),
+                modifier = Modifier.clickable { selectedKpiQuarter = "Annual" }
+              ) {
+                Text(
+                  text = if (isAnnual) "✓ Viewing Annual" else "View Annual",
+                  fontSize = 10.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = if (isAnnual) Color.White else EblNavyPrimary,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
           // Quarter selection bar
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
           ) {
-            listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+            listOf("Q1", "Q2", "Q3", "Q4", "Annual").forEach { q ->
               val isSelected = selectedKpiQuarter.equals(q, ignoreCase = true)
               androidx.compose.material3.FilterChip(
                 selected = isSelected,
                 onClick = { selectedKpiQuarter = q },
-                label = { Text(q, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                label = {
+                  Text(
+                    text = if (q == "Annual") "বার্ষিক (Yr)" else q,
+                    fontSize = 10.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                  )
+                },
                 colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
                   selectedContainerColor = EblNavyPrimary,
                   selectedLabelColor = Color.White
                 ),
-                modifier = Modifier.weight(1f).testTag("kpi_chip_quarter_$q")
+                modifier = Modifier.weight(if (q == "Annual") 1.3f else 1f).testTag("kpi_chip_quarter_$q")
               )
             }
           }

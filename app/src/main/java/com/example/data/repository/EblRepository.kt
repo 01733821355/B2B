@@ -312,6 +312,31 @@ class EblRepository(
         q4B2bTarget = b2bTarget,
         updatedAt = now
       )
+      "ALL", "ANNUAL", "YEAR" -> {
+        val qCc = if (creditCardTarget >= 40) (creditCardTarget / 4) else creditCardTarget
+        val qCorp = if (corporateCardTarget >= 20) (corporateCardTarget / 4) else corporateCardTarget
+        val qB2b = if (b2bTarget >= 20) (b2bTarget / 4) else b2bTarget
+        existing.copy(
+          targetYear = year,
+          activeQuarter = DateUtils.getCurrentQuarter(),
+          creditCardTarget = qCc,
+          corporateCardTarget = qCorp,
+          b2bTarget = qB2b,
+          q1CreditCardTarget = qCc,
+          q1CorporateCardTarget = qCorp,
+          q1B2bTarget = qB2b,
+          q2CreditCardTarget = qCc,
+          q2CorporateCardTarget = qCorp,
+          q2B2bTarget = qB2b,
+          q3CreditCardTarget = qCc,
+          q3CorporateCardTarget = qCorp,
+          q3B2bTarget = qB2b,
+          q4CreditCardTarget = qCc,
+          q4CorporateCardTarget = qCorp,
+          q4B2bTarget = qB2b,
+          updatedAt = now
+        )
+      }
       else -> existing.copy(
         targetYear = year,
         activeQuarter = cleanQ.ifBlank { "Q4" },
@@ -1447,6 +1472,7 @@ class EblRepository(
       }
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
+      val fullTarget = database.rmTargetDao().getTargetForRm(rmCode)
       val payload = org.json.JSONObject().apply {
         put("action", "UPSERT_RM_TARGET")
         put("rmCode", rmCode)
@@ -1455,12 +1481,33 @@ class EblRepository(
         put("creditCardTarget", ccTarget)
         put("corporateCardTarget", corpTarget)
         put("b2bTarget", b2bTarget)
+        if (fullTarget != null) {
+          put("activeQuarter", fullTarget.activeQuarter)
+          put("q1CreditCardTarget", fullTarget.q1CreditCardTarget)
+          put("q1CorporateCardTarget", fullTarget.q1CorporateCardTarget)
+          put("q1B2bTarget", fullTarget.q1B2bTarget)
+          put("q2CreditCardTarget", fullTarget.q2CreditCardTarget)
+          put("q2CorporateCardTarget", fullTarget.q2CorporateCardTarget)
+          put("q2B2bTarget", fullTarget.q2B2bTarget)
+          put("q3CreditCardTarget", fullTarget.q3CreditCardTarget)
+          put("q3CorporateCardTarget", fullTarget.q3CorporateCardTarget)
+          put("q3B2bTarget", fullTarget.q3B2bTarget)
+          put("q4CreditCardTarget", fullTarget.q4CreditCardTarget)
+          put("q4CorporateCardTarget", fullTarget.q4CorporateCardTarget)
+          put("q4B2bTarget", fullTarget.q4B2bTarget)
+          put("annualCreditCardTarget", fullTarget.annualCreditCardTarget)
+          put("annualCorporateCardTarget", fullTarget.annualCorporateCardTarget)
+          put("annualB2bTarget", fullTarget.annualB2bTarget)
+        }
         put("spreadsheetId", currentStatus.spreadsheetId.ifBlank { "1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI" })
         put("secretKey", currentStatus.syncSecretKey.ifBlank { "ebl_secure_sync_token_2026" })
       }
       val requestBody = payload.toString().toRequestBody("application/json".toMediaType())
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
       httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
+
+      // Dual-sync to Universal_Settings so every device pulling settings immediately receives this target update
+      syncSettingUpsertToGoogleSheets("RM_TARGET_$rmCode", payload.toString())
     } catch (_: Exception) {}
   }
 
@@ -3588,6 +3635,22 @@ class EblRepository(
       val lastLocalTargetChangeTime = database.appSettingDao().getSetting("RM_TARGET_UPDATED_AT_$code")?.updatedAt ?: 0L
       val isRecentLocalTargetChange = (now - lastLocalTargetChangeTime) < 300_000L // 5 minutes immunity window
 
+      val q1Cc = if (obj.has("q1CreditCardTarget")) obj.optInt("q1CreditCardTarget", ccTarget) else ccTarget
+      val q1Corp = if (obj.has("q1CorporateCardTarget")) obj.optInt("q1CorporateCardTarget", corpTarget) else corpTarget
+      val q1B2b = if (obj.has("q1B2bTarget")) obj.optInt("q1B2bTarget", b2bTarget) else b2bTarget
+
+      val q2Cc = if (obj.has("q2CreditCardTarget")) obj.optInt("q2CreditCardTarget", ccTarget) else ccTarget
+      val q2Corp = if (obj.has("q2CorporateCardTarget")) obj.optInt("q2CorporateCardTarget", corpTarget) else corpTarget
+      val q2B2b = if (obj.has("q2B2bTarget")) obj.optInt("q2B2bTarget", b2bTarget) else b2bTarget
+
+      val q3Cc = if (obj.has("q3CreditCardTarget")) obj.optInt("q3CreditCardTarget", ccTarget) else ccTarget
+      val q3Corp = if (obj.has("q3CorporateCardTarget")) obj.optInt("q3CorporateCardTarget", corpTarget) else corpTarget
+      val q3B2b = if (obj.has("q3B2bTarget")) obj.optInt("q3B2bTarget", b2bTarget) else b2bTarget
+
+      val q4Cc = if (obj.has("q4CreditCardTarget")) obj.optInt("q4CreditCardTarget", ccTarget) else ccTarget
+      val q4Corp = if (obj.has("q4CorporateCardTarget")) obj.optInt("q4CorporateCardTarget", corpTarget) else corpTarget
+      val q4B2b = if (obj.has("q4B2bTarget")) obj.optInt("q4B2bTarget", b2bTarget) else b2bTarget
+
       val existingTarget = database.rmTargetDao().getTargetForRm(code)
       if (existingTarget == null) {
         database.rmTargetDao().insertOrUpdateTarget(
@@ -3596,44 +3659,50 @@ class EblRepository(
             creditCardTarget = ccTarget,
             corporateCardTarget = corpTarget,
             b2bTarget = b2bTarget,
-            q1CreditCardTarget = ccTarget,
-            q1CorporateCardTarget = corpTarget,
-            q1B2bTarget = b2bTarget,
-            q2CreditCardTarget = ccTarget,
-            q2CorporateCardTarget = corpTarget,
-            q2B2bTarget = b2bTarget,
-            q3CreditCardTarget = ccTarget,
-            q3CorporateCardTarget = corpTarget,
-            q3B2bTarget = b2bTarget,
-            q4CreditCardTarget = ccTarget,
-            q4CorporateCardTarget = corpTarget,
-            q4B2bTarget = b2bTarget,
+            q1CreditCardTarget = q1Cc,
+            q1CorporateCardTarget = q1Corp,
+            q1B2bTarget = q1B2b,
+            q2CreditCardTarget = q2Cc,
+            q2CorporateCardTarget = q2Corp,
+            q2B2bTarget = q2B2b,
+            q3CreditCardTarget = q3Cc,
+            q3CorporateCardTarget = q3Corp,
+            q3B2bTarget = q3B2b,
+            q4CreditCardTarget = q4Cc,
+            q4CorporateCardTarget = q4Corp,
+            q4B2bTarget = q4B2b,
             updatedAt = now
           )
         )
       } else if (!isRecentLocalTargetChange) {
-        // Prevent sheet's default 15, 5, 2 from overwriting user-configured targets
-        val isSheetDefaultValues = (ccTarget == 15 && corpTarget == 5 && b2bTarget == 2)
-        val hasCustomLocalTargets = (existingTarget.creditCardTarget != 15 || existingTarget.corporateCardTarget != 5 || existingTarget.b2bTarget != 2)
-
-        if (!(isSheetDefaultValues && hasCustomLocalTargets)) {
-          if (existingTarget.creditCardTarget != ccTarget ||
-              existingTarget.corporateCardTarget != corpTarget ||
-              existingTarget.b2bTarget != b2bTarget) {
-            database.rmTargetDao().insertOrUpdateTarget(
-              existingTarget.copy(
-                creditCardTarget = ccTarget,
-                corporateCardTarget = corpTarget,
-                b2bTarget = b2bTarget,
-                q1CreditCardTarget = if (existingTarget.q1CreditCardTarget == 20) ccTarget else existingTarget.q1CreditCardTarget,
-                q2CreditCardTarget = if (existingTarget.q2CreditCardTarget == 20) ccTarget else existingTarget.q2CreditCardTarget,
-                q3CreditCardTarget = if (existingTarget.q3CreditCardTarget == 20) ccTarget else existingTarget.q3CreditCardTarget,
-                q4CreditCardTarget = if (existingTarget.q4CreditCardTarget == 20) ccTarget else existingTarget.q4CreditCardTarget,
-                updatedAt = now
-              )
+        if (existingTarget.creditCardTarget != ccTarget ||
+            existingTarget.corporateCardTarget != corpTarget ||
+            existingTarget.b2bTarget != b2bTarget ||
+            (obj.has("q1CreditCardTarget") && existingTarget.q1CreditCardTarget != q1Cc) ||
+            (obj.has("q2CreditCardTarget") && existingTarget.q2CreditCardTarget != q2Cc) ||
+            (obj.has("q3CreditCardTarget") && existingTarget.q3CreditCardTarget != q3Cc) ||
+            (obj.has("q4CreditCardTarget") && existingTarget.q4CreditCardTarget != q4Cc)) {
+          database.rmTargetDao().insertOrUpdateTarget(
+            existingTarget.copy(
+              creditCardTarget = ccTarget,
+              corporateCardTarget = corpTarget,
+              b2bTarget = b2bTarget,
+              q1CreditCardTarget = q1Cc,
+              q1CorporateCardTarget = q1Corp,
+              q1B2bTarget = q1B2b,
+              q2CreditCardTarget = q2Cc,
+              q2CorporateCardTarget = q2Corp,
+              q2B2bTarget = q2B2b,
+              q3CreditCardTarget = q3Cc,
+              q3CorporateCardTarget = q3Corp,
+              q3B2bTarget = q3B2b,
+              q4CreditCardTarget = q4Cc,
+              q4CorporateCardTarget = q4Corp,
+              q4B2bTarget = q4B2b,
+              updatedAt = now
             )
-            updatedCount++
-          }
+          )
+          updatedCount++
         }
       }
     }
@@ -3842,6 +3911,53 @@ class EblRepository(
             database.appSettingDao().insertOrUpdateSetting(
               AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
             )
+          } else if (key.startsWith("RM_TARGET_", true)) {
+            val tRmCode = key.substringAfter("RM_TARGET_").trim().uppercase()
+            if (tRmCode.isNotBlank()) {
+              try {
+                val tObj = org.json.JSONObject(value)
+                val yr = tObj.optInt("year", 2026)
+                val actQ = tObj.optString("activeQuarter", tObj.optString("quarter", "Q4")).trim().uppercase()
+                val cc = tObj.optInt("creditCardTarget", 20)
+                val corp = tObj.optInt("corporateCardTarget", 10)
+                val b2b = tObj.optInt("b2bTarget", 15)
+                val q1Cc = tObj.optInt("q1CreditCardTarget", cc)
+                val q1Corp = tObj.optInt("q1CorporateCardTarget", corp)
+                val q1B2b = tObj.optInt("q1B2bTarget", b2b)
+                val q2Cc = tObj.optInt("q2CreditCardTarget", cc)
+                val q2Corp = tObj.optInt("q2CorporateCardTarget", corp)
+                val q2B2b = tObj.optInt("q2B2bTarget", b2b)
+                val q3Cc = tObj.optInt("q3CreditCardTarget", cc)
+                val q3Corp = tObj.optInt("q3CorporateCardTarget", corp)
+                val q3B2b = tObj.optInt("q3B2bTarget", b2b)
+                val q4Cc = tObj.optInt("q4CreditCardTarget", cc)
+                val q4Corp = tObj.optInt("q4CorporateCardTarget", corp)
+                val q4B2b = tObj.optInt("q4B2bTarget", b2b)
+
+                val existingT = database.rmTargetDao().getTargetForRm(tRmCode)
+                val updatedT = (existingT ?: RmTargetEntity(rmCode = tRmCode)).copy(
+                  targetYear = yr,
+                  activeQuarter = actQ,
+                  creditCardTarget = cc,
+                  corporateCardTarget = corp,
+                  b2bTarget = b2b,
+                  q1CreditCardTarget = q1Cc,
+                  q1CorporateCardTarget = q1Corp,
+                  q1B2bTarget = q1B2b,
+                  q2CreditCardTarget = q2Cc,
+                  q2CorporateCardTarget = q2Corp,
+                  q2B2bTarget = q2B2b,
+                  q3CreditCardTarget = q3Cc,
+                  q3CorporateCardTarget = q3Corp,
+                  q3B2bTarget = q3B2b,
+                  q4CreditCardTarget = q4Cc,
+                  q4CorporateCardTarget = q4Corp,
+                  q4B2bTarget = q4B2b,
+                  updatedAt = now
+                )
+                database.rmTargetDao().insertOrUpdateTarget(updatedT)
+              } catch (_: Exception) {}
+            }
           } else if (key.startsWith("CHECKLIST_PRESET_") || key.startsWith("CHECKLIST_CUSTOM_")) {
             val nonKeywords = listOf("THEME", "SCALE", "FONT", "COLOR", "STYLE", "STATUS", "PASSWORD", "APP_NAME")
             val isRogue = nonKeywords.any { friendlyName.uppercase().contains(it) || keyUpper.contains(it) }

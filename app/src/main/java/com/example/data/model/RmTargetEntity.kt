@@ -25,8 +25,27 @@ data class RmTargetEntity(
   val q4CorporateCardTarget: Int = 10,
   val q4B2bTarget: Int = 15
 ) {
+  val annualCreditCardTarget: Int
+    get() = (q1CreditCardTarget + q2CreditCardTarget + q3CreditCardTarget + q4CreditCardTarget).let {
+      if (it > 0) it else creditCardTarget * 4
+    }
+
+  val annualCorporateCardTarget: Int
+    get() = (q1CorporateCardTarget + q2CorporateCardTarget + q3CorporateCardTarget + q4CorporateCardTarget).let {
+      if (it > 0) it else corporateCardTarget * 4
+    }
+
+  val annualB2bTarget: Int
+    get() = (q1B2bTarget + q2B2bTarget + q3B2bTarget + q4B2bTarget).let {
+      if (it > 0) it else b2bTarget * 4
+    }
+
   fun getTargetForQuarter(quarter: String): Triple<Int, Int, Int> {
-    val qTriple = when (quarter.trim().uppercase()) {
+    val qUpper = quarter.trim().uppercase()
+    if (qUpper in listOf("ANNUAL", "ALL", "YEAR", "BARSHIK")) {
+      return Triple(annualCreditCardTarget, annualCorporateCardTarget, annualB2bTarget)
+    }
+    val qTriple = when (qUpper) {
       "Q1" -> Triple(q1CreditCardTarget, q1CorporateCardTarget, q1B2bTarget)
       "Q2" -> Triple(q2CreditCardTarget, q2CorporateCardTarget, q2B2bTarget)
       "Q3" -> Triple(q3CreditCardTarget, q3CorporateCardTarget, q3B2bTarget)

@@ -353,6 +353,9 @@ fun AdminDashboardScreen(
                 val ccTarget = row.target?.creditCardTarget ?: 20
                 val corpTarget = row.target?.corporateCardTarget ?: 10
                 val b2bTarget = row.target?.b2bTarget ?: 15
+                val annualCc = row.target?.annualCreditCardTarget ?: (ccTarget * 4)
+                val annualCorp = row.target?.annualCorporateCardTarget ?: (corpTarget * 4)
+                val annualB2b = row.target?.annualB2bTarget ?: (b2bTarget * 4)
 
                 Row(
                   modifier = Modifier.fillMaxWidth(),
@@ -361,13 +364,13 @@ fun AdminDashboardScreen(
                 ) {
                   Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
-                      Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                      Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget (Yr:$annualCc)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
-                      Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                      Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget (Yr:$annualCorp)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
-                      Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                      Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget (Yr:$annualB2b)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
                   }
 

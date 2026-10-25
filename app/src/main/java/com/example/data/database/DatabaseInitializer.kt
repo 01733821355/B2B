@@ -49,51 +49,51 @@ object DatabaseInitializer {
     // User requirement: Do not keep any demo customer information (purge CUST-001..CUST-005 and SYSTEM files)
     database.customerFileDao().purgeDemoCustomerFiles()
 
-    val existingUsers = database.userDao().getAllUsers()
-    if (existingUsers.isNotEmpty()) {
-      return@withContext
-    }
-
     val now = DateUtils.currentDhakaMillis()
 
-    // 1. Seed Initial Admin & Mentor Accounts (Fresh installation, no demo customer files)
-    // Admin0 (Initial default password: #123456A)
-    val adminSalt = SecurityUtils.generateSalt()
-    val adminHash = SecurityUtils.hashPassword("#123456A", adminSalt)
-    val adminUser = UserEntity(
-      rmCode = "Admin0",
-      name = "System Administrator",
-      role = "ADMIN",
-      passwordHash = adminHash,
-      salt = adminSalt,
-      mobile = "+8801700000001",
-      email = "admin0@suite.local",
-      officeAddress = "Corporate Office, 100 Gulshan Ave, Dhaka",
-      accountStatus = "ACTIVE",
-      mustChangePassword = false,
-      createdAt = now,
-      authUid = "AUTH_ADMIN_0"
-    )
+    // 1. Ensure Admin Account always exists
+    val adminExists = database.userDao().getUser("Admin0") != null || database.userDao().getAllUsers().any { it.role.equals("ADMIN", ignoreCase = true) }
+    if (!adminExists) {
+      val adminSalt = SecurityUtils.generateSalt()
+      val adminHash = SecurityUtils.hashPassword("#123456A", adminSalt)
+      val adminUser = UserEntity(
+        rmCode = "Admin0",
+        name = "System Administrator",
+        role = "ADMIN",
+        passwordHash = adminHash,
+        salt = adminSalt,
+        mobile = "+8801700000001",
+        email = "admin0@suite.local",
+        officeAddress = "Corporate Office, 100 Gulshan Ave, Dhaka",
+        accountStatus = "ACTIVE",
+        mustChangePassword = false,
+        createdAt = now,
+        authUid = "AUTH_ADMIN_0"
+      )
+      database.userDao().insertUser(adminUser)
+    }
 
-    // Mentor (Initial default password: 12345)
-    val mentorSalt = SecurityUtils.generateSalt()
-    val mentorHash = SecurityUtils.hashPassword("12345", mentorSalt)
-    val mentorUser = UserEntity(
-      rmCode = "12345",
-      name = "Senior Operations Mentor",
-      role = "MENTOR",
-      passwordHash = mentorHash,
-      salt = mentorSalt,
-      mobile = "+8801700000002",
-      email = "mentor12345@suite.local",
-      officeAddress = "Operations Center, Motijheel C/A, Dhaka",
-      accountStatus = "ACTIVE",
-      mustChangePassword = false,
-      createdAt = now,
-      authUid = "AUTH_MENTOR_12345"
-    )
-
-    database.userDao().insertUsers(listOf(adminUser, mentorUser))
+    // 2. Ensure Mentor Account always exists
+    val mentorExists = database.userDao().getUser("12345") != null || database.userDao().getAllUsers().any { it.role.equals("MENTOR", ignoreCase = true) }
+    if (!mentorExists) {
+      val mentorSalt = SecurityUtils.generateSalt()
+      val mentorHash = SecurityUtils.hashPassword("12345", mentorSalt)
+      val mentorUser = UserEntity(
+        rmCode = "12345",
+        name = "Senior Operations Mentor",
+        role = "MENTOR",
+        passwordHash = mentorHash,
+        salt = mentorSalt,
+        mobile = "+8801700000002",
+        email = "mentor12345@suite.local",
+        officeAddress = "Operations Center, Motijheel C/A, Dhaka",
+        accountStatus = "ACTIVE",
+        mustChangePassword = false,
+        createdAt = now,
+        authUid = "AUTH_MENTOR_12345"
+      )
+      database.userDao().insertUser(mentorUser)
+    }
 
     // 2. Seed Core App Settings
     val settings = listOf(

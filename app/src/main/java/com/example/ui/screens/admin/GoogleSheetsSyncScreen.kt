@@ -1527,8 +1527,8 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Handle Direct RM Profile, Role Switching, Status & Password Update (or insert new RM row if not found in sheet)
-    if (data.action === 'UPDATE_RM_PASSWORD' || data.action === 'UPSERT_RM' || data.action === 'UPDATE_RM_PROFILE' || data.action === 'APPROVE_RM' || data.action === 'REJECT_RM') {
+    // Handle Direct RM Profile, Role Switching, Status, Targets & Password Update (or insert new RM row if not found in sheet)
+    if (data.action === 'UPDATE_RM_PASSWORD' || data.action === 'UPSERT_RM' || data.action === 'UPDATE_RM_PROFILE' || data.action === 'APPROVE_RM' || data.action === 'REJECT_RM' || data.action === 'UPSERT_RM_TARGET' || data.action === 'UPDATE_RM_TARGET' || data.action === 'SET_RM_TARGET') {
       var targetRmCode = String(data.rmCode || (data.rm && data.rm.rmCode) || '').trim().toUpperCase();
       var curRmsP = rmSheet.getDataRange().getValues();
       var foundRm = false;
@@ -1570,7 +1570,33 @@ function doPost(e) {
           updateTime
         ]);
       }
-      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details, role and credentials synchronized in sheet." }))
+
+      // Also persist to Universal_Settings under RM_TARGET_<rmCode> so all quarterly and annual targets sync to every phone
+      if (data.action === 'UPSERT_RM_TARGET' || data.action === 'UPDATE_RM_TARGET' || data.action === 'SET_RM_TARGET' || data.creditCardTarget !== undefined) {
+        try {
+          var setSheetT = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+          if (setSheetT && targetRmCode) {
+            var tKey = 'RM_TARGET_' + targetRmCode;
+            var tVal = JSON.stringify(data);
+            var setValsT = setSheetT.getDataRange().getValues();
+            var tRowIdx = -1;
+            for (var tr = 1; tr < setValsT.length; tr++) {
+              if (String(setValsT[tr][0] || '').trim().toUpperCase() === tKey) {
+                tRowIdx = tr + 1;
+                break;
+              }
+            }
+            if (tRowIdx > 0) {
+              setSheetT.getRange(tRowIdx, 2).setValue(tVal);
+              setSheetT.getRange(tRowIdx, 5).setValue(nowTimeStr);
+            } else {
+              setSheetT.appendRow([tKey, tVal, 'Target for ' + targetRmCode, 'App_Sync', nowTimeStr]);
+            }
+          }
+        } catch (eT) {}
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details, targets and credentials synchronized in sheet." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

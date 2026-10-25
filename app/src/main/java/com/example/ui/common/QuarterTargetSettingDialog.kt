@@ -93,14 +93,35 @@ fun QuarterTargetSettingDialog(
           }
         }
         Column {
-          Text("Set KPI Targets (কোয়ার্টার লক্ষ্যমাত্রা)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+          Text("Set Target (বার্ষিক ও কোয়ার্টার লক্ষ্যমাত্রা)", fontWeight = FontWeight.Bold, fontSize = 16.sp)
           Text("$rmName (RM $rmCode)", fontSize = 11.sp, color = Color.Gray)
         }
       }
     },
     text = {
       Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Select Quarter & Assign Production Goals:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = EblNavyDark)
+        // Annual Target Summary Banner
+        val annCc = currentTarget?.annualCreditCardTarget ?: 80
+        val annCorp = currentTarget?.annualCorporateCardTarget ?: 40
+        val annB2b = currentTarget?.annualB2bTarget ?: 60
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFFEFF6FF),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+          modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+        ) {
+          Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(6.dp))
+              Text("2026 বার্ষিক মোট লক্ষ্যমাত্রা (Annual Goal):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A))
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("CC: $annCc • Corp: $annCorp • B2B: $annB2b", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2563EB))
+          }
+        }
+
+        Text("Select Quarter or Annual to Set Target:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = EblNavyDark)
         Spacer(modifier = Modifier.height(8.dp))
 
         // Quarter Selector Pills
@@ -151,7 +172,7 @@ fun QuarterTargetSettingDialog(
               Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(6.dp))
               Text(
-                text = if (selectedQuarter == "ALL") "All 4 Quarters • Year 2026" else DateUtils.getQuarterDateLabel(selectedQuarter, selectedYear),
+                text = if (selectedQuarter == "ALL") "All 4 Quarters • Year 2026 (Annual)" else DateUtils.getQuarterDateLabel(selectedQuarter, selectedYear),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = EblNavyDark
@@ -161,18 +182,20 @@ fun QuarterTargetSettingDialog(
               shape = RoundedCornerShape(4.dp),
               color = Color(0xFFDCFCE7)
             ) {
-              Text("STC Target", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+              Text(if (selectedQuarter == "ALL") "Annual" else "Quarter", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
             }
           }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        val periodLabel = if (selectedQuarter == "ALL") "All Year" else selectedQuarter
+
         // Credit Card Input
         OutlinedTextField(
           value = ccInput,
           onValueChange = { ccInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("Credit Card STC Target ($selectedQuarter)") },
+          label = { Text("Credit Card STC Target ($periodLabel)") },
           placeholder = { Text("e.g. 20") },
           leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(18.dp)) },
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -186,7 +209,7 @@ fun QuarterTargetSettingDialog(
         OutlinedTextField(
           value = corpInput,
           onValueChange = { corpInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("Corporate Card Target ($selectedQuarter)") },
+          label = { Text("Corporate Card Target ($periodLabel)") },
           placeholder = { Text("e.g. 10") },
           leadingIcon = { Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFF1E40AF), modifier = Modifier.size(18.dp)) },
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -200,7 +223,7 @@ fun QuarterTargetSettingDialog(
         OutlinedTextField(
           value = b2bInput,
           onValueChange = { b2bInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("B2B / Payroll Target ($selectedQuarter)") },
+          label = { Text("B2B / Payroll Target ($periodLabel)") },
           placeholder = { Text("e.g. 15") },
           leadingIcon = { Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(18.dp)) },
           keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -210,7 +233,10 @@ fun QuarterTargetSettingDialog(
 
         Spacer(modifier = Modifier.height(6.dp))
         Text(
-          text = "Note: Target saves specifically for $selectedQuarter $selectedYear. RM will receive an automated alert.",
+          text = if (selectedQuarter == "ALL")
+            "Note: Saves annual goal & distributes across all quarters. Auto-syncs to Google Sheets."
+          else
+            "Note: Target saves specifically for $selectedQuarter $selectedYear and syncs live to Google Sheets.",
           fontSize = 10.sp,
           color = Color.Gray
         )
@@ -227,7 +253,7 @@ fun QuarterTargetSettingDialog(
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
       ) {
-        Text("Save $selectedQuarter Target", fontWeight = FontWeight.Bold)
+        Text(if (selectedQuarter == "ALL") "Save Annual Target" else "Save $selectedQuarter Target", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {

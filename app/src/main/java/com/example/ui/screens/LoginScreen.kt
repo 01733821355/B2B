@@ -4,6 +4,7 @@ import android.content.ContextWrapper
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -377,7 +378,82 @@ fun LoginScreen(
             textAlign = TextAlign.Center
           )
 
-          Spacer(modifier = Modifier.height(20.dp))
+          Spacer(modifier = Modifier.height(14.dp))
+
+          // Quick Role Select Chips for effortless login
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFEFF6FF),
+              border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+              modifier = Modifier
+                .weight(1f)
+                .clickable {
+                  usernameInput = "Admin0"
+                  passwordInput = "#123456A"
+                  errorMessage = null
+                }
+                .testTag("chip_login_admin")
+            ) {
+              Column(
+                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                Text("👑 Admin", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF))
+                Text("Admin0", fontSize = 9.sp, color = Color(0xFF3B82F6))
+              }
+            }
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFF0FDF4),
+              border = BorderStroke(1.dp, Color(0xFF86EFAC)),
+              modifier = Modifier
+                .weight(1f)
+                .clickable {
+                  usernameInput = "12345"
+                  passwordInput = "12345"
+                  errorMessage = null
+                }
+                .testTag("chip_login_mentor")
+            ) {
+              Column(
+                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                Text("🎓 Mentor", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                Text("12345", fontSize = 9.sp, color = Color(0xFF15803D))
+              }
+            }
+
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFFFFBEB),
+              border = BorderStroke(1.dp, Color(0xFFFDE68A)),
+              modifier = Modifier
+                .weight(1f)
+                .clickable {
+                  usernameInput = "104393"
+                  passwordInput = "#123456A"
+                  errorMessage = null
+                }
+                .testTag("chip_login_rm")
+            ) {
+              Column(
+                modifier = Modifier.padding(vertical = 6.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+              ) {
+                Text("💼 RM", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E))
+                Text("104393", fontSize = 9.sp, color = Color(0xFFB45309))
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
 
           // Error Message Alert
           if (errorMessage != null) {
