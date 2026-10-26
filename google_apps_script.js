@@ -244,9 +244,33 @@ function extractAllSheetFiles(sheet) {
       activeStatus: getVal(row, ['active status', 'activestatus', 'active'], 'N'),
       assignedRmCode: getVal(row, ['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], ''),
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
-      cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks'], ''),
+      cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks', 'cpv notes', 'cpv note'], ''),
       remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
-      cpvStatus: getVal(row, ['cpv status', 'cpvstatus'], 'Pending'),
+      cpvStatus: (function() {
+        var rawCpv = getVal(row, [
+          'cpv status', 'cpvstatus', 'cpv', 'cpv_status', 'cpv stat', 'cpvstat',
+          'verification status', 'verification', 'cpv verification', 'cpvstage',
+          'cpv result', 'cpvresult', 'cpv report', 'cpv_stat'
+        ], '');
+        if (!rawCpv) {
+          var hasSl = colMap.hasOwnProperty('sl') || colMap.hasOwnProperty('slno') || colMap.hasOwnProperty('serial') || colMap.hasOwnProperty('serialno');
+          var fallbackIdx = hasSl ? 14 : 13;
+          if (row[fallbackIdx] !== undefined && row[fallbackIdx] !== null && String(row[fallbackIdx]).trim() !== '') {
+            var fbVal = String(row[fallbackIdx]).trim();
+            var fbLow = fbVal.toLowerCase();
+            if (fbLow === 'pending' || fbLow === 'completed' || fbLow === 'failed' || fbLow === 'not required' || fbLow === 'in progress') {
+              rawCpv = fbVal;
+            }
+          }
+        }
+        if (!rawCpv) return 'Pending';
+        var low = rawCpv.toLowerCase();
+        if (low === 'completed' || low === 'complete' || low === 'done' || low === 'passed' || low === 'verified' || low === 'positive') return 'Completed';
+        if (low === 'failed' || low === 'fail' || low === 'rejected' || low === 'negative') return 'Failed';
+        if (low === 'not required' || low === 'not_required' || low === 'notrequired' || low === 'waived' || low === 'n/a' || low === 'na') return 'Not Required';
+        if (low === 'pending' || low === 'in progress' || low === 'processing' || low === 'waiting') return 'Pending';
+        return rawCpv;
+      })(),
       submissionAddress: getVal(row, ['gps submission address', 'submission address', 'gps address', 'submissionaddress'], ''),
       submissionLat: parseFloat(getVal(row, ['gps lat', 'submission lat', 'lat', 'latitude'], '0')) || 0.0,
       submissionLng: parseFloat(getVal(row, ['gps lng', 'submission lng', 'lng', 'longitude'], '0')) || 0.0,

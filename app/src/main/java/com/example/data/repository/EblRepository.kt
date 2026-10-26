@@ -921,6 +921,9 @@ class EblRepository(
         put("remarks", file.remarks)
         put("cpvRemarks", file.cpvRemarks)
         put("cpvStatus", file.cpvStatus)
+        put("cpvDate", file.cpvDate)
+        put("cpvAddress", file.cpvAddress)
+        put("cpvLastUpdatedBy", file.cpvLastUpdatedBy)
         put("submissionAddress", file.submissionAddress ?: "")
         put("submissionLat", file.submissionLatitude ?: 0.0)
         put("submissionLng", file.submissionLongitude ?: 0.0)
@@ -4702,8 +4705,10 @@ class EblRepository(
 
         val sheetUpdatedBy = obj.optString("updatedBy", "")
         val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
-        val wasRecentlyEditedLocally = (!existing.isSynced || now - existing.updatedAt < 60_000) && (existing.updatedBy != "GoogleSheets_Sync")
-        if (wasRecentlyEditedLocally && !isManualSheetEdit) {
+        // Protection: Only skip incoming sheet updates if this device made a local edit within the last 10 seconds that hasn't synced yet
+        val isVeryRecentLocalEdit = (!existing.isSynced && (now - existing.updatedAt < 10_000L)) ||
+                                    (now - existing.updatedAt < 5_000L && existing.updatedBy != "GoogleSheets_Sync")
+        if (isVeryRecentLocalEdit && !isManualSheetEdit) {
           continue
         }
 
@@ -4712,28 +4717,57 @@ class EblRepository(
         val mob = obj.optString("mobile", existing.mobile)
         val em = obj.optString("email", existing.email)
         val prodType = obj.optString("productType", existing.productType)
-        val sheetCpv = obj.optString("cpvStatus", "").trim()
-        val cpvStatus = if (sheetCpv.isNotBlank()) sheetCpv else existing.cpvStatus
-        val cpvRemarks = if (obj.has("cpvRemarks")) obj.optString("cpvRemarks", existing.cpvRemarks) else existing.cpvRemarks
+
+        val sheetCpvRaw = listOf("cpvStatus", "cpv_status", "cpv", "CPV Status", "CPV", "verificationStatus", "cpv_stat", "cpvStat")
+          .firstNotNullOfOrNull { key ->
+            val v = obj.optString(key, "").trim()
+            if (v.isNotBlank()) v else null
+          } ?: ""
+
+        val normalizedSheetCpv = if (sheetCpvRaw.isNotBlank()) {
+          when (sheetCpvRaw.lowercase()) {
+            "completed", "complete", "done", "passed", "verified", "positive" -> "Completed"
+            "failed", "fail", "rejected", "negative" -> "Failed"
+            "not required", "not_required", "notrequired", "waived", "n/a", "na" -> "Not Required"
+            "pending", "in progress", "processing", "waiting" -> "Pending"
+            else -> sheetCpvRaw.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+          }
+        } else ""
+
+        val cpvStatus = if (normalizedSheetCpv.isNotBlank()) normalizedSheetCpv else existing.cpvStatus
+
+        val sheetCpvRemarks = listOf("cpvRemarks", "cpv_remarks", "cpvNotes", "cpv_notes")
+          .firstNotNullOfOrNull { key ->
+            if (obj.has(key)) obj.optString(key, "").trim() else null
+          }
+        val cpvRemarks = if (!sheetCpvRemarks.isNullOrBlank()) sheetCpvRemarks else existing.cpvRemarks
         val remarksVal = if (obj.has("remarks")) obj.optString("remarks", existing.remarks) else existing.remarks
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", existing.serialNumber))
 
+        val sheetCpvDate = obj.optString("cpvDate", "").trim()
+        val sheetCpvAddress = obj.optString("cpvAddress", "").trim()
+        val sheetCpvLastUpdatedBy = obj.optString("cpvLastUpdatedBy", "").trim()
+
+        val hasCpvChanged = normalizedSheetCpv.isNotBlank() &&
+                            !existing.cpvStatus.trim().equals(normalizedSheetCpv.trim(), ignoreCase = true)
+        val hasCpvRemarksChanged = !sheetCpvRemarks.isNullOrBlank() &&
+                                   existing.cpvRemarks.trim() != sheetCpvRemarks.trim()
         val hasStatusChanged = !existing.applicationStatus.trim().equals(appStatus.trim(), ignoreCase = true)
         val isBothActive = (existing.activeStatus.equals("Y", true) || existing.activeStatus.equals("ACTIVE", true)) &&
                            (activeStatus.equals("Y", true) || activeStatus.equals("ACTIVE", true))
         val isBothInactive = (existing.activeStatus.equals("N", true) || existing.activeStatus.equals("INACTIVE", true)) &&
                              (activeStatus.equals("N", true) || activeStatus.equals("INACTIVE", true))
         val hasActiveChanged = !isBothActive && !isBothInactive && !existing.activeStatus.trim().equals(activeStatus.trim(), ignoreCase = true)
-        val hasRemarksChanged = existing.remarks.trim() != remarksVal.trim() || existing.cpvRemarks.trim() != cpvRemarks.trim()
+        val hasRemarksChanged = existing.remarks.trim() != remarksVal.trim() || hasCpvRemarksChanged
         val hasDocsChanged = existing.pendingDocuments.trim() != pendingDocs.trim()
         val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber.trim() != ccNumber.trim()
         val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.trim().equals(rmCode.trim(), ignoreCase = true)
         val hasSlChanged = sheetSl.isNotBlank() && existing.serialNumber.trim() != sheetSl.trim()
         val hasDetailsChanged = existing.customerName.trim() != custName.trim() || existing.companyName.trim() != compName.trim() ||
                                 existing.mobile.trim() != mob.trim() || existing.email.trim() != em.trim() || existing.officeAddress.trim() != offAddr.trim() ||
-                                existing.productType.trim() != prodType.trim() || existing.cpvStatus.trim() != cpvStatus.trim()
+                                existing.productType.trim() != prodType.trim() || hasCpvChanged
 
-        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged) {
+        if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged || hasCpvChanged) {
           val updated = existing.copy(
             customerName = custName,
             companyName = compName,
@@ -4746,6 +4780,9 @@ class EblRepository(
             remarks = remarksVal,
             cpvRemarks = cpvRemarks,
             cpvStatus = cpvStatus,
+            cpvDate = if (sheetCpvDate.isNotBlank()) sheetCpvDate else existing.cpvDate,
+            cpvAddress = if (sheetCpvAddress.isNotBlank()) sheetCpvAddress else existing.cpvAddress,
+            cpvLastUpdatedBy = if (sheetCpvLastUpdatedBy.isNotBlank()) sheetCpvLastUpdatedBy else existing.cpvLastUpdatedBy,
             pendingDocuments = pendingDocs,
             ccNumber = if (ccNumber.isNotBlank()) ccNumber else existing.ccNumber,
             assignedRmCode = if (rmCode.isNotBlank()) rmCode else existing.assignedRmCode,
@@ -4763,6 +4800,32 @@ class EblRepository(
       } else {
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", ""))
         val sheetMobile = obj.optString("mobile", "").trim()
+
+        val sheetCpvRaw = listOf("cpvStatus", "cpv_status", "cpv", "CPV Status", "CPV", "verificationStatus", "cpv_stat", "cpvStat")
+          .firstNotNullOfOrNull { key ->
+            val v = obj.optString(key, "").trim()
+            if (v.isNotBlank()) v else null
+          } ?: ""
+
+        val normalizedSheetCpv = if (sheetCpvRaw.isNotBlank()) {
+          when (sheetCpvRaw.lowercase()) {
+            "completed", "complete", "done", "passed", "verified", "positive" -> "Completed"
+            "failed", "fail", "rejected", "negative" -> "Failed"
+            "not required", "not_required", "notrequired", "waived", "n/a", "na" -> "Not Required"
+            "pending", "in progress", "processing", "waiting" -> "Pending"
+            else -> sheetCpvRaw.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+          }
+        } else "Pending"
+
+        val sheetCpvRemarks = listOf("cpvRemarks", "cpv_remarks", "cpvNotes", "cpv_notes")
+          .firstNotNullOfOrNull { key ->
+            if (obj.has(key)) obj.optString(key, "").trim() else null
+          } ?: ""
+
+        val sheetCpvDate = obj.optString("cpvDate", "").trim()
+        val sheetCpvAddress = obj.optString("cpvAddress", "").trim()
+        val sheetCpvLastUpdatedBy = obj.optString("cpvLastUpdatedBy", "").trim()
+
         val newFile = CustomerFileEntity(
           fileId = targetId,
           customerName = custName,
@@ -4778,7 +4841,11 @@ class EblRepository(
           ccNumber = ccNumber,
           pendingDocuments = pendingDocs,
           remarks = remarks,
-          cpvStatus = obj.optString("cpvStatus", "Pending"),
+          cpvStatus = normalizedSheetCpv,
+          cpvRemarks = sheetCpvRemarks,
+          cpvDate = sheetCpvDate,
+          cpvAddress = sheetCpvAddress,
+          cpvLastUpdatedBy = sheetCpvLastUpdatedBy,
           serialNumber = sheetSl,
           submissionAddress = if (sheetSubAddress.isNotBlank()) sheetSubAddress else null,
           submissionLatitude = if (sheetLat != 0.0) sheetLat else null,

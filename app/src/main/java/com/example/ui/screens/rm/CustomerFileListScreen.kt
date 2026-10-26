@@ -586,8 +586,9 @@ fun CustomerFileListScreen(
 
   // View Customer Details Dialog
   if (viewingFile != null) {
+    val liveViewingFile = files.find { it.fileId == viewingFile!!.fileId } ?: viewingFile!!
     CustomerDetailDialog(
-      file = viewingFile!!,
+      file = liveViewingFile,
       currentUser = currentUser,
       viewModel = viewModel,
       onDismiss = { viewingFile = null },

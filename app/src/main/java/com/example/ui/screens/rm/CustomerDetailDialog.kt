@@ -107,24 +107,28 @@ fun CustomerDetailDialog(
   onDismiss: () -> Unit,
   onEdit: (String) -> Unit
 ) {
+  val liveFileFlow = remember(file.fileId) { viewModel.eblRepository.getFileByIdFlow(file.fileId) }
+  val liveFileState by liveFileFlow.collectAsState(initial = file)
+  val currentFile = liveFileState ?: file
+
   val scrollState = rememberScrollState()
-  val attachmentsFlow = viewModel.eblRepository.getAttachmentsForFileFlow(file.fileId)
+  val attachmentsFlow = viewModel.eblRepository.getAttachmentsForFileFlow(currentFile.fileId)
   val attachments by attachmentsFlow.collectAsState(initial = emptyList())
   val allRms by viewModel.allRms.collectAsState()
   var selectedAttachmentForView by remember { mutableStateOf<FileAttachmentEntity?>(null) }
   var showReassignModal by remember { mutableStateOf(false) }
   var showConfirmDeleteModal by remember { mutableStateOf(false) }
-  var newSelectedRmCode by remember(file.assignedRmCode) { mutableStateOf(file.assignedRmCode) }
+  var newSelectedRmCode by remember(currentFile.assignedRmCode) { mutableStateOf(currentFile.assignedRmCode) }
   var isSubmittingReassign by remember { mutableStateOf(false) }
 
   val scope = rememberCoroutineScope()
   val context = androidx.compose.ui.platform.LocalContext.current
   val availableStatuses by viewModel.fileStatusOptions.collectAsState()
   var showUpdateStatusDialog by remember { mutableStateOf(false) }
-  var selectedNewStatus by remember(file.applicationStatus) { mutableStateOf(file.applicationStatus) }
-  var selectedNewCpvStatus by remember(file.cpvStatus) { mutableStateOf(file.cpvStatus) }
-  var statusRemarksInput by remember(file.remarks) { mutableStateOf(file.remarks) }
-  var cpvRemarksInput by remember(file.cpvRemarks) { mutableStateOf(file.cpvRemarks) }
+  var selectedNewStatus by remember(currentFile.applicationStatus) { mutableStateOf(currentFile.applicationStatus) }
+  var selectedNewCpvStatus by remember(currentFile.cpvStatus) { mutableStateOf(currentFile.cpvStatus) }
+  var statusRemarksInput by remember(currentFile.remarks) { mutableStateOf(currentFile.remarks) }
+  var cpvRemarksInput by remember(currentFile.cpvRemarks) { mutableStateOf(currentFile.cpvRemarks) }
   var isUpdatingStatus by remember { mutableStateOf(false) }
 
   var showAddAttachmentModal by remember { mutableStateOf(false) }
@@ -296,13 +300,13 @@ fun CustomerDetailDialog(
         ) {
           Column {
             Text(
-              text = file.customerName,
+              text = currentFile.customerName,
               fontSize = 18.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
             )
             Text(
-              text = "File ID: ${file.fileId} • RM Code: ${file.assignedRmCode}",
+              text = "File ID: ${currentFile.fileId} • RM Code: ${currentFile.assignedRmCode}",
               fontSize = 12.sp,
               color = Color.Gray
             )
@@ -332,16 +336,18 @@ fun CustomerDetailDialog(
               horizontalArrangement = Arrangement.spacedBy(6.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
-              ApplicationStatusBadge(file.applicationStatus)
-              ActiveStatusBadge(file.activeStatus)
-              CpvStatusBadge(file.cpvStatus)
+              ApplicationStatusBadge(currentFile.applicationStatus)
+              ActiveStatusBadge(currentFile.activeStatus)
+              CpvStatusBadge(currentFile.cpvStatus)
             }
 
-            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == file.assignedRmCode) {
+            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == currentFile.assignedRmCode) {
               OutlinedButton(
                 onClick = {
-                  selectedNewStatus = file.applicationStatus
-                  statusRemarksInput = file.remarks
+                  selectedNewStatus = currentFile.applicationStatus
+                  selectedNewCpvStatus = currentFile.cpvStatus
+                  statusRemarksInput = currentFile.remarks
+                  cpvRemarksInput = currentFile.cpvRemarks
                   showUpdateStatusDialog = true
                 },
                 shape = RoundedCornerShape(6.dp),
@@ -367,24 +373,24 @@ fun CustomerDetailDialog(
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
-              DetailRow("Office / Company", file.companyName)
-              DetailRow("Office Address", file.officeAddress)
-              if (file.ccNumber.isNotBlank()) DetailRow("CC-Number", file.ccNumber)
-              DetailRow("Mobile Number", file.mobile)
-              if (file.altMobile.isNotBlank()) DetailRow("Alt Mobile", file.altMobile)
-              if (file.email.isNotBlank()) DetailRow("Email Address", file.email)
-              DetailRow("Product Type", file.productType)
-              DetailRow("Created Date", DateUtils.formatDateTime(file.createdAt))
-              DetailRow("Last Updated", DateUtils.formatDateTime(file.updatedAt))
-              if (file.submittedAt != null) DetailRow("Submitted Date", DateUtils.formatDateTime(file.submittedAt))
-              if (file.approvedAt != null) DetailRow("Approved Date", DateUtils.formatDateTime(file.approvedAt))
-              DetailRow("Created By", file.createdBy)
-              DetailRow("Updated By", file.updatedBy)
+              DetailRow("Office / Company", currentFile.companyName)
+              DetailRow("Office Address", currentFile.officeAddress)
+              if (currentFile.ccNumber.isNotBlank()) DetailRow("CC-Number", currentFile.ccNumber)
+              DetailRow("Mobile Number", currentFile.mobile)
+              if (currentFile.altMobile.isNotBlank()) DetailRow("Alt Mobile", currentFile.altMobile)
+              if (currentFile.email.isNotBlank()) DetailRow("Email Address", currentFile.email)
+              DetailRow("Product Type", currentFile.productType)
+              DetailRow("Created Date", DateUtils.formatDateTime(currentFile.createdAt))
+              DetailRow("Last Updated", DateUtils.formatDateTime(currentFile.updatedAt))
+              if (currentFile.submittedAt != null) DetailRow("Submitted Date", DateUtils.formatDateTime(currentFile.submittedAt))
+              if (currentFile.approvedAt != null) DetailRow("Approved Date", DateUtils.formatDateTime(currentFile.approvedAt))
+              DetailRow("Created By", currentFile.createdBy)
+              DetailRow("Updated By", currentFile.updatedBy)
             }
           }
 
           // Mentor Only: Submission GPS Location Audit
-          if (currentUser.role == "MENTOR" && (file.submissionAddress != null || file.submissionLatitude != null)) {
+          if (currentUser.role == "MENTOR" && (currentFile.submissionAddress != null || currentFile.submissionLatitude != null)) {
             Spacer(modifier = Modifier.height(10.dp))
             Surface(
               shape = RoundedCornerShape(8.dp),
@@ -399,9 +405,9 @@ fun CustomerDetailDialog(
                   Text("Mentor GPS Field Audit (Confidential)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
                 }
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Entry Address: ${file.submissionAddress ?: "Captured via GPS File Entry"}", fontSize = 12.sp, color = Color(0xFF15803D))
-                if (file.submissionLatitude != null && file.submissionLongitude != null) {
-                  Text("GPS Coords: %.5f, %.5f".format(file.submissionLatitude, file.submissionLongitude), fontSize = 11.sp, color = Color(0xFF166534))
+                Text("Entry Address: ${currentFile.submissionAddress ?: "Captured via GPS File Entry"}", fontSize = 12.sp, color = Color(0xFF15803D))
+                if (currentFile.submissionLatitude != null && currentFile.submissionLongitude != null) {
+                  Text("GPS Coords: %.5f, %.5f".format(currentFile.submissionLatitude, currentFile.submissionLongitude), fontSize = 11.sp, color = Color(0xFF166534))
                 }
               }
             }
@@ -412,14 +418,14 @@ fun CustomerDetailDialog(
           // Pending Documents
           Text("Pending Documents Checklist:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
           Spacer(modifier = Modifier.height(6.dp))
-          if (file.pendingDocuments.isBlank()) {
+          if (currentFile.pendingDocuments.isBlank()) {
             Text("None. All documents submitted.", fontSize = 12.sp, color = Color(0xFF15803D))
           } else {
             FlowRow(
               horizontalArrangement = Arrangement.spacedBy(6.dp),
               verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-              file.pendingDocuments.split(",").filter { it.isNotBlank() }.forEach { doc ->
+              currentFile.pendingDocuments.split(",").filter { it.isNotBlank() }.forEach { doc ->
                 Box(
                   modifier = Modifier
                     .background(Color(0xFFFEF3C7), RoundedCornerShape(6.dp))
@@ -434,7 +440,7 @@ fun CustomerDetailDialog(
           Spacer(modifier = Modifier.height(14.dp))
 
           // Remarks
-          if (file.remarks.isNotBlank()) {
+          if (currentFile.remarks.isNotBlank()) {
             Text("Remarks & Requirements:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Spacer(modifier = Modifier.height(4.dp))
             Box(
@@ -443,7 +449,7 @@ fun CustomerDetailDialog(
                 .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
                 .padding(10.dp)
             ) {
-              Text(file.remarks, fontSize = 12.sp, color = Color.DarkGray)
+              Text(currentFile.remarks, fontSize = 12.sp, color = Color.DarkGray)
             }
             Spacer(modifier = Modifier.height(14.dp))
           }
@@ -455,13 +461,13 @@ fun CustomerDetailDialog(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text("Contact Point Verification (CPV):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == file.assignedRmCode) {
+            if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR" || currentUser.rmCode == currentFile.assignedRmCode) {
               OutlinedButton(
                 onClick = {
-                  selectedNewStatus = file.applicationStatus
-                  selectedNewCpvStatus = file.cpvStatus
-                  statusRemarksInput = file.remarks
-                  cpvRemarksInput = file.cpvRemarks
+                  selectedNewStatus = currentFile.applicationStatus
+                  selectedNewCpvStatus = currentFile.cpvStatus
+                  statusRemarksInput = currentFile.remarks
+                  cpvRemarksInput = currentFile.cpvRemarks
                   showUpdateStatusDialog = true
                 },
                 shape = RoundedCornerShape(6.dp),
@@ -484,11 +490,11 @@ fun CustomerDetailDialog(
             border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              DetailRow("CPV Status", file.cpvStatus)
-              DetailRow("CPV Date", file.cpvDate.ifBlank { "N/A" })
-              DetailRow("CPV Address", file.cpvAddress.ifBlank { "N/A" })
-              DetailRow("CPV Remarks", file.cpvRemarks.ifBlank { "N/A" })
-              DetailRow("Verified By", file.cpvLastUpdatedBy.ifBlank { file.assignedRmCode })
+              DetailRow("CPV Status", currentFile.cpvStatus)
+              DetailRow("CPV Date", currentFile.cpvDate.ifBlank { "N/A" })
+              DetailRow("CPV Address", currentFile.cpvAddress.ifBlank { "N/A" })
+              DetailRow("CPV Remarks", currentFile.cpvRemarks.ifBlank { "N/A" })
+              DetailRow("Verified By", currentFile.cpvLastUpdatedBy.ifBlank { currentFile.assignedRmCode })
             }
           }
 
