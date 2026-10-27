@@ -504,6 +504,13 @@ class EblRepository(
         )
       )
     }
+    context?.let { ctx ->
+      NotificationHelper.sendIncomingSmsNotification(
+        context = ctx,
+        senderTitle = "EBL Notice: $customerName",
+        messageText = alertMsg
+      )
+    }
   }
 
   suspend fun clearSmsForRm(rmCode: String) = withContext(Dispatchers.IO) {
@@ -1879,7 +1886,11 @@ class EblRepository(
     }
 
     val cleanRmCode = rmCode.trim().uppercase()
-    val cleanRole = if (role.trim().equals("MENTOR", ignoreCase = true)) "MENTOR" else "RM"
+    val cleanRole = when {
+      role.trim().equals("ADMIN", ignoreCase = true) -> "ADMIN"
+      role.trim().equals("MENTOR", ignoreCase = true) -> "MENTOR"
+      else -> "RM"
+    }
     if (cleanRmCode.isBlank() || name.trim().isBlank()) {
       return@withContext Result.failure(Exception("RM Code and Name are mandatory."))
     }
@@ -1905,7 +1916,7 @@ class EblRepository(
       accountStatus = "ACTIVE",
       mustChangePassword = false,
       createdAt = now,
-      authUid = if (cleanRole == "MENTOR") "AUTH_MENTOR_$cleanRmCode" else "AUTH_RM_$cleanRmCode"
+      authUid = "AUTH_${cleanRole}_$cleanRmCode"
     )
 
     database.userDao().insertUser(newUser)
@@ -1981,7 +1992,7 @@ class EblRepository(
       ?: return@withContext Result.failure(Exception("User not found."))
 
     val targetStatus = existing.accountStatus
-    val targetRole = if (role != null && (role.equals("MENTOR", true) || role.equals("RM", true))) role.uppercase() else existing.role
+    val targetRole = if (role != null && (role.equals("MENTOR", true) || role.equals("RM", true) || role.equals("ADMIN", true))) role.uppercase() else existing.role
 
     val updated = if (!newPassword.isNullOrBlank()) {
       val salt = SecurityUtils.generateSalt()
@@ -2853,40 +2864,76 @@ class EblRepository(
     Result.success(Unit)
   }
 
-  fun getRmCustomTargetsFlow(rmCode: String): Flow<Map<String, Int>> {
-    return database.appSettingDao().getSettingFlow("RM_CUSTOM_TARGETS_${rmCode.trim().uppercase()}").map { setting ->
+  fun getRmCustomTargetsFlow(rmCode: String, quarter: String? = null): Flow<Map<String, Int>> {
+    val cleanRm = rmCode.trim().uppercase()
+    val normQuarter = quarter?.trim()?.uppercase()
+    val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+    val targetKey = if (normQuarter.isNullOrBlank() || normQuarter == "ALL") baseKey else "${baseKey}_$normQuarter"
+
+    return database.appSettingDao().getSettingFlow(targetKey).map { setting ->
       val raw = setting?.settingValue
-      if (raw.isNullOrBlank()) emptyMap() else {
-        try {
-          val obj = org.json.JSONObject(raw)
-          val map = mutableMapOf<String, Int>()
-          val keys = obj.keys()
-          while (keys.hasNext()) {
-            val k = keys.next()
-            map[k] = obj.optInt(k, 0)
+      if (raw.isNullOrBlank()) {
+        if (targetKey != baseKey) {
+          val fallbackRaw = database.appSettingDao().getSetting(baseKey)?.settingValue
+          if (!fallbackRaw.isNullOrBlank()) {
+            return@map parseTargetsJsonMap(fallbackRaw)
           }
-          map
-        } catch (_: Exception) {
-          emptyMap()
         }
+        emptyMap()
+      } else {
+        parseTargetsJsonMap(raw)
       }
     }
   }
 
-  suspend fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>) = withContext(Dispatchers.IO) {
+  private fun parseTargetsJsonMap(raw: String): Map<String, Int> {
+    return try {
+      val obj = org.json.JSONObject(raw)
+      val map = mutableMapOf<String, Int>()
+      val keys = obj.keys()
+      while (keys.hasNext()) {
+        val k = keys.next()
+        map[k] = obj.optInt(k, 0)
+      }
+      map
+    } catch (_: Exception) {
+      emptyMap()
+    }
+  }
+
+  suspend fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>, quarter: String? = null) = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
     val json = org.json.JSONObject(targets).toString()
     val now = DateUtils.currentDhakaMillis()
-    val key = "RM_CUSTOM_TARGETS_${rmCode.trim().uppercase()}"
+    val cleanRm = rmCode.trim().uppercase()
+    val normQuarter = quarter?.trim()?.uppercase()
+    val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+    val targetKey = if (normQuarter.isNullOrBlank() || normQuarter == "ALL") baseKey else "${baseKey}_$normQuarter"
+
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity(
-        settingKey = key,
+        settingKey = targetKey,
         settingValue = json,
         updatedBy = currentUser?.rmCode ?: "ADMIN",
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets(key, json) }
+    applicationScope.launch { syncSettingUpsertToGoogleSheets(targetKey, json) }
+
+    if (normQuarter.isNullOrBlank() || normQuarter == "ALL") {
+      listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+        val qKey = "${baseKey}_$q"
+        database.appSettingDao().insertOrUpdateSetting(
+          AppSettingEntity(
+            settingKey = qKey,
+            settingValue = json,
+            updatedBy = currentUser?.rmCode ?: "ADMIN",
+            updatedAt = now
+          )
+        )
+        applicationScope.launch { syncSettingUpsertToGoogleSheets(qKey, json) }
+      }
+    }
   }
 
   suspend fun updateFileStatus(
@@ -3587,11 +3634,11 @@ class EblRepository(
       val settingsArray = json.optJSONArray("settings") ?: JSONArray()
       val updatedSettingsCount = processSheetSettings(settingsArray)
 
-      val filesArray = json.optJSONArray("files") ?: json.optJSONArray("latestFiles") ?: JSONArray()
-      val updatedFilesCount = processSheetFiles(filesArray)
-
       val rmsArray = json.optJSONArray("rms") ?: JSONArray()
       val updatedRmsCount = processSheetRms(rmsArray)
+
+      val filesArray = json.optJSONArray("files") ?: json.optJSONArray("latestFiles") ?: JSONArray()
+      val updatedFilesCount = processSheetFiles(filesArray)
 
       val docsArray = json.optJSONArray("importantDocuments") ?: json.optJSONArray("documents") ?: JSONArray()
       val updatedDocsCount = processSheetDocuments(docsArray)
@@ -3659,16 +3706,25 @@ class EblRepository(
       }
     }
 
+    val existingUsersMap = database.userDao().getAllUsers().associateBy { it.rmCode.uppercase() }
+
     for (i in 0 until sheetRmsJson.length()) {
       val obj = sheetRmsJson.optJSONObject(i) ?: continue
       val code = obj.optString("rmCode").trim().uppercase()
-      if (code.isBlank() || code == "ADMIN0" || code == "MENTOR0" || code in deletedCodes) continue
+      if (code.isBlank() || code in deletedCodes) continue
 
       val name = obj.optString("name", "Relationship Manager").trim()
       val mobile = obj.optString("mobile", "").trim()
       val email = obj.optString("email", "").trim()
       val office = obj.optString("officeAddress", "Dhaka Branch").trim()
-      val role = obj.optString("role", "RM").trim()
+      val rawRole = obj.optString("role", "").trim()
+      val role = when {
+        rawRole.equals("ADMIN", true) || code.startsWith("ADMIN") -> "ADMIN"
+        rawRole.equals("MENTOR", true) || code.startsWith("MENTOR") || code == "12345" -> "MENTOR"
+        rawRole.equals("RM", true) -> "RM"
+        rawRole.isNotBlank() -> rawRole.uppercase()
+        else -> "RM"
+      }
       val status = obj.optString("accountStatus", "ACTIVE").trim()
       val ccTarget = obj.optInt("creditCardTarget", 15)
       val corpTarget = obj.optInt("corporateCardTarget", 5)
@@ -3677,7 +3733,7 @@ class EblRepository(
       val sheetHash = obj.optString("passwordHash", "").trim()
       val sheetSalt = obj.optString("salt", "").trim()
 
-      val existing = database.userDao().getUser(code)
+      val existing = existingUsersMap[code] ?: database.userDao().getUser(code)
       if (existing != null) {
         val lastLocalPassChangeTime = database.appSettingDao().getSetting("RM_PASS_UPDATED_AT_$code")?.updatedAt ?: 0L
         val isRecentLocalPassChange = (now - lastLocalPassChangeTime) < 300_000L // 5 minutes immunity window
@@ -5156,6 +5212,14 @@ class EblRepository(
     applicationScope.launch {
       syncEventUpsertToGoogleSheets(event)
     }
+    context?.let { ctx ->
+      NotificationHelper.sendNewEventNotification(
+        context = ctx,
+        eventTitle = event.title,
+        creatorName = event.creatorName,
+        targetDate = if (event.closeTime.isNotBlank()) "Deadline: ${event.closeTime}" else event.targetDate
+      )
+    }
     Result.success(event)
   }
 
@@ -5164,6 +5228,22 @@ class EblRepository(
       return true
     }
     return DateUtils.isEventExpired(event.closeTime, event.targetDate)
+  }
+
+  suspend fun closeTeamEvent(eventId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+      ?: return@withContext Result.failure(Exception("Unauthorized operation."))
+    if (currentUser.role != "ADMIN" && currentUser.role != "MENTOR") {
+      return@withContext Result.failure(Exception("Access Denied: Only Admin or Mentor can close events."))
+    }
+    val existing = database.communicationDao().getEventById(eventId)
+      ?: return@withContext Result.failure(Exception("Event not found."))
+    val updated = existing.copy(status = "CLOSED")
+    database.communicationDao().insertEvent(updated)
+    applicationScope.launch {
+      syncEventUpsertToGoogleSheets(updated)
+    }
+    Result.success(Unit)
   }
 
   suspend fun updateEventSettings(

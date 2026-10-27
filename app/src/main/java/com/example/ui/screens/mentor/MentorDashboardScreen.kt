@@ -1170,8 +1170,8 @@ fun MentorDashboardScreen(
           if (success) mentorTargetSettingRow = null
         }
       },
-      onSaveCustomTargets = { customMap ->
-        viewModel.saveRmCustomTargets(row.rmCode, customMap)
+      onSaveCustomTargets = { quarter, customMap ->
+        viewModel.saveRmCustomTargets(row.rmCode, customMap, quarter)
       }
     )
   }

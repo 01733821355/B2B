@@ -63,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.common.ActiveEventSlidingBanner
 import com.example.ui.common.EblTopBar
 import com.example.ui.screens.ChangePasswordDialog
 import com.example.ui.screens.LoginScreen
@@ -269,35 +270,45 @@ fun EblMainApp(viewModel: AppViewModel) {
         currentScreen !is Screen.AdminDashboard &&
         currentScreen !is Screen.MentorDashboard
 
-      EblTopBar(
-        user = user,
-        appCustomName = appCustomName,
-        canNavigateBack = canGoBack,
-        onNavigateBack = {
-          if (!viewModel.navigateBack()) {
-            when (user.role) {
-              "ADMIN" -> viewModel.navigateTo(Screen.AdminDashboard)
-              "MENTOR" -> viewModel.navigateTo(Screen.MentorDashboard)
-              else -> viewModel.navigateTo(Screen.RmDashboard)
+      Column(modifier = Modifier.fillMaxWidth()) {
+        EblTopBar(
+          user = user,
+          appCustomName = appCustomName,
+          canNavigateBack = canGoBack,
+          onNavigateBack = {
+            if (!viewModel.navigateBack()) {
+              when (user.role) {
+                "ADMIN" -> viewModel.navigateTo(Screen.AdminDashboard)
+                "MENTOR" -> viewModel.navigateTo(Screen.MentorDashboard)
+                else -> viewModel.navigateTo(Screen.RmDashboard)
+              }
             }
-          }
-        },
-        onLogout = { viewModel.logout() },
-        onChangePassword = { showPasswordDialog = true },
-        onSyncClicked = { viewModel.navigateTo(Screen.GoogleSheetsSync) },
-        pendingSyncCount = syncStatus?.pendingRecordsCount ?: 0,
-        unreadSmsCount = unreadSmsCount,
-        smsList = if (user.role == "RM") rmSmsList else allSmsList,
-        onMarkSmsRead = { viewModel.markSmsAsRead(it) },
-        onMarkAllSmsRead = { viewModel.markAllSmsAsRead() },
-        onClearSms = {
-          if (user.role == "RM") viewModel.clearSmsForCurrentRm() else viewModel.clearAllSms()
-        },
-        onDeleteSms = { viewModel.deleteSms(it) },
-        onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
-        onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
-        onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) }
-      )
+          },
+          onLogout = { viewModel.logout() },
+          onChangePassword = { showPasswordDialog = true },
+          onSyncClicked = { viewModel.navigateTo(Screen.GoogleSheetsSync) },
+          pendingSyncCount = syncStatus?.pendingRecordsCount ?: 0,
+          unreadSmsCount = unreadSmsCount,
+          smsList = if (user.role == "RM") rmSmsList else allSmsList,
+          onMarkSmsRead = { viewModel.markSmsAsRead(it) },
+          onMarkAllSmsRead = { viewModel.markAllSmsAsRead() },
+          onClearSms = {
+            if (user.role == "RM") viewModel.clearSmsForCurrentRm() else viewModel.clearAllSms()
+          },
+          onDeleteSms = { viewModel.deleteSms(it) },
+          onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
+          onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
+          onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) }
+        )
+
+        val activeEvents by viewModel.activeTeamEvents.collectAsState()
+        if (activeEvents.isNotEmpty()) {
+          ActiveEventSlidingBanner(
+            activeEvents = activeEvents,
+            onEventClick = { viewModel.navigateTo(Screen.CommunicationHub) }
+          )
+        }
+      }
     },
     bottomBar = {
       if (!isWideScreen) {

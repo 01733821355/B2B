@@ -19,8 +19,9 @@ interface UserDao {
   @Query("SELECT * FROM users WHERE UPPER(TRIM(role)) = 'RM' ORDER BY createdAt DESC")
   fun getAllRmsFlow(): Flow<List<UserEntity>>
 
-  @Query("SELECT * FROM users WHERE UPPER(TRIM(role)) IN ('RM', 'MENTOR') ORDER BY role ASC, name ASC")
+  @Query("SELECT * FROM users WHERE UPPER(TRIM(role)) IN ('RM', 'MENTOR', 'ADMIN') ORDER BY role ASC, name ASC")
   fun getAllOfficersFlow(): Flow<List<UserEntity>>
+
 
   @Query("SELECT * FROM users WHERE UPPER(TRIM(role)) = 'MENTOR' ORDER BY name ASC")
   fun getAllMentorsFlow(): Flow<List<UserEntity>>

@@ -95,6 +95,37 @@ object DatabaseInitializer {
       database.userDao().insertUser(mentorUser)
     }
 
+    // 3. Ensure Default RM Account (104393) exists for instant first-time login
+    val rmExists = database.userDao().getUser("104393") != null
+    if (!rmExists) {
+      val rmSalt = SecurityUtils.generateSalt()
+      val rmHash = SecurityUtils.hashPassword("#123456A", rmSalt)
+      val rmUser = UserEntity(
+        rmCode = "104393",
+        name = "Md. Bappy Hossain",
+        role = "RM",
+        passwordHash = rmHash,
+        salt = rmSalt,
+        mobile = "+8801733821355",
+        email = "mdbappyhossain018@gmail.com",
+        officeAddress = "EBL Principal Branch, 100 Motijheel C/A, Dhaka",
+        accountStatus = "ACTIVE",
+        mustChangePassword = false,
+        createdAt = now,
+        authUid = "AUTH_RM_104393"
+      )
+      database.userDao().insertUser(rmUser)
+      database.rmTargetDao().insertOrUpdateTarget(
+        com.example.data.model.RmTargetEntity(
+          rmCode = "104393",
+          creditCardTarget = 20,
+          corporateCardTarget = 10,
+          b2bTarget = 15,
+          updatedAt = now
+        )
+      )
+    }
+
     // 2. Seed Core App Settings
     val settings = listOf(
       AppSettingEntity(

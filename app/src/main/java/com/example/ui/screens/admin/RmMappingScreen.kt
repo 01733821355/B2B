@@ -97,6 +97,7 @@ fun RmMappingScreen(
     when (selectedRoleTab) {
       "RM" -> base.filter { it.role.equals("RM", true) }
       "MENTOR" -> base.filter { it.role.equals("MENTOR", true) }
+      "ADMIN" -> base.filter { it.role.equals("ADMIN", true) }
       else -> base
     }
   }
@@ -252,16 +253,29 @@ fun RmMappingScreen(
                   )
                   Spacer(modifier = Modifier.width(6.dp))
                   val isMentor = rm.role.equals("MENTOR", true)
+                  val isAdmin = rm.role.equals("ADMIN", true)
                   androidx.compose.material3.Surface(
                     shape = RoundedCornerShape(6.dp),
-                    color = if (isMentor) Color(0xFFF3E8FF) else Color(0xFFEFF6FF),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isMentor) Color(0xFFC084FC) else Color(0xFF93C5FD))
+                    color = when {
+                      isAdmin -> Color(0xFFFEF3C7)
+                      isMentor -> Color(0xFFF3E8FF)
+                      else -> Color(0xFFEFF6FF)
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.dp, when {
+                      isAdmin -> Color(0xFFF59E0B)
+                      isMentor -> Color(0xFFC084FC)
+                      else -> Color(0xFF93C5FD)
+                    })
                   ) {
                     Text(
-                      text = if (isMentor) "MENTOR" else "RM",
+                      text = rm.role.uppercase(),
                       fontSize = 10.sp,
                       fontWeight = FontWeight.Bold,
-                      color = if (isMentor) Color(0xFF7E22CE) else Color(0xFF1D4ED8),
+                      color = when {
+                        isAdmin -> Color(0xFFB45309)
+                        isMentor -> Color(0xFF7E22CE)
+                        else -> Color(0xFF1D4ED8)
+                      },
                       modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                   }
@@ -543,7 +557,7 @@ fun RmMappingScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            listOf("RM" to "Relationship Manager (RM)", "MENTOR" to "Team Mentor").forEach { (rCode, rLabel) ->
+            listOf("RM" to "RM", "MENTOR" to "Mentor", "ADMIN" to "Admin").forEach { (rCode, rLabel) ->
               val isSel = roleInput == rCode
               androidx.compose.material3.FilterChip(
                 selected = isSel,
@@ -557,8 +571,8 @@ fun RmMappingScreen(
           VoiceInputField(
             value = rmCodeInput,
             onValueChange = { rmCodeInput = it; addError = null },
-            label = "Unique Code (RM / Mentor ID) *",
-            placeholder = "e.g. 104396 or Mentor2",
+            label = "Unique Code (RM / Mentor / Admin ID) *",
+            placeholder = "e.g. 104396, Mentor2, or Admin2",
             testTag = "add_rm_code"
           )
           Spacer(modifier = Modifier.height(8.dp))
@@ -655,7 +669,15 @@ fun RmMappingScreen(
     var editMobile by remember { mutableStateOf(editingRm!!.mobile) }
     var editEmail by remember { mutableStateOf(editingRm!!.email) }
     var editAddress by remember { mutableStateOf(editingRm!!.officeAddress) }
-    var editRole by remember { mutableStateOf(if (editingRm!!.role.equals("MENTOR", true)) "MENTOR" else "RM") }
+    var editRole by remember {
+      mutableStateOf(
+        when {
+          editingRm!!.role.equals("ADMIN", true) -> "ADMIN"
+          editingRm!!.role.equals("MENTOR", true) -> "MENTOR"
+          else -> "RM"
+        }
+      )
+    }
     var editNewPassword by remember { mutableStateOf("") }
 
     AlertDialog(
@@ -669,7 +691,7 @@ fun RmMappingScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
           ) {
-            listOf("RM" to "Relationship Manager (RM)", "MENTOR" to "Team Mentor").forEach { (rCode, rLabel) ->
+            listOf("RM" to "RM", "MENTOR" to "Mentor", "ADMIN" to "Admin").forEach { (rCode, rLabel) ->
               val isSel = editRole.equals(rCode, true)
               androidx.compose.material3.FilterChip(
                 selected = isSel,
@@ -776,8 +798,8 @@ fun RmMappingScreen(
           if (success) settingTargetsRm = null
         }
       },
-      onSaveCustomTargets = { customMap ->
-        viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap)
+      onSaveCustomTargets = { quarter, customMap ->
+        viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap, quarter)
       }
     )
   }

@@ -4,8 +4,10 @@ import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.time.temporal.TemporalAdjusters
 
 object DateUtils {
@@ -164,13 +166,70 @@ object DateUtils {
     }
   }
 
+  fun normalizeDigits(input: String): String {
+    return input
+      .replace('০', '0').replace('১', '1').replace('২', '2').replace('৩', '3').replace('৪', '4')
+      .replace('৫', '5').replace('৬', '6').replace('৭', '7').replace('৮', '8').replace('৯', '9')
+  }
+
+  fun parseLocalDate(dateStr: String?): LocalDate? {
+    if (dateStr.isNullOrBlank()) return null
+    val clean = normalizeDigits(dateStr.trim())
+    val datePatterns = listOf("dd/MM/yyyy", "d/M/yyyy", "dd-MM-yyyy", "d-M-yyyy", "yyyy-MM-dd", "yyyy-M-d", "dd MMM yyyy", "d MMM yyyy")
+    for (p in datePatterns) {
+      try {
+        val f = DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern(p).toFormatter(java.util.Locale.ENGLISH)
+        return LocalDate.parse(clean, f)
+      } catch (_: Exception) {}
+    }
+    return null
+  }
+
+  fun parseDeadlineMillis(closeTime: String?, targetDate: String = ""): Long? {
+    if (closeTime.isNullOrBlank()) return null
+    var clean = normalizeDigits(closeTime.trim())
+    clean.toLongOrNull()?.let { return it }
+
+    // Normalize am/pm: insert space between number and AM/PM if missing, e.g. "6:00pm" -> "6:00 PM"
+    clean = clean.replace("(?i)(\\d+)(am|pm)".toRegex(), "$1 $2")
+    clean = clean.replace("(?i)am".toRegex(), "AM").replace("(?i)pm".toRegex(), "PM")
+
+    // 1. Try full date-time parse
+    val fullParse = parseDateTime(clean)
+    if (fullParse != null) {
+      val hasTime = clean.contains(":") || clean.contains("AM") || clean.contains("PM")
+      return if (!hasTime) fullParse + 86399000L else fullParse
+    }
+
+    // 2. Try time-only parse (e.g. "06:00 PM", "6:00 PM", "18:00", "6 PM")
+    val timePatterns = listOf(
+      "h:mm:ss a", "hh:mm:ss a", "h:mm a", "hh:mm a",
+      "H:mm:ss", "HH:mm:ss", "H:mm", "HH:mm",
+      "h a", "hh a"
+    )
+    for (tp in timePatterns) {
+      try {
+        val tf = DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern(tp).toFormatter(java.util.Locale.ENGLISH)
+        val lt = LocalTime.parse(clean, tf)
+        val baseDate = if (targetDate.isNotBlank()) parseLocalDate(targetDate) ?: LocalDate.now(DHAKA_ZONE)
+                       else LocalDate.now(DHAKA_ZONE)
+        return baseDate.atTime(lt).atZone(DHAKA_ZONE).toInstant().toEpochMilli()
+      } catch (_: Exception) {}
+    }
+
+    return null
+  }
+
   fun parseDateTime(dateStr: String?): Long? {
     if (dateStr.isNullOrBlank()) return null
-    var trimmed = dateStr.trim()
+    var trimmed = normalizeDigits(dateStr.trim())
     trimmed.toLongOrNull()?.let { return it }
 
+    // Normalize am/pm
+    trimmed = trimmed.replace("(?i)(\\d+)(am|pm)".toRegex(), "$1 $2")
+    trimmed = trimmed.replace("(?i)am".toRegex(), "AM").replace("(?i)pm".toRegex(), "PM")
+
     // Strip JS timezone name in parentheses if present:
-    // e.g. "Fri Oct 23 2026 17:31:00 GMT+0600 (Bangladesh Standard Time)" -> "Fri Oct 23 2026 17:31:00 GMT+0600"
     if (trimmed.contains("(") && trimmed.contains(")")) {
       trimmed = trimmed.substringBefore("(").trim()
     }
@@ -180,7 +239,7 @@ object DateUtils {
       return Instant.parse(trimmed).toEpochMilli()
     } catch (_: Exception) {}
 
-    // Try standard JS Date format: "Fri Oct 23 2026 17:31:00 GMT+0600"
+    // Try standard JS Date format
     try {
       val jsFormatter = DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", java.util.Locale.ENGLISH)
       return java.time.ZonedDateTime.parse(trimmed, jsFormatter).toInstant().toEpochMilli()
@@ -197,20 +256,34 @@ object DateUtils {
       "yyyy-MM-dd'T'HH:mm:ss",
       "yyyy-MM-dd'T'HH:mm:ss.SSS",
       "yyyy-MM-dd'T'HH:mm",
+      "dd/MM/yyyy HH:mm:ss",
       "dd/MM/yyyy HH:mm",
       "dd/MM/yyyy hh:mm a",
+      "dd/MM/yyyy h:mm a",
+      "d/M/yyyy HH:mm:ss",
+      "d/M/yyyy HH:mm",
+      "d/M/yyyy h:mm a",
+      "d/M/yyyy hh:mm a",
+      "dd-MM-yyyy HH:mm:ss",
       "dd-MM-yyyy HH:mm",
       "dd-MM-yyyy hh:mm a",
+      "dd-MM-yyyy h:mm a",
+      "d-M-yyyy HH:mm",
+      "d-M-yyyy h:mm a",
       "dd MMM yyyy, hh:mm a",
+      "dd MMM yyyy, h:mm a",
       "dd MMM yyyy, hh:mm:ss a",
       "dd/MM/yyyy",
+      "d/M/yyyy",
       "dd-MM-yyyy",
-      "yyyy-MM-dd"
+      "d-M-yyyy",
+      "yyyy-MM-dd",
+      "yyyy-M-d"
     )
     for (p in patterns) {
       try {
-        val formatter = DateTimeFormatter.ofPattern(p, java.util.Locale.ENGLISH)
-        if (p == "yyyy-MM-dd" || p == "dd/MM/yyyy" || p == "dd-MM-yyyy") {
+        val formatter = DateTimeFormatterBuilder().parseCaseInsensitive().appendPattern(p).toFormatter(java.util.Locale.ENGLISH)
+        if (p == "yyyy-MM-dd" || p == "yyyy-M-d" || p == "dd/MM/yyyy" || p == "d/M/yyyy" || p == "dd-MM-yyyy" || p == "d-M-yyyy") {
           val ld = LocalDate.parse(trimmed, formatter)
           return ld.atStartOfDay(DHAKA_ZONE).toInstant().toEpochMilli()
         } else {
@@ -225,17 +298,16 @@ object DateUtils {
   fun isEventExpired(closeTime: String, targetDate: String = ""): Boolean {
     val now = currentDhakaMillis()
     if (closeTime.isNotBlank()) {
-      val parsedClose = parseDateTime(closeTime)
+      val parsedClose = parseDeadlineMillis(closeTime, targetDate)
       if (parsedClose != null && parsedClose > 0L) {
-        val expiryTime = if (closeTime.trim().length <= 10) parsedClose + 86399000L else parsedClose
-        return now > expiryTime
+        return now >= parsedClose
       }
     }
     if (targetDate.isNotBlank()) {
       val parsedTarget = parseDateTime(targetDate)
       if (parsedTarget != null && parsedTarget > 0L) {
         val expiryTime = if (targetDate.trim().length <= 10) parsedTarget + 86399000L else parsedTarget
-        return now > expiryTime
+        return now >= expiryTime
       }
     }
     return false

@@ -433,6 +433,9 @@ fun CommunicationHubScreen(
               onViewSubmissions = { targetEvt -> activeViewEventSubmissions = targetEvt },
               onDeleteEvent = { eventIdToDelete ->
                 viewModel.deleteTeamEvent(eventIdToDelete)
+              },
+              onCloseEvent = { eventIdToClose ->
+                viewModel.closeTeamEvent(eventIdToClose)
               }
             )
           }
@@ -596,18 +599,20 @@ fun EventCardItem(
   currentUser: UserEntity?,
   onOpenSubmit: (TeamEventEntity) -> Unit,
   onViewSubmissions: (TeamEventEntity) -> Unit,
-  onDeleteEvent: (String) -> Unit = {}
+  onDeleteEvent: (String) -> Unit = {},
+  onCloseEvent: (String) -> Unit = {}
 ) {
   val title = event?.title ?: fallbackMessage.messageText.lines().firstOrNull() ?: "Team Event"
   val targetDate = event?.targetDate ?: "As announced"
   val desc = event?.description ?: fallbackMessage.messageText
   val creatorName = event?.creatorName ?: fallbackMessage.senderName
-  val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR" || isCreator
-  val canDeleteEvent = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR" || isCreator
+  val isPrivileged = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR"
+  val canDeleteEvent = currentUser?.role == "ADMIN" || currentUser?.role == "MENTOR"
   var showDeleteConfirmDialog by remember { mutableStateOf(false) }
+  var showCloseConfirmDialog by remember { mutableStateOf(false) }
 
   val context = androidx.compose.ui.platform.LocalContext.current
-  val isExpired = event != null && DateUtils.isEventExpired(event.closeTime, event.targetDate)
+  val isExpired = event != null && (event.status.equals("CLOSED", ignoreCase = true) || event.status.equals("COMPLETED", ignoreCase = true) || DateUtils.isEventExpired(event.closeTime, event.targetDate))
 
   if (showDeleteConfirmDialog && event != null) {
     AlertDialog(
@@ -630,6 +635,33 @@ fun EventCardItem(
       },
       dismissButton = {
         TextButton(onClick = { showDeleteConfirmDialog = false }) {
+          Text("বাতিল")
+        }
+      }
+    )
+  }
+
+  if (showCloseConfirmDialog && event != null) {
+    AlertDialog(
+      onDismissRequest = { showCloseConfirmDialog = false },
+      icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFDC2626)) },
+      title = { Text("ইভেন্টটি সমাপ্ত/বন্ধ করবেন?", fontWeight = FontWeight.Bold) },
+      text = {
+        Text("আপনি কি নিশ্চিত যে '${event.title}' ইভেন্টটি বন্ধ করতে চান? বন্ধ করার পর RM-রা আর কোনো নতুন তথ্য এন্ট্রি দিতে পারবে না। ফলাফল ও রিপোর্ট সংরক্ষিত থাকবে।")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            showCloseConfirmDialog = false
+            onCloseEvent(event.eventId)
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+        ) {
+          Text("হ্যাঁ, ইভেন্ট বন্ধ করুন")
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { showCloseConfirmDialog = false }) {
           Text("বাতিল")
         }
       }
@@ -708,6 +740,26 @@ fun EventCardItem(
               )
             }
           }
+
+          if (isPrivileged && event != null && !isExpired) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFFFEF2F2),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+              modifier = Modifier.clickable { showCloseConfirmDialog = true }
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              ) {
+                Icon(Icons.Default.Lock, contentDescription = "Close Event", tint = Color(0xFFDC2626), modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("বন্ধ করুন", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+              }
+            }
+          }
+
           if (canDeleteEvent && event != null) {
             Spacer(modifier = Modifier.width(6.dp))
             IconButton(
@@ -749,52 +801,62 @@ fun EventCardItem(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        // RM Button to submit details
-        if (isExpired) {
-          Button(
-            onClick = {
-              Toast.makeText(context, "এই ইভেন্টের সময়সীমা শেষ হয়েছে। নতুন এন্ট্রি বন্ধ রয়েছে।", Toast.LENGTH_LONG).show()
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF94A3B8)),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .testTag("btn_submit_event_closed")
-          ) {
-            Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("সময় শেষ (এন্ট্রি বন্ধ)", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-          }
-        } else {
-          Button(
-            onClick = {
-              if (event != null) onOpenSubmit(event)
-            },
-            colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-            shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-            modifier = Modifier
-              .weight(1f)
-              .testTag("btn_submit_event_details")
-          ) {
-            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        // RM Button to submit details (blocked when expired)
+        if (currentUser?.role == "RM") {
+          if (isExpired) {
+            Button(
+              onClick = {
+                Toast.makeText(context, "এই ইভেন্টের সময়সীমা শেষ হয়েছে। নতুন এন্ট্রি বন্ধ রয়েছে।", Toast.LENGTH_LONG).show()
+              },
+              colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFFE2E8F0),
+                disabledContainerColor = Color(0xFFE2E8F0),
+                disabledContentColor = Color(0xFF64748B)
+              ),
+              shape = RoundedCornerShape(8.dp),
+              enabled = false,
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+              modifier = Modifier
+                .weight(1f)
+                .testTag("btn_submit_event_closed")
+            ) {
+              Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("সময় শেষ (এন্ট্রি বন্ধ)", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            }
+          } else {
+            Button(
+              onClick = {
+                if (event != null) onOpenSubmit(event)
+              },
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+              modifier = Modifier
+                .weight(1f)
+                .testTag("btn_submit_event_details")
+            ) {
+              Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            }
           }
         }
 
-        // Admin & Mentor (or creator) button to view summary table of all RMs
+        // ONLY Admin & Mentor can view results and download report!
         if (isPrivileged && event != null) {
-          OutlinedButton(
+          Button(
             onClick = { onViewSubmissions(event) },
+            colors = ButtonDefaults.buttonColors(containerColor = if (isExpired) Color(0xFF1E3A8A) else Color(0xFF2563EB)),
             shape = RoundedCornerShape(8.dp),
             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
             modifier = Modifier
               .weight(1f)
               .testTag("btn_view_all_submissions")
           ) {
-            Text("সব RM এর তালিকা", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("ফলাফল ও রিপোর্ট", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
           }
         }
       }
@@ -1007,7 +1069,7 @@ fun SubmitDeliveryResponseDialog(
   val customerList = remember {
     mutableStateListOf(CustomerEntryItem())
   }
-  val isExpired = DateUtils.isEventExpired(event.closeTime, event.targetDate)
+  val isExpired = event.status.equals("CLOSED", ignoreCase = true) || DateUtils.isEventExpired(event.closeTime, event.targetDate)
 
   AlertDialog(
     onDismissRequest = onDismiss,

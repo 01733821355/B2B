@@ -1192,12 +1192,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun getRmCustomTargetsFlow(rmCode: String): Flow<Map<String, Int>> =
-    eblRepository.getRmCustomTargetsFlow(rmCode)
+  fun getRmCustomTargetsFlow(rmCode: String, quarter: String? = null): Flow<Map<String, Int>> =
+    eblRepository.getRmCustomTargetsFlow(rmCode, quarter)
 
-  fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>) {
+  fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>, quarter: String? = null) {
     viewModelScope.launch {
-      eblRepository.saveRmCustomTargets(rmCode, targets)
+      eblRepository.saveRmCustomTargets(rmCode, targets, quarter)
     }
   }
 
@@ -1472,6 +1472,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val teamEvents: StateFlow<List<com.example.data.model.TeamEventEntity>> = eblRepository.getAllTeamEventsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+  val activeTeamEvents: StateFlow<List<com.example.data.model.TeamEventEntity>> = eblRepository.getAllTeamEventsFlow()
+    .map { list -> list.filter { !eblRepository.isEventExpired(it) } }
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
   fun sendChatMessage(
     text: String,
     recipientRmCode: String? = null,
@@ -1580,6 +1584,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onResult?.invoke(true, null)
       }.onFailure { err ->
         _uiMessage.emit(err.message ?: "Failed to delete event.")
+        onResult?.invoke(false, err.message)
+      }
+    }
+  }
+
+  fun closeTeamEvent(
+    eventId: String,
+    onResult: ((Boolean, String?) -> Unit)? = null
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.closeTeamEvent(eventId)
+      res.onSuccess {
+        _uiMessage.emit("✓ ইভেন্টটি সমাপ্ত ও ডাটা এন্ট্রি বন্ধ করা হয়েছে।")
+        onResult?.invoke(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit(err.message ?: "Failed to close event.")
         onResult?.invoke(false, err.message)
       }
     }

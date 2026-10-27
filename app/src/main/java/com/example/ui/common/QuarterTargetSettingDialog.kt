@@ -65,7 +65,7 @@ fun QuarterTargetSettingDialog(
   initialCustomTargets: Map<String, Int> = emptyMap(),
   onDismiss: () -> Unit,
   onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
-  onSaveCustomTargets: ((Map<String, Int>) -> Unit)? = null
+  onSaveCustomTargets: ((quarter: String, targets: Map<String, Int>) -> Unit)? = null
 ) {
   var selectedQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
   var selectedYear by remember { mutableStateOf(2026) }
@@ -77,8 +77,18 @@ fun QuarterTargetSettingDialog(
   var corpInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.second.toString()) }
   var b2bInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.third.toString()) }
 
-  val customTargetInputs = remember(selectedQuarter, initialCustomTargets) {
-    mutableStateMapOf<String, String>().apply {
+  val customTargetsByQuarter = remember {
+    mutableStateMapOf<String, MutableMap<String, String>>().apply {
+      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+        put(q, mutableMapOf<String, String>().apply {
+          initialCustomTargets.forEach { (k, v) -> put(k, v.toString()) }
+        })
+      }
+    }
+  }
+
+  val customTargetInputs = customTargetsByQuarter.getOrPut(selectedQuarter) {
+    mutableMapOf<String, String>().apply {
       initialCustomTargets.forEach { (k, v) -> put(k, v.toString()) }
     }
   }
@@ -273,7 +283,15 @@ fun QuarterTargetSettingDialog(
             ) {
               OutlinedTextField(
                 value = customTargetInputs[crit] ?: "",
-                onValueChange = { customTargetInputs[crit] = it.filter { ch -> ch.isDigit() } },
+                onValueChange = { newVal ->
+                  val digits = newVal.filter { ch -> ch.isDigit() }
+                  customTargetInputs[crit] = digits
+                  if (selectedQuarter == "ALL") {
+                    listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+                      customTargetsByQuarter.getOrPut(q) { mutableMapOf() }[crit] = digits
+                    }
+                  }
+                },
                 label = { Text("$crit Target ($periodLabel)") },
                 placeholder = { Text("e.g. 10") },
                 leadingIcon = { Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp)) },
@@ -369,7 +387,7 @@ fun QuarterTargetSettingDialog(
             val num = v.toIntOrNull()
             if (num != null) k to num else null
           }.toMap()
-          onSaveCustomTargets?.invoke(customMap)
+          onSaveCustomTargets?.invoke(selectedQuarter, customMap)
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
