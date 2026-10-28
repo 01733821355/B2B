@@ -1593,19 +1593,55 @@ fun DocumentChecklistSenderTab(
   var showCustomerPickerDialog by remember { mutableStateOf(false) }
   var customerSearchQuery by remember { mutableStateOf("") }
 
-  // Header and Regards auto-fill
-  val custDisplayName = customerName.trim().ifBlank { "Customer" }
-  val presetDisplayName = when (selectedPreset) {
-    "Credit Card Limit Enhance" -> "Credit Card Limit Enhancement"
-    "Corporate Card" -> "Corporate Credit Card"
-    else -> selectedPreset
+  var checklistLanguage by remember { mutableStateOf(com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) }
+
+  // Header and Regards auto-fill with multi-language support
+  val custDisplayName = customerName.trim().ifBlank {
+    if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "সম্মানিত গ্রাহক" else "Customer"
+  }
+  val presetDisplayName = com.example.util.ChecklistTranslator.translatePresetName(selectedPreset, checklistLanguage)
+
+  val activeHeaderTemplate = when (checklistLanguage) {
+    com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> headerTemplate
+    com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> {
+      if (headerTemplate.contains("Dear {CUSTOMER_NAME}") || headerTemplate.contains("Greetings from Eastern Bank")) {
+        com.example.util.ChecklistTranslator.getHeaderTemplate(com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+      } else {
+        headerTemplate
+      }
+    }
+    com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> {
+      if (headerTemplate.contains("Dear {CUSTOMER_NAME}") || headerTemplate.contains("Greetings from Eastern Bank")) {
+        com.example.util.ChecklistTranslator.getHeaderTemplate(com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL)
+      } else {
+        headerTemplate
+      }
+    }
   }
 
-  val resolvedHeader = headerTemplate
+  val activeRegardsTemplate = when (checklistLanguage) {
+    com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> regardsTemplate
+    com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> {
+      if (regardsTemplate.contains("For any query") || regardsTemplate.contains("Eastern Bank PLC") || regardsTemplate.contains("RM Code:")) {
+        com.example.util.ChecklistTranslator.getRegardsTemplate(com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+      } else {
+        regardsTemplate
+      }
+    }
+    com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> {
+      if (regardsTemplate.contains("For any query") || regardsTemplate.contains("Eastern Bank PLC") || regardsTemplate.contains("RM Code:")) {
+        com.example.util.ChecklistTranslator.getRegardsTemplate(com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL)
+      } else {
+        regardsTemplate
+      }
+    }
+  }
+
+  val resolvedHeader = activeHeaderTemplate
     .replace("{CUSTOMER_NAME}", custDisplayName)
     .replace("{PRESET_NAME}", presetDisplayName)
 
-  val resolvedRegards = regardsTemplate
+  val resolvedRegards = activeRegardsTemplate
     .replace("{RM_NAME}", currentUser.name.ifBlank { "Relationship Manager" })
     .replace("{RM_CODE}", currentUser.rmCode)
     .replace("{RM_PHONE}", currentUser.mobile.ifBlank { "017XXXXXXXX" })
@@ -1615,9 +1651,10 @@ fun DocumentChecklistSenderTab(
     selectedPreset,
     resolvedHeader,
     resolvedRegards,
-    singleChecklistItems.map { it.isChecked },
-    corporateCompanyItems.map { it.isChecked },
-    corporateEmployeeItems.map { it.isChecked }
+    checklistLanguage,
+    singleChecklistItems.map { it.isChecked to it.title },
+    corporateCompanyItems.map { it.isChecked to it.title },
+    corporateEmployeeItems.map { it.isChecked to it.title }
   ) {
     val sb = StringBuilder()
     sb.appendLine(resolvedHeader)
@@ -1627,30 +1664,33 @@ fun DocumentChecklistSenderTab(
       val checkedCompany = corporateCompanyItems.filter { it.isChecked }
       val checkedEmp = corporateEmployeeItems.filter { it.isChecked }
 
-      sb.appendLine("🏢 [PART 1: COMPANY DOCUMENTS / কোম্পানি ডকুমেন্টস]")
+      sb.appendLine(com.example.util.ChecklistTranslator.getCategoryTitle("COMPANY", checklistLanguage))
       if (checkedCompany.isEmpty()) {
-        sb.appendLine("• (No company documents selected)")
+        sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো কোম্পানি ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No company documents selected)")
       } else {
         checkedCompany.forEachIndexed { idx, item ->
-          sb.appendLine("${idx + 1}. ${item.title}")
+          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          sb.appendLine("${idx + 1}. $docTitle")
         }
       }
       sb.appendLine()
-      sb.appendLine("👤 [PART 2: EMPLOYEE DOCUMENTS / এমপ্লয়ি ডকুমেন্টস]")
+      sb.appendLine(com.example.util.ChecklistTranslator.getCategoryTitle("EMPLOYEE", checklistLanguage))
       if (checkedEmp.isEmpty()) {
-        sb.appendLine("• (No employee documents selected)")
+        sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো কর্মকর্তা/কর্মচারী ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No employee documents selected)")
       } else {
         checkedEmp.forEachIndexed { idx, item ->
-          sb.appendLine("${idx + 1}. ${item.title}")
+          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          sb.appendLine("${idx + 1}. $docTitle")
         }
       }
     } else {
       val checkedList = singleChecklistItems.filter { it.isChecked }
       if (checkedList.isEmpty()) {
-        sb.appendLine("• (No documents selected)")
+        sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No documents selected)")
       } else {
         checkedList.forEachIndexed { idx, item ->
-          sb.appendLine("${idx + 1}. ${item.title}")
+          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          sb.appendLine("${idx + 1}. $docTitle")
         }
       }
     }
@@ -2429,6 +2469,115 @@ fun DocumentChecklistSenderTab(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
+          // Language Selection & AI Auto-Translate Bar
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = Color(0xFFF1F5F9),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(bottom = 12.dp)
+          ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    text = "🌐 ভাষা / Language:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "বাংলা সক্রিয়" else if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL) "দ্বিভাষিক সক্রিয়" else "English Active",
+                    fontSize = 10.sp,
+                    color = Color(0xFF0369A1),
+                    fontWeight = FontWeight.SemiBold
+                  )
+                }
+
+                // AI Auto Bangla Button
+                Surface(
+                  shape = RoundedCornerShape(6.dp),
+                  color = Color(0xFFECFDF5),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981)),
+                  modifier = Modifier
+                    .testTag("btn_ai_auto_translate_bangla")
+                    .clickable {
+                      checklistLanguage = com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA
+                      singleChecklistItems.indices.forEach { idx ->
+                        singleChecklistItems[idx] = singleChecklistItems[idx].copy(
+                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(singleChecklistItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                        )
+                      }
+                      corporateCompanyItems.indices.forEach { idx ->
+                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(
+                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(corporateCompanyItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                        )
+                      }
+                      corporateEmployeeItems.indices.forEach { idx ->
+                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(
+                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(corporateEmployeeItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                        )
+                      }
+                      Toast.makeText(context, "🤖 AI Auto: চেকলিস্ট স্বয়ংক্রিয়ভাবে বাংলায় রূপান্তর করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                  Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Text(
+                      text = "🤖 AI Auto বাংলা",
+                      fontSize = 10.5.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = Color(0xFF047857)
+                    )
+                  }
+                }
+              }
+
+              Spacer(modifier = Modifier.height(8.dp))
+
+              // 3 Language Selector Pills: English, বাংলা, বাংলা + English
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+              ) {
+                com.example.util.ChecklistTranslator.ChecklistLanguage.values().forEach { lang ->
+                  val isSelected = checklistLanguage == lang
+                  Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = if (isSelected) EblNavyPrimary else Color.White,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) EblNavyPrimary else Color(0xFFCBD5E1)),
+                    modifier = Modifier
+                      .weight(1f)
+                      .testTag("btn_lang_${lang.name.lowercase()}")
+                      .clickable { checklistLanguage = lang }
+                  ) {
+                    Box(
+                      modifier = Modifier.padding(vertical = 6.dp),
+                      contentAlignment = Alignment.Center
+                    ) {
+                      Text(
+                        text = lang.label,
+                        fontSize = 11.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else Color(0xFF334155),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                      )
+                    }
+                  }
+                }
+              }
+            }
+          }
+
           if (selectedPreset == "Corporate Card") {
             // CORPORATE CARD: MASTER SELECTION CONTROLS
             Row(
@@ -2579,13 +2728,25 @@ fun DocumentChecklistSenderTab(
                   modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = item.title,
-                  fontSize = 12.sp,
-                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
-                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
-                  modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = item.title,
+                    fontSize = 12.sp,
+                    color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                    fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
+                  )
+                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+                      Text(
+                        text = "বাংলা: $banglaSub",
+                        fontSize = 10.5.sp,
+                        color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  }
+                }
                 if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
                   IconButton(
                     onClick = { editingCorpCompanyTarget = Pair(index, item.title) },
@@ -2719,13 +2880,25 @@ fun DocumentChecklistSenderTab(
                   modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                  text = item.title,
-                  fontSize = 12.sp,
-                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
-                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
-                  modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = item.title,
+                    fontSize = 12.sp,
+                    color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                    fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
+                  )
+                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+                      Text(
+                        text = "বাংলা: $banglaSub",
+                        fontSize = 10.5.sp,
+                        color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  }
+                }
                 if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
                   IconButton(
                     onClick = { editingCorpEmployeeTarget = Pair(index, item.title) },
@@ -2866,13 +3039,25 @@ fun DocumentChecklistSenderTab(
                   modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                  text = item.title,
-                  fontSize = 12.sp,
-                  color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
-                  fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal,
-                  modifier = Modifier.weight(1f)
-                )
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = item.title,
+                    fontSize = 12.sp,
+                    color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
+                    fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
+                  )
+                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+                      Text(
+                        text = "বাংলা: $banglaSub",
+                        fontSize = 10.5.sp,
+                        color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  }
+                }
                 IconButton(
                   onClick = { editingItemTarget = Pair(index, item.title) },
                   modifier = Modifier.size(24.dp)
@@ -2996,17 +3181,68 @@ fun DocumentChecklistSenderTab(
               overflow = TextOverflow.Ellipsis,
               modifier = Modifier.weight(1f, fill = false)
             )
-            Text(
-              text = "Auto-Formatted",
-              fontSize = 10.sp,
-              color = Color(0xFF059669),
-              fontWeight = FontWeight.SemiBold,
-              maxLines = 1,
-              softWrap = false
-            )
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color(0xFFEFF6FF),
+                border = androidx.compose.foundation.BorderStroke(0.6.dp, Color(0xFF93C5FD))
+              ) {
+                Text(
+                  text = "${checklistLanguage.label} (${checklistLanguage.badge})",
+                  fontSize = 10.sp,
+                  color = Color(0xFF1D4ED8),
+                  fontWeight = FontWeight.Bold,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+              }
+              Text(
+                text = "Auto-Formatted",
+                fontSize = 10.sp,
+                color = Color(0xFF059669),
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false
+              )
+            }
           }
 
-          Spacer(modifier = Modifier.height(8.dp))
+          Spacer(modifier = Modifier.height(6.dp))
+
+          // Quick language switcher directly above preview
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+          ) {
+            com.example.util.ChecklistTranslator.ChecklistLanguage.values().forEach { lang ->
+              val isSel = checklistLanguage == lang
+              Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = if (isSel) EblNavyPrimary else Color(0xFFF1F5F9),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, if (isSel) EblNavyPrimary else Color(0xFFCBD5E1)),
+                modifier = Modifier
+                  .weight(1f)
+                  .testTag("preview_lang_${lang.name.lowercase()}")
+                  .clickable { checklistLanguage = lang }
+              ) {
+                Box(
+                  modifier = Modifier.padding(vertical = 4.dp),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Text(
+                    text = lang.label,
+                    fontSize = 10.sp,
+                    fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSel) Color.White else Color(0xFF475569)
+                  )
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(6.dp))
 
           Surface(
             shape = RoundedCornerShape(8.dp),

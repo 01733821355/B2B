@@ -94,6 +94,7 @@ fun RmDashboardScreen(
   targetCriteria: List<String> = listOf("Credit Card", "Corporate Card", "B2B"),
   assignedCriteria: List<String> = emptyList(),
   customTargets: Map<String, Int> = emptyMap(),
+  allQuarterCustomTargets: Map<String, Map<String, Int>> = emptyMap(),
   unreadSmsCount: Int = 0,
   onOpenSmsInbox: () -> Unit = {},
   onOpenDbrChecklist: () -> Unit = {},
@@ -126,8 +127,34 @@ fun RmDashboardScreen(
   val corpTarget = currentQuarterTargets.second
   val b2bTarget = currentQuarterTargets.third
 
+  // Custom targets specific to the selected quarter
+  val currentQuarterCustomTargets = remember(selectedKpiQuarter, allQuarterCustomTargets, customTargets) {
+    val qKey = selectedKpiQuarter.uppercase()
+    when {
+      qKey.startsWith("Q") -> {
+        val qMap = allQuarterCustomTargets[qKey]
+        if (!qMap.isNullOrEmpty()) qMap else customTargets
+      }
+      qKey in listOf("ANNUAL", "ALL", "BARSHIK") -> {
+        val allMap = allQuarterCustomTargets["ALL"]
+        if (!allMap.isNullOrEmpty()) {
+          allMap
+        } else {
+          val sumMap = mutableMapOf<String, Int>()
+          listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+            allQuarterCustomTargets[q]?.forEach { (crit, v) ->
+              sumMap[crit] = (sumMap[crit] ?: 0) + v
+            }
+          }
+          if (sumMap.isNotEmpty()) sumMap else customTargets
+        }
+      }
+      else -> customTargets
+    }
+  }
+
   // Only show criteria assigned specifically to this RM (and not universally deleted)
-  val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets) {
+  val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets, allQuarterCustomTargets) {
     val assigned = if (assignedCriteria.isNotEmpty()) {
       assignedCriteria
     } else {
@@ -136,6 +163,9 @@ fun RmDashboardScreen(
       if ((target?.corporateCardTarget ?: 0) > 0) list.add("Corporate Card")
       if ((target?.b2bTarget ?: 0) > 0) list.add("B2B")
       customTargets.forEach { (k, v) -> if (v > 0) list.add(k) }
+      allQuarterCustomTargets.values.forEach { qm ->
+        qm.forEach { (k, v) -> if (v > 0 && !list.contains(k)) list.add(k) }
+      }
       if (list.isEmpty()) listOf("Credit Card", "Corporate Card", "B2B") else list
     }
     assigned.filter { a -> targetCriteria.any { it.equals(a, ignoreCase = true) } }
@@ -493,7 +523,11 @@ fun RmDashboardScreen(
             val norm = it.trim().lowercase()
             !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
           }.forEach { crit ->
-            val annualCustom = (customTargets[crit] ?: 10) * 4
+            val sumQ = ((allQuarterCustomTargets["Q1"]?.get(crit) ?: 0) +
+                        (allQuarterCustomTargets["Q2"]?.get(crit) ?: 0) +
+                        (allQuarterCustomTargets["Q3"]?.get(crit) ?: 0) +
+                        (allQuarterCustomTargets["Q4"]?.get(crit) ?: 0))
+            val annualCustom = if (sumQ > 0) sumQ else (allQuarterCustomTargets["ALL"]?.get(crit) ?: (customTargets[crit] ?: 10) * 4)
             annualSummaryParts.add("$crit $annualCustom")
           }
           val annualSummaryText = if (annualSummaryParts.isNotEmpty()) {
@@ -721,7 +755,7 @@ fun RmDashboardScreen(
                         }
                       }
                       else -> {
-                        val targetVal = customTargets[crit] ?: 10
+                        val targetVal = currentQuarterCustomTargets[crit] ?: 10
                         Surface(
                           shape = RoundedCornerShape(10.dp),
                           color = Color(0xFFFFFBEB),

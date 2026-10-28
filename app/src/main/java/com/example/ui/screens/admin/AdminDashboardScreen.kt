@@ -401,6 +401,7 @@ fun AdminDashboardScreen(
     val row = targetSettingRow!!
     val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
     val customTargets by viewModel.getRmCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
+    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
     val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(row.rmCode).collectAsState(initial = emptyList())
 
     com.example.ui.common.QuarterTargetSettingDialog(
@@ -412,6 +413,7 @@ fun AdminDashboardScreen(
       onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
       onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
       initialCustomTargets = customTargets,
+      allQuarterCustomTargets = allQuarterCustomTargets,
       onDismiss = { targetSettingRow = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
@@ -420,6 +422,9 @@ fun AdminDashboardScreen(
       },
       onSaveCustomTargets = { quarter, customMap ->
         viewModel.saveRmCustomTargets(row.rmCode, customMap, quarter)
+      },
+      onSaveAllQuarterCustomTargets = { quarterlyMap ->
+        viewModel.saveRmCustomTargetsAllQuarters(row.rmCode, quarterlyMap)
       },
       onSaveAssignedCriteria = { assignedList ->
         viewModel.saveRmAssignedCriteria(row.rmCode, assignedList)

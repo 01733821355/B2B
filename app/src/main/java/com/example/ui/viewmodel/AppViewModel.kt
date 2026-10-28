@@ -1201,6 +1201,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun getRmAllQuarterCustomTargetsFlow(rmCode: String): Flow<Map<String, Map<String, Int>>> =
+    eblRepository.getRmAllQuarterCustomTargetsFlow(rmCode)
+
+  fun saveRmCustomTargetsAllQuarters(rmCode: String, quarterlyTargets: Map<String, Map<String, Int>>) {
+    viewModelScope.launch {
+      eblRepository.saveRmCustomTargetsAllQuarters(rmCode, quarterlyTargets)
+    }
+  }
+
   fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> =
     eblRepository.getRmAssignedCriteriaFlow(rmCode)
 

@@ -351,6 +351,7 @@ fun EblMainApp(viewModel: AppViewModel) {
             val rmTarget = allTargets.find { it.rmCode == user.rmCode }
             val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
             val customTargets by viewModel.getRmCustomTargetsFlow(user.rmCode).collectAsState(initial = emptyMap())
+            val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(user.rmCode).collectAsState(initial = emptyMap())
             val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(user.rmCode).collectAsState(initial = emptyList())
 
             RmDashboardScreen(
@@ -360,6 +361,7 @@ fun EblMainApp(viewModel: AppViewModel) {
               targetCriteria = targetCriteria,
               assignedCriteria = assignedCriteria,
               customTargets = customTargets,
+              allQuarterCustomTargets = allQuarterCustomTargets,
               selectedTimeFilter = timeFilter,
               recentFiles = files,
               unreadSmsCount = unreadSmsCount,

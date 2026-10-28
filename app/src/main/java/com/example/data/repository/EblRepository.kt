@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -2868,21 +2869,98 @@ class EblRepository(
     val cleanRm = rmCode.trim().uppercase()
     val normQuarter = quarter?.trim()?.uppercase()
     val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
-    val targetKey = if (normQuarter.isNullOrBlank() || normQuarter == "ALL") baseKey else "${baseKey}_$normQuarter"
+    val allQuartersKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm"
 
-    return database.appSettingDao().getSettingFlow(targetKey).map { setting ->
-      val raw = setting?.settingValue
-      if (raw.isNullOrBlank()) {
-        if (targetKey != baseKey) {
-          val fallbackRaw = database.appSettingDao().getSetting(baseKey)?.settingValue
-          if (!fallbackRaw.isNullOrBlank()) {
-            return@map parseTargetsJsonMap(fallbackRaw)
+    return combine(
+      database.appSettingDao().getSettingFlow(allQuartersKey),
+      database.appSettingDao().getSettingFlow(if (normQuarter.isNullOrBlank() || normQuarter == "ALL") baseKey else "${baseKey}_$normQuarter")
+    ) { allSetting: AppSettingEntity?, specificSetting: AppSettingEntity? ->
+      if (!normQuarter.isNullOrBlank() && normQuarter != "ALL" && !allSetting?.settingValue.isNullOrBlank()) {
+        try {
+          val obj = org.json.JSONObject(allSetting!!.settingValue)
+          val qObj = obj.optJSONObject(normQuarter)
+          if (qObj != null) {
+            val map = mutableMapOf<String, Int>()
+            val keys = qObj.keys()
+            while (keys.hasNext()) {
+              val k = keys.next()
+              map[k] = qObj.optInt(k, 0)
+            }
+            return@combine map
           }
-        }
-        emptyMap()
-      } else {
-        parseTargetsJsonMap(raw)
+        } catch (_: Exception) {}
       }
+
+      val raw = specificSetting?.settingValue
+      if (!raw.isNullOrBlank()) {
+        parseTargetsJsonMap(raw)
+      } else {
+        emptyMap()
+      }
+    }
+  }
+
+  fun getRmAllQuarterCustomTargetsFlow(rmCode: String): Flow<Map<String, Map<String, Int>>> {
+    val cleanRm = rmCode.trim().uppercase()
+    val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+    val allQuartersKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm"
+
+    return combine(
+      listOf(
+        database.appSettingDao().getSettingFlow(allQuartersKey),
+        database.appSettingDao().getSettingFlow("${baseKey}_Q1"),
+        database.appSettingDao().getSettingFlow("${baseKey}_Q2"),
+        database.appSettingDao().getSettingFlow("${baseKey}_Q3"),
+        database.appSettingDao().getSettingFlow("${baseKey}_Q4"),
+        database.appSettingDao().getSettingFlow(baseKey)
+      )
+    ) { array: Array<AppSettingEntity?> ->
+      val allSetting = array[0]
+      val q1Setting = array[1]
+      val q2Setting = array[2]
+      val q3Setting = array[3]
+      val q4Setting = array[4]
+      val baseSetting = array[5]
+
+      val res = mutableMapOf<String, MutableMap<String, Int>>()
+      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q -> res[q] = mutableMapOf() }
+
+      val allRaw = allSetting?.settingValue
+      if (!allRaw.isNullOrBlank()) {
+        try {
+          val obj = org.json.JSONObject(allRaw)
+          val keys = obj.keys()
+          while (keys.hasNext()) {
+            val qKey = keys.next().uppercase()
+            val innerObj = obj.optJSONObject(qKey)
+            if (innerObj != null) {
+              val map = mutableMapOf<String, Int>()
+              val iKeys = innerObj.keys()
+              while (iKeys.hasNext()) {
+                val k = iKeys.next()
+                map[k] = innerObj.optInt(k, 0)
+              }
+              res[qKey] = map
+            }
+          }
+        } catch (_: Exception) {}
+      }
+
+      val baseMap = parseTargetsJsonMap(baseSetting?.settingValue ?: "")
+      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+        if (res[q].isNullOrEmpty()) {
+          val specificRaw = when (q) {
+            "Q1" -> q1Setting?.settingValue
+            "Q2" -> q2Setting?.settingValue
+            "Q3" -> q3Setting?.settingValue
+            "Q4" -> q4Setting?.settingValue
+            else -> baseSetting?.settingValue
+          }
+          val map = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else baseMap
+          res[q] = map.toMutableMap()
+        }
+      }
+      res.mapValues { it.value.toMap() }
     }
   }
 
@@ -2908,6 +2986,7 @@ class EblRepository(
     val cleanRm = rmCode.trim().uppercase()
     val normQuarter = quarter?.trim()?.uppercase()
     val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+    val allQuartersKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm"
     val targetKey = if (normQuarter.isNullOrBlank() || normQuarter == "ALL") baseKey else "${baseKey}_$normQuarter"
 
     database.appSettingDao().insertOrUpdateSetting(
@@ -2920,20 +2999,64 @@ class EblRepository(
     )
     applicationScope.launch { syncSettingUpsertToGoogleSheets(targetKey, json) }
 
-    if (normQuarter.isNullOrBlank() || normQuarter == "ALL") {
-      listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
-        val qKey = "${baseKey}_$q"
-        database.appSettingDao().insertOrUpdateSetting(
-          AppSettingEntity(
-            settingKey = qKey,
-            settingValue = json,
-            updatedBy = currentUser?.rmCode ?: "ADMIN",
-            updatedAt = now
-          )
-        )
-        applicationScope.launch { syncSettingUpsertToGoogleSheets(qKey, json) }
-      }
+    // Update allQuarters JSON structure
+    val existingAllSetting = database.appSettingDao().getSetting(allQuartersKey)
+    val rootObj = try {
+      if (!existingAllSetting?.settingValue.isNullOrBlank()) org.json.JSONObject(existingAllSetting!!.settingValue)
+      else org.json.JSONObject()
+    } catch (_: Exception) {
+      org.json.JSONObject()
     }
+    val activeQ = if (normQuarter.isNullOrBlank()) "ALL" else normQuarter
+    rootObj.put(activeQ, org.json.JSONObject(targets))
+    val updatedAllJson = rootObj.toString()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = allQuartersKey,
+        settingValue = updatedAllJson,
+        updatedBy = currentUser?.rmCode ?: "ADMIN",
+        updatedAt = now
+      )
+    )
+    applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, updatedAllJson) }
+  }
+
+  suspend fun saveRmCustomTargetsAllQuarters(
+    rmCode: String,
+    quarterlyTargets: Map<String, Map<String, Int>>
+  ) = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val cleanRm = rmCode.trim().uppercase()
+    val now = DateUtils.currentDhakaMillis()
+    val allQuartersKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm"
+    val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+
+    val rootObj = org.json.JSONObject()
+    quarterlyTargets.forEach { (q, map) ->
+      rootObj.put(q.uppercase(), org.json.JSONObject(map))
+      val qKey = if (q.equals("ALL", true)) baseKey else "${baseKey}_${q.uppercase()}"
+      val qJson = org.json.JSONObject(map).toString()
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity(
+          settingKey = qKey,
+          settingValue = qJson,
+          updatedBy = currentUser?.rmCode ?: "ADMIN",
+          updatedAt = now
+        )
+      )
+      applicationScope.launch { syncSettingUpsertToGoogleSheets(qKey, qJson) }
+    }
+
+    val fullJson = rootObj.toString()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = allQuartersKey,
+        settingValue = fullJson,
+        updatedBy = currentUser?.rmCode ?: "ADMIN",
+        updatedAt = now
+      )
+    )
+    applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson) }
   }
 
   fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> {

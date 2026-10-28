@@ -68,9 +68,11 @@ fun QuarterTargetSettingDialog(
   onAddCriteria: ((String) -> Unit)? = null,
   onDeleteCriteria: ((String) -> Unit)? = null,
   initialCustomTargets: Map<String, Int> = emptyMap(),
+  allQuarterCustomTargets: Map<String, Map<String, Int>> = emptyMap(),
   onDismiss: () -> Unit,
   onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
   onSaveCustomTargets: ((quarter: String, targets: Map<String, Int>) -> Unit)? = null,
+  onSaveAllQuarterCustomTargets: ((targets: Map<String, Map<String, Int>>) -> Unit)? = null,
   onSaveAssignedCriteria: ((List<String>) -> Unit)? = null
 ) {
   var selectedQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
@@ -86,19 +88,39 @@ fun QuarterTargetSettingDialog(
     mutableStateOf(initialSet)
   }
 
-  // Load existing targets for selected quarter
-  val existingQTargets = currentTarget?.getTargetForQuarter(selectedQuarter) ?: Triple(20, 10, 15)
+  // Quarterly isolated inputs state: Quarter -> (Criterion -> TargetNumberString)
+  val targetsByQuarterState = remember(allQuarterCustomTargets, currentTarget, initialCustomTargets) {
+    val qMap = mutableMapOf<String, MutableMap<String, String>>()
+    listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+      val inner = mutableMapOf<String, String>()
+      val qT = currentTarget?.getTargetForQuarter(q) ?: Triple(20, 10, 15)
+      inner["Credit Card"] = if (qT.first > 0) qT.first.toString() else "20"
+      inner["Corporate Card"] = if (qT.second > 0) qT.second.toString() else "10"
+      inner["B2B"] = if (qT.third > 0) qT.third.toString() else "15"
 
-  // Target inputs mapped by criteria name with fully reactive Compose State
-  var targetInputs by remember(selectedQuarter, currentTarget, initialCustomTargets) {
-    val initialMap = mutableMapOf<String, String>()
-    initialMap["Credit Card"] = if (existingQTargets.first > 0) existingQTargets.first.toString() else "20"
-    initialMap["Corporate Card"] = if (existingQTargets.second > 0) existingQTargets.second.toString() else "10"
-    initialMap["B2B"] = if (existingQTargets.third > 0) existingQTargets.third.toString() else "15"
-    initialCustomTargets.forEach { (k, v) ->
-      initialMap[k] = if (v > 0) v.toString() else "10"
+      // Load specific custom targets for this quarter
+      val qSpecificCustom = allQuarterCustomTargets[q]
+      if (qSpecificCustom != null && qSpecificCustom.isNotEmpty()) {
+        qSpecificCustom.forEach { (crit, v) ->
+          inner[crit] = if (v > 0) v.toString() else "10"
+        }
+      } else {
+        // Fallback to ALL or initial
+        val fallbackCustom = allQuarterCustomTargets["ALL"] ?: initialCustomTargets
+        fallbackCustom.forEach { (crit, v) ->
+          inner[crit] = if (v > 0) v.toString() else "10"
+        }
+      }
+
+      // Ensure any criterion in allCriteria has an entry
+      allCriteria.forEach { crit ->
+        if (!inner.containsKey(crit)) {
+          inner[crit] = "10"
+        }
+      }
+      qMap[q] = inner
     }
-    mutableStateOf(initialMap.toMap())
+    mutableStateOf(qMap)
   }
 
   var showAddCriteriaRow by remember { mutableStateOf(false) }
@@ -205,7 +227,7 @@ fun QuarterTargetSettingDialog(
               shape = RoundedCornerShape(4.dp),
               color = Color(0xFFDCFCE7)
             ) {
-              Text(if (selectedQuarter == "ALL") "Annual" else "Quarter", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
+              Text(if (selectedQuarter == "ALL") "Annual" else selectedQuarter, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp))
             }
           }
         }
@@ -213,13 +235,13 @@ fun QuarterTargetSettingDialog(
         Spacer(modifier = Modifier.height(12.dp))
 
         Text(
-          text = "টার্গেট ক্রাইটেরিয়া নির্বাচন ও মান নির্ধারণ (Assign Criteria & Numbers):",
+          text = "টার্গেট ক্রাইটেরিয়া ও $selectedQuarter লক্ষ্যমাত্রা:",
           fontSize = 12.sp,
           fontWeight = FontWeight.Bold,
           color = EblNavyDark
         )
         Text(
-          text = "যে যে ক্রাইটেরিয়া টিক দেওয়া হবে, শুধুমাত্র সেইগুলিই এই RM-এর অ্যাপে দেখা যাবে।",
+          text = "প্রতিটি কোয়ার্টারের (Q1, Q2, Q3, Q4) লক্ষ্যমাত্রা সম্পূর্ণ আলাদাভাবে সেট হবে।",
           fontSize = 10.sp,
           color = Color(0xFF64748B)
         )
@@ -238,6 +260,8 @@ fun QuarterTargetSettingDialog(
             norm.contains("b2b") -> Quad(Icons.Default.Handshake, Color(0xFF7E22CE), Color(0xFFFAF5FF), Color(0xFFE9D5FF))
             else -> Quad(Icons.Default.Stars, Color(0xFFD97706), Color(0xFFFFFBEB), Color(0xFFFDE68A))
           }
+
+          val currentVal = targetsByQuarterState.value[selectedQuarter]?.get(crit) ?: ""
 
           Surface(
             shape = RoundedCornerShape(8.dp),
@@ -263,15 +287,19 @@ fun QuarterTargetSettingDialog(
                       val updatedSet = selectedAssignedCriteria.toMutableSet()
                       if (checked) {
                         updatedSet.add(crit)
-                        if (targetInputs[crit].isNullOrBlank()) {
-                          val m = targetInputs.toMutableMap()
-                          m[crit] = when {
-                            norm.contains("credit") -> "20"
-                            norm.contains("corp") -> "10"
-                            norm.contains("b2b") -> "15"
-                            else -> "10"
+                        listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+                          val qMap = targetsByQuarterState.value.toMutableMap()
+                          val inner = (qMap[q] ?: mutableMapOf()).toMutableMap()
+                          if (inner[crit].isNullOrBlank() || inner[crit] == "0") {
+                            inner[crit] = when {
+                              norm.contains("credit") -> "20"
+                              norm.contains("corp") -> "10"
+                              norm.contains("b2b") -> "15"
+                              else -> "10"
+                            }
                           }
-                          targetInputs = m
+                          qMap[q] = inner
+                          targetsByQuarterState.value = qMap
                         }
                       } else {
                         updatedSet.removeIf { it.equals(crit, ignoreCase = true) }
@@ -310,15 +338,17 @@ fun QuarterTargetSettingDialog(
               if (isAssigned) {
                 Spacer(modifier = Modifier.height(4.dp))
                 OutlinedTextField(
-                  value = targetInputs[crit] ?: "",
+                  value = currentVal,
                   onValueChange = { newVal ->
                     val digits = newVal.filter { ch -> ch.isDigit() }
-                    val updated = targetInputs.toMutableMap()
-                    updated[crit] = digits
-                    targetInputs = updated
+                    val qMap = targetsByQuarterState.value.toMutableMap()
+                    val inner = (qMap[selectedQuarter] ?: mutableMapOf()).toMutableMap()
+                    inner[crit] = digits
+                    qMap[selectedQuarter] = inner
+                    targetsByQuarterState.value = qMap
                   },
                   label = { Text("$crit Target ($periodLabel)", fontSize = 11.sp) },
-                  placeholder = { Text("লক্ষ্যমাত্রা সংখ্যা দিন (e.g. 20)") },
+                  placeholder = { Text("লক্ষ্যমাত্রা দিন (e.g. 10)") },
                   keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                   modifier = Modifier
                     .fillMaxWidth()
@@ -370,11 +400,14 @@ fun QuarterTargetSettingDialog(
                       updatedSet.add(clean)
                       selectedAssignedCriteria = updatedSet
 
-                      val updatedInputs = targetInputs.toMutableMap()
-                      if (!updatedInputs.containsKey(clean)) {
-                        updatedInputs[clean] = "10"
+                      // Populate new criterion in each quarter state
+                      val qMap = targetsByQuarterState.value.toMutableMap()
+                      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+                        val inner = (qMap[q] ?: mutableMapOf()).toMutableMap()
+                        if (!inner.containsKey(clean)) inner[clean] = "10"
+                        qMap[q] = inner
                       }
-                      targetInputs = updatedInputs
+                      targetsByQuarterState.value = qMap
 
                       newCriteriaNameInput = ""
                       showAddCriteriaRow = false
@@ -419,26 +452,36 @@ fun QuarterTargetSettingDialog(
           val isCorpAssigned = selectedAssignedCriteria.any { it.equals("Corporate Card", ignoreCase = true) }
           val isB2bAssigned = selectedAssignedCriteria.any { it.equals("B2B", ignoreCase = true) }
 
-          val cc = if (isCcAssigned) (targetInputs["Credit Card"]?.toIntOrNull() ?: 20) else 0
-          val corp = if (isCorpAssigned) (targetInputs["Corporate Card"]?.toIntOrNull() ?: 10) else 0
-          val b2b = if (isB2bAssigned) (targetInputs["B2B"]?.toIntOrNull() ?: 15) else 0
+          val currentInner = targetsByQuarterState.value[selectedQuarter] ?: emptyMap()
+          val cc = if (isCcAssigned) (currentInner["Credit Card"]?.toIntOrNull() ?: 20) else 0
+          val corp = if (isCorpAssigned) (currentInner["Corporate Card"]?.toIntOrNull() ?: 10) else 0
+          val b2b = if (isB2bAssigned) (currentInner["B2B"]?.toIntOrNull() ?: 15) else 0
 
           onSave(selectedQuarter, selectedYear, cc, corp, b2b)
 
-          // Custom criteria targets
-          val customMap = mutableMapOf<String, Int>()
-          allCriteria.filter {
+          // Build all-quarter custom targets map
+          val allQuartersResult = mutableMapOf<String, Map<String, Int>>()
+          val customCriteriaList = allCriteria.filter {
             val norm = it.trim().lowercase()
             !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
-          }.forEach { crit ->
-            if (selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }) {
-              val num = targetInputs[crit]?.toIntOrNull() ?: 10
-              customMap[crit] = num
-            }
           }
-          onSaveCustomTargets?.invoke(selectedQuarter, customMap)
 
-          // Save exact list of assigned criteria
+          listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+            val innerMap = mutableMapOf<String, Int>()
+            val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
+            customCriteriaList.forEach { crit ->
+              if (selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }) {
+                val num = qInputs[crit]?.toIntOrNull() ?: 10
+                innerMap[crit] = num
+              }
+            }
+            allQuartersResult[q] = innerMap
+          }
+
+          onSaveAllQuarterCustomTargets?.invoke(allQuartersResult)
+          onSaveCustomTargets?.invoke(selectedQuarter, allQuartersResult[selectedQuarter] ?: emptyMap())
+
+          // Save assigned criteria list
           val assignedList = allCriteria.filter { crit ->
             selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
           }
