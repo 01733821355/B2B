@@ -49,6 +49,7 @@ fun VoiceInputField(
   testTag: String = ""
 ) {
   val context = LocalContext.current
+  val deduplicator = androidx.compose.runtime.remember { com.example.util.InputDeduplicator() }
 
   val speechLauncher = rememberLauncherForActivityResult(
     ActivityResultContracts.StartActivityForResult()
@@ -64,7 +65,10 @@ fun VoiceInputField(
 
   OutlinedTextField(
     value = value,
-    onValueChange = onValueChange,
+    onValueChange = { raw ->
+      val clean = deduplicator.filter(value, raw)
+      onValueChange(clean)
+    },
     label = { Text(label, fontSize = 12.sp) },
     placeholder = if (placeholder.isNotBlank()) { { Text(placeholder, fontSize = 12.sp) } } else null,
     leadingIcon = leadingIcon,

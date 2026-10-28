@@ -478,13 +478,103 @@ private fun ActiveRoutePlanView(
     return
   }
 
-  LazyColumn(
-    modifier = Modifier
-      .fillMaxSize()
-      .padding(horizontal = 14.dp),
-    verticalArrangement = Arrangement.spacedBy(10.dp),
-    contentPadding = PaddingValues(vertical = 12.dp)
-  ) {
+  var activeViewTab by remember { mutableStateOf("MAP") } // "MAP" or "LIST"
+
+  Column(modifier = Modifier.fillMaxSize()) {
+    // Mode Switcher: 🗺️ রুট ম্যাপ ভিউ (Map) vs 📋 স্টপ তালিকা (Stop List)
+    Surface(
+      color = Color.White,
+      shadowElevation = 2.dp,
+      modifier = Modifier.fillMaxWidth()
+    ) {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (activeViewTab == "MAP") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
+          border = BorderStroke(1.dp, if (activeViewTab == "MAP") Color(0xFF1D4ED8) else Color(0xFFCBD5E1)),
+          modifier = Modifier
+            .weight(1f)
+            .clickable { activeViewTab = "MAP" }
+            .testTag("tab_route_map_view")
+        ) {
+          Row(
+            modifier = Modifier.padding(vertical = 7.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              Icons.Default.Map,
+              contentDescription = null,
+              tint = if (activeViewTab == "MAP") Color.White else Color(0xFF475569),
+              modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "🗺️ রুট ম্যাপ ভিউ (Map)",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = if (activeViewTab == "MAP") Color.White else Color(0xFF475569)
+            )
+          }
+        }
+
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (activeViewTab == "LIST") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
+          border = BorderStroke(1.dp, if (activeViewTab == "LIST") Color(0xFF1D4ED8) else Color(0xFFCBD5E1)),
+          modifier = Modifier
+            .weight(1f)
+            .clickable { activeViewTab = "LIST" }
+            .testTag("tab_route_list_view")
+        ) {
+          Row(
+            modifier = Modifier.padding(vertical = 7.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              Icons.Default.Navigation,
+              contentDescription = null,
+              tint = if (activeViewTab == "LIST") Color.White else Color(0xFF475569),
+              modifier = Modifier.size(15.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "📋 স্টপ তালিকা (${customers.size})",
+              fontSize = 12.sp,
+              fontWeight = FontWeight.Bold,
+              color = if (activeViewTab == "LIST") Color.White else Color(0xFF475569)
+            )
+          }
+        }
+      }
+    }
+
+    if (activeViewTab == "MAP") {
+      FieldRouteInteractiveMapView(
+        customers = customers,
+        completedCount = completedCount,
+        totalInitialCount = totalInitialCount,
+        onOpenGoogleMaps = onOpenGoogleMapsFullRoute,
+        onCompleteCustomer = onCompleteCustomer,
+        onCallCustomer = onCallCustomer,
+        onWhatsAppCustomer = onWhatsAppCustomer,
+        onOpenSingleLocationMap = onOpenSingleLocationMap,
+        modifier = Modifier.weight(1f)
+      )
+    } else {
+      LazyColumn(
+        modifier = Modifier
+          .weight(1f)
+          .padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(vertical = 12.dp)
+      ) {
     // Progress & Summary Banner
     item {
       Card(
@@ -609,6 +699,8 @@ private fun ActiveRoutePlanView(
       )
     }
   }
+}
+}
 }
 
 @Composable

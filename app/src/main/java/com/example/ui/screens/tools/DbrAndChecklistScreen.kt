@@ -61,6 +61,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import kotlinx.coroutines.launch
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -147,7 +149,9 @@ data class ExistingLoanEntry(
 data class ChecklistItem(
   val id: Int,
   val title: String,
-  val isChecked: Boolean = true
+  val isChecked: Boolean = true,
+  val englishTitle: String = title,
+  val banglaTitle: String = ""
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1232,6 +1236,7 @@ fun DocumentChecklistSenderTab(
 ) {
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
+  var isTranslatingWithAi by remember { mutableStateOf(false) }
 
   var customerName by remember { mutableStateOf("") }
   var customerMobile by remember { mutableStateOf("") }
@@ -1660,6 +1665,16 @@ fun DocumentChecklistSenderTab(
     sb.appendLine(resolvedHeader)
     sb.appendLine()
 
+    fun resolveDocText(item: ChecklistItem): String {
+      val eng = if (item.englishTitle.isNotBlank()) item.englishTitle else item.title
+      val bng = if (item.banglaTitle.isNotBlank()) item.banglaTitle else com.example.util.ChecklistTranslator.translateDocumentTitle(eng, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+      return when (checklistLanguage) {
+        com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> eng
+        com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> bng
+        com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> if (bng.equals(eng, ignoreCase = true)) eng else "$bng ($eng)"
+      }
+    }
+
     if (selectedPreset == "Corporate Card") {
       val checkedCompany = corporateCompanyItems.filter { it.isChecked }
       val checkedEmp = corporateEmployeeItems.filter { it.isChecked }
@@ -1669,7 +1684,7 @@ fun DocumentChecklistSenderTab(
         sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো কোম্পানি ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No company documents selected)")
       } else {
         checkedCompany.forEachIndexed { idx, item ->
-          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          val docTitle = resolveDocText(item)
           sb.appendLine("${idx + 1}. $docTitle")
         }
       }
@@ -1679,7 +1694,7 @@ fun DocumentChecklistSenderTab(
         sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো কর্মকর্তা/কর্মচারী ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No employee documents selected)")
       } else {
         checkedEmp.forEachIndexed { idx, item ->
-          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          val docTitle = resolveDocText(item)
           sb.appendLine("${idx + 1}. $docTitle")
         }
       }
@@ -1689,7 +1704,7 @@ fun DocumentChecklistSenderTab(
         sb.appendLine(if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA) "• (কোনো ডকুমেন্ট নির্বাচন করা হয়নি)" else "• (No documents selected)")
       } else {
         checkedList.forEachIndexed { idx, item ->
-          val docTitle = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, checklistLanguage)
+          val docTitle = resolveDocText(item)
           sb.appendLine("${idx + 1}. $docTitle")
         }
       }
@@ -2500,43 +2515,79 @@ fun DocumentChecklistSenderTab(
                   )
                 }
 
-                // AI Auto Bangla Button
+                // Gemini AI Live Bangla Button
                 Surface(
                   shape = RoundedCornerShape(6.dp),
-                  color = Color(0xFFECFDF5),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF10B981)),
+                  color = if (isTranslatingWithAi) Color(0xFFFEF3C7) else Color(0xFFECFDF5),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, if (isTranslatingWithAi) Color(0xFFF59E0B) else Color(0xFF10B981)),
                   modifier = Modifier
                     .testTag("btn_ai_auto_translate_bangla")
-                    .clickable {
-                      checklistLanguage = com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA
-                      singleChecklistItems.indices.forEach { idx ->
-                        singleChecklistItems[idx] = singleChecklistItems[idx].copy(
-                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(singleChecklistItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                        )
+                    .clickable(enabled = !isTranslatingWithAi) {
+                      coroutineScope.launch {
+                        isTranslatingWithAi = true
+                        try {
+                          if (selectedPreset == "Corporate Card") {
+                            val compEnglishList = corporateCompanyItems.map { if (it.englishTitle.isNotBlank()) it.englishTitle else it.title }
+                            val empEnglishList = corporateEmployeeItems.map { if (it.englishTitle.isNotBlank()) it.englishTitle else it.title }
+                            val compTranslations = com.example.util.GeminiTranslator.translateChecklistItemsToBangla(compEnglishList)
+                            val empTranslations = com.example.util.GeminiTranslator.translateChecklistItemsToBangla(empEnglishList)
+
+                            corporateCompanyItems.indices.forEach { idx ->
+                              val eng = compEnglishList[idx]
+                              val bng = compTranslations[eng] ?: com.example.util.ChecklistTranslator.translateDocumentTitle(eng, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                              corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(englishTitle = eng, banglaTitle = bng)
+                            }
+                            corporateEmployeeItems.indices.forEach { idx ->
+                              val eng = empEnglishList[idx]
+                              val bng = empTranslations[eng] ?: com.example.util.ChecklistTranslator.translateDocumentTitle(eng, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                              corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(englishTitle = eng, banglaTitle = bng)
+                            }
+                          } else {
+                            val englishList = singleChecklistItems.map { if (it.englishTitle.isNotBlank()) it.englishTitle else it.title }
+                            val translations = com.example.util.GeminiTranslator.translateChecklistItemsToBangla(englishList)
+
+                            singleChecklistItems.indices.forEach { idx ->
+                              val eng = englishList[idx]
+                              val bng = translations[eng] ?: com.example.util.ChecklistTranslator.translateDocumentTitle(eng, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+                              singleChecklistItems[idx] = singleChecklistItems[idx].copy(englishTitle = eng, banglaTitle = bng)
+                            }
+                          }
+                          checklistLanguage = com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA
+                          Toast.makeText(context, "✨ Gemini AI Live: চেকলিস্ট নিখুঁত বাংলায় রূপান্তর হয়েছে!", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                          checklistLanguage = com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA
+                          Toast.makeText(context, "চেকলিস্ট বাংলায় রূপান্তর করা হয়েছে", Toast.LENGTH_SHORT).show()
+                        } finally {
+                          isTranslatingWithAi = false
+                        }
                       }
-                      corporateCompanyItems.indices.forEach { idx ->
-                        corporateCompanyItems[idx] = corporateCompanyItems[idx].copy(
-                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(corporateCompanyItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                        )
-                      }
-                      corporateEmployeeItems.indices.forEach { idx ->
-                        corporateEmployeeItems[idx] = corporateEmployeeItems[idx].copy(
-                          title = com.example.util.ChecklistTranslator.translateDocumentTitle(corporateEmployeeItems[idx].title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                        )
-                      }
-                      Toast.makeText(context, "🤖 AI Auto: চেকলিস্ট স্বয়ংক্রিয়ভাবে বাংলায় রূপান্তর করা হয়েছে!", Toast.LENGTH_SHORT).show()
                     }
                 ) {
                   Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                   ) {
-                    Text(
-                      text = "🤖 AI Auto বাংলা",
-                      fontSize = 10.5.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = Color(0xFF047857)
-                    )
+                    if (isTranslatingWithAi) {
+                      CircularProgressIndicator(
+                        modifier = Modifier.size(12.dp),
+                        strokeWidth = 2.dp,
+                        color = Color(0xFFD97706)
+                      )
+                      Spacer(modifier = Modifier.width(6.dp))
+                      Text(
+                        text = "অনুবাদ হচ্ছে...",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFFB45309)
+                      )
+                    } else {
+                      Text(
+                        text = "✨ Gemini AI Live বাংলা",
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF047857)
+                      )
+                    }
                   }
                 }
               }
@@ -2729,19 +2780,37 @@ fun DocumentChecklistSenderTab(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                  val engTitle = if (item.englishTitle.isNotBlank()) item.englishTitle else item.title
+                  val bngTitle = if (item.banglaTitle.isNotBlank()) item.banglaTitle else com.example.util.ChecklistTranslator.translateDocumentTitle(engTitle, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+
+                  val displayTitle = when (checklistLanguage) {
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> engTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> bngTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> bngTitle
+                  }
+
                   Text(
-                    text = item.title,
+                    text = displayTitle,
                     fontSize = 12.sp,
                     color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
                     fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
                   )
-                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
-                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+
+                  if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    if (!bngTitle.equals(engTitle, ignoreCase = true)) {
                       Text(
-                        text = "বাংলা: $banglaSub",
+                        text = "🇧🇩 বাংলা: $bngTitle",
                         fontSize = 10.5.sp,
                         color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  } else {
+                    if (!engTitle.equals(bngTitle, ignoreCase = true)) {
+                      Text(
+                        text = "🇬🇧 English: $engTitle",
+                        fontSize = 10.sp,
+                        color = Color(0xFF64748B),
                         fontWeight = FontWeight.Normal
                       )
                     }
@@ -2881,19 +2950,37 @@ fun DocumentChecklistSenderTab(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                  val engTitle = if (item.englishTitle.isNotBlank()) item.englishTitle else item.title
+                  val bngTitle = if (item.banglaTitle.isNotBlank()) item.banglaTitle else com.example.util.ChecklistTranslator.translateDocumentTitle(engTitle, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+
+                  val displayTitle = when (checklistLanguage) {
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> engTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> bngTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> bngTitle
+                  }
+
                   Text(
-                    text = item.title,
+                    text = displayTitle,
                     fontSize = 12.sp,
                     color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
                     fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
                   )
-                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
-                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+
+                  if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    if (!bngTitle.equals(engTitle, ignoreCase = true)) {
                       Text(
-                        text = "বাংলা: $banglaSub",
+                        text = "🇧🇩 বাংলা: $bngTitle",
                         fontSize = 10.5.sp,
                         color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  } else {
+                    if (!engTitle.equals(bngTitle, ignoreCase = true)) {
+                      Text(
+                        text = "🇬🇧 English: $engTitle",
+                        fontSize = 10.sp,
+                        color = Color(0xFF64748B),
                         fontWeight = FontWeight.Normal
                       )
                     }
@@ -3040,19 +3127,37 @@ fun DocumentChecklistSenderTab(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f)) {
+                  val engTitle = if (item.englishTitle.isNotBlank()) item.englishTitle else item.title
+                  val bngTitle = if (item.banglaTitle.isNotBlank()) item.banglaTitle else com.example.util.ChecklistTranslator.translateDocumentTitle(engTitle, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
+
+                  val displayTitle = when (checklistLanguage) {
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH -> engTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA -> bngTitle
+                    com.example.util.ChecklistTranslator.ChecklistLanguage.BILINGUAL -> bngTitle
+                  }
+
                   Text(
-                    text = item.title,
+                    text = displayTitle,
                     fontSize = 12.sp,
                     color = if (item.isChecked) Color(0xFF1E293B) else Color.Gray,
                     fontWeight = if (item.isChecked) FontWeight.Medium else FontWeight.Normal
                   )
-                  if (checklistLanguage != com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
-                    val banglaSub = com.example.util.ChecklistTranslator.translateDocumentTitle(item.title, com.example.util.ChecklistTranslator.ChecklistLanguage.BANGLA)
-                    if (!banglaSub.equals(item.title, ignoreCase = true)) {
+
+                  if (checklistLanguage == com.example.util.ChecklistTranslator.ChecklistLanguage.ENGLISH) {
+                    if (!bngTitle.equals(engTitle, ignoreCase = true)) {
                       Text(
-                        text = "বাংলা: $banglaSub",
+                        text = "🇧🇩 বাংলা: $bngTitle",
                         fontSize = 10.5.sp,
                         color = Color(0xFF047857),
+                        fontWeight = FontWeight.Normal
+                      )
+                    }
+                  } else {
+                    if (!engTitle.equals(bngTitle, ignoreCase = true)) {
+                      Text(
+                        text = "🇬🇧 English: $engTitle",
+                        fontSize = 10.sp,
+                        color = Color(0xFF64748B),
                         fontWeight = FontWeight.Normal
                       )
                     }

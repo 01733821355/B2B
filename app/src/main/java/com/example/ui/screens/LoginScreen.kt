@@ -101,6 +101,9 @@ fun LoginScreen(
   var isLoading by remember { mutableStateOf(false) }
   var errorMessage by remember { mutableStateOf<String?>(null) }
 
+  val usernameDeduplicator = remember { com.example.util.InputDeduplicator() }
+  val passwordDeduplicator = remember { com.example.util.InputDeduplicator() }
+
   LaunchedEffect(lastLoggedRmCode) {
     val lastPw = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
     val bestDefault = lastPw.ifBlank { lastLoggedRmCode }
@@ -143,14 +146,16 @@ fun LoginScreen(
     }
   }
 
-  fun doBiometricLogin() {
+  fun doBiometricLogin(isUserExplicitClick: Boolean = false) {
     val currentTyped = usernameInput.trim().uppercase()
     val lastVerified = lastLoggedRmCode.trim().uppercase()
     val lastPasswordLoggedId = sharedPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
     val targetCode = currentTyped.ifBlank { lastPasswordLoggedId.ifBlank { lastVerified } }
 
     if (targetCode.isBlank()) {
-      errorMessage = "Please enter your RM Code / Username first."
+      if (isUserExplicitClick) {
+        errorMessage = "Please enter your RM Code / Username first."
+      }
       return
     }
 
@@ -162,22 +167,30 @@ fun LoginScreen(
     }.filterIsInstance<FragmentActivity>().firstOrNull()
 
     if (activity == null) {
-      errorMessage = "Biometric prompt requires an active activity."
+      if (isUserExplicitClick) {
+        errorMessage = "Biometric prompt requires an active activity."
+      }
       return
     }
 
     val availability = BiometricHelper.checkBiometricAvailability(context)
     when (availability) {
       BiometricHelper.BiometricAvailability.NO_HARDWARE -> {
-        errorMessage = "Fingerprint sensor is not available on this device."
+        if (isUserExplicitClick) {
+          errorMessage = "Fingerprint sensor is not available on this device."
+        }
         return
       }
       BiometricHelper.BiometricAvailability.NONE_ENROLLED -> {
-        errorMessage = "No fingerprint enrolled. Please enroll a fingerprint in Android Settings."
+        if (isUserExplicitClick) {
+          errorMessage = "No fingerprint enrolled. Please enroll a fingerprint in Android Settings."
+        }
         return
       }
       BiometricHelper.BiometricAvailability.UNAVAILABLE -> {
-        errorMessage = "Fingerprint biometric sensor is currently unavailable."
+        if (isUserExplicitClick) {
+          errorMessage = "Fingerprint biometric sensor is currently unavailable."
+        }
         return
       }
       BiometricHelper.BiometricAvailability.AVAILABLE -> {}
@@ -401,8 +414,9 @@ fun LoginScreen(
           // Voice-Enabled RM Code / Username
           VoiceInputField(
             value = usernameInput,
-            onValueChange = {
-              usernameInput = it
+            onValueChange = { raw ->
+              val clean = usernameDeduplicator.filter(usernameInput, raw)
+              usernameInput = clean
               errorMessage = null
             },
             label = "RM Code / Username",
@@ -425,8 +439,9 @@ fun LoginScreen(
           // Password
           OutlinedTextField(
             value = passwordInput,
-            onValueChange = {
-              passwordInput = it
+            onValueChange = { raw ->
+              val clean = passwordDeduplicator.filter(passwordInput, raw)
+              passwordInput = clean
               errorMessage = null
             },
             label = { Text("Password") },
@@ -515,7 +530,7 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             OutlinedButton(
-              onClick = { doBiometricLogin() },
+              onClick = { doBiometricLogin(isUserExplicitClick = true) },
               enabled = !isLoading,
               shape = RoundedCornerShape(10.dp),
               border = BorderStroke(1.5.dp, EblGold),
