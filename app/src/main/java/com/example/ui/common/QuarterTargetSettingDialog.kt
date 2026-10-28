@@ -461,6 +461,10 @@ fun QuarterTargetSettingDialog(
 
           // Build all-quarter custom targets map
           val allQuartersResult = mutableMapOf<String, Map<String, Int>>()
+          val standardCriteria = setOf("Credit Card", "Corporate Card", "B2B")
+          val customCriteriaList = allCriteria.filter { crit ->
+            standardCriteria.none { it.equals(crit.trim(), ignoreCase = true) }
+          }
 
           listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
             val innerMap = mutableMapOf<String, Int>()
