@@ -783,12 +783,14 @@ fun RmMappingScreen(
 
     val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
     val customTargets by viewModel.getRmCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyMap())
+    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyList())
 
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = settingTargetsRm!!.rmCode,
       rmName = settingTargetsRm!!.name,
       currentTarget = existingTarget,
       allCriteria = targetCriteria,
+      assignedCriteria = assignedCriteria,
       onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
       onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
       initialCustomTargets = customTargets,
@@ -800,6 +802,9 @@ fun RmMappingScreen(
       },
       onSaveCustomTargets = { quarter, customMap ->
         viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap, quarter)
+      },
+      onSaveAssignedCriteria = { assignedList ->
+        viewModel.saveRmAssignedCriteria(settingTargetsRm!!.rmCode, assignedList)
       }
     )
   }

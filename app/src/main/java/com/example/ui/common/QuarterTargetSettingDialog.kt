@@ -18,14 +18,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -34,9 +38,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,41 +64,46 @@ fun QuarterTargetSettingDialog(
   rmName: String,
   currentTarget: RmTargetEntity?,
   allCriteria: List<String> = listOf("Credit Card", "Corporate Card", "B2B"),
+  assignedCriteria: List<String> = allCriteria,
   onAddCriteria: ((String) -> Unit)? = null,
   onDeleteCriteria: ((String) -> Unit)? = null,
   initialCustomTargets: Map<String, Int> = emptyMap(),
   onDismiss: () -> Unit,
   onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
-  onSaveCustomTargets: ((quarter: String, targets: Map<String, Int>) -> Unit)? = null
+  onSaveCustomTargets: ((quarter: String, targets: Map<String, Int>) -> Unit)? = null,
+  onSaveAssignedCriteria: ((List<String>) -> Unit)? = null
 ) {
   var selectedQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
   var selectedYear by remember { mutableStateOf(2026) }
 
+  // Which criteria are currently checked/assigned to this RM
+  var selectedAssignedCriteria by remember(assignedCriteria, allCriteria) {
+    val initialSet = if (assignedCriteria.isNotEmpty()) {
+      assignedCriteria.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }.toSet()
+    } else {
+      allCriteria.toSet()
+    }
+    mutableStateOf(initialSet)
+  }
+
   // Load existing targets for selected quarter
   val existingQTargets = currentTarget?.getTargetForQuarter(selectedQuarter) ?: Triple(20, 10, 15)
 
-  var ccInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.first.toString()) }
-  var corpInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.second.toString()) }
-  var b2bInput by remember(selectedQuarter) { mutableStateOf(existingQTargets.third.toString()) }
-
-  val customTargetsByQuarter = remember {
-    mutableStateMapOf<String, MutableMap<String, String>>().apply {
-      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
-        put(q, mutableMapOf<String, String>().apply {
-          initialCustomTargets.forEach { (k, v) -> put(k, v.toString()) }
-        })
-      }
+  // Target inputs mapped by criteria name with fully reactive Compose State
+  var targetInputs by remember(selectedQuarter, currentTarget, initialCustomTargets) {
+    val initialMap = mutableMapOf<String, String>()
+    initialMap["Credit Card"] = if (existingQTargets.first > 0) existingQTargets.first.toString() else "20"
+    initialMap["Corporate Card"] = if (existingQTargets.second > 0) existingQTargets.second.toString() else "10"
+    initialMap["B2B"] = if (existingQTargets.third > 0) existingQTargets.third.toString() else "15"
+    initialCustomTargets.forEach { (k, v) ->
+      initialMap[k] = if (v > 0) v.toString() else "10"
     }
-  }
-
-  val customTargetInputs = customTargetsByQuarter.getOrPut(selectedQuarter) {
-    mutableMapOf<String, String>().apply {
-      initialCustomTargets.forEach { (k, v) -> put(k, v.toString()) }
-    }
+    mutableStateOf(initialMap.toMap())
   }
 
   var showAddCriteriaRow by remember { mutableStateOf(false) }
   var newCriteriaNameInput by remember { mutableStateOf("") }
+  var criteriaToDelete by remember { mutableStateOf<String?>(null) }
 
   val quarters = listOf(
     Pair("Q1", "Q1 (Jan-Mar)"),
@@ -134,31 +143,10 @@ fun QuarterTargetSettingDialog(
           .fillMaxWidth()
           .verticalScroll(verticalScrollState)
       ) {
-        // Annual Target Summary Banner
-        val annCc = currentTarget?.annualCreditCardTarget ?: 80
-        val annCorp = currentTarget?.annualCorporateCardTarget ?: 40
-        val annB2b = currentTarget?.annualB2bTarget ?: 60
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = Color(0xFFEFF6FF),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-          modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
-        ) {
-          Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text("2026 বার্ষিক মোট লক্ষ্যমাত্রা (Annual Goal):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E3A8A))
-            }
-            Spacer(modifier = Modifier.height(2.dp))
-            Text("CC: $annCc • Corp: $annCorp • B2B: $annB2b", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2563EB))
-          }
-        }
-
-        Text("Select Quarter or Annual to Set Target:", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = EblNavyDark)
-        Spacer(modifier = Modifier.height(8.dp))
-
         // Quarter Selector Pills
+        Text("কোয়ার্টার বা বার্ষিক সময়কাল নির্বাচন করুন:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+        Spacer(modifier = Modifier.height(6.dp))
+
         val scrollState = rememberScrollState()
         Row(
           modifier = Modifier
@@ -189,12 +177,13 @@ fun QuarterTargetSettingDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Year and Period info
+        // Period Info Badge
         Surface(
           shape = RoundedCornerShape(8.dp),
-          color = Color(0xFFF1F5F9),
+          color = Color(0xFFEFF6FF),
+          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
@@ -203,13 +192,13 @@ fun QuarterTargetSettingDialog(
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
+              Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(6.dp))
               Text(
                 text = if (selectedQuarter == "ALL") "All 4 Quarters • Year 2026 (Annual)" else DateUtils.getQuarterDateLabel(selectedQuarter, selectedYear),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = EblNavyDark
+                color = Color(0xFF1E3A8A)
               )
             }
             Surface(
@@ -223,96 +212,132 @@ fun QuarterTargetSettingDialog(
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        Text(
+          text = "টার্গেট ক্রাইটেরিয়া নির্বাচন ও মান নির্ধারণ (Assign Criteria & Numbers):",
+          fontSize = 12.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblNavyDark
+        )
+        Text(
+          text = "যে যে ক্রাইটেরিয়া টিক দেওয়া হবে, শুধুমাত্র সেইগুলিই এই RM-এর অ্যাপে দেখা যাবে।",
+          fontSize = 10.sp,
+          color = Color(0xFF64748B)
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
         val periodLabel = if (selectedQuarter == "ALL") "All Year" else selectedQuarter
 
-        // Credit Card Input
-        OutlinedTextField(
-          value = ccInput,
-          onValueChange = { ccInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("Credit Card STC Target ($periodLabel)") },
-          placeholder = { Text("e.g. 20") },
-          leadingIcon = { Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(18.dp)) },
-          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-          modifier = Modifier.fillMaxWidth().testTag("input_quarter_cc_target"),
-          singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Corporate Card Input
-        OutlinedTextField(
-          value = corpInput,
-          onValueChange = { corpInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("Corporate Card Target ($periodLabel)") },
-          placeholder = { Text("e.g. 10") },
-          leadingIcon = { Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFF1E40AF), modifier = Modifier.size(18.dp)) },
-          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-          modifier = Modifier.fillMaxWidth().testTag("input_quarter_corp_target"),
-          singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // B2B / Loan Input
-        OutlinedTextField(
-          value = b2bInput,
-          onValueChange = { b2bInput = it.filter { ch -> ch.isDigit() } },
-          label = { Text("B2B / Payroll Target ($periodLabel)") },
-          placeholder = { Text("e.g. 15") },
-          leadingIcon = { Icon(Icons.Default.TrendingUp, contentDescription = null, tint = Color(0xFF7C3AED), modifier = Modifier.size(18.dp)) },
-          keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-          modifier = Modifier.fillMaxWidth().testTag("input_quarter_b2b_target"),
-          singleLine = true
-        )
-
-        // Dynamic Custom Criteria List (Added by Admin)
-        val customCriteria = allCriteria.filter { crit ->
+        // Display all available criteria
+        allCriteria.forEach { crit ->
+          val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
           val norm = crit.trim().lowercase()
-          norm != "credit card" && norm != "corporate card" && norm != "b2b"
-        }
 
-        if (customCriteria.isNotEmpty()) {
-          Spacer(modifier = Modifier.height(12.dp))
-          Text("অন্যান্য টার্গেট ক্রাইটেরিয়া (Custom Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-          Spacer(modifier = Modifier.height(6.dp))
+          val (icon, iconColor, containerBg, borderClr) = when {
+            norm.contains("credit") -> Quad(Icons.Default.CreditCard, Color(0xFF15803D), Color(0xFFF0FDF4), Color(0xFFBBF7D0))
+            norm.contains("corp") -> Quad(Icons.Default.Business, Color(0xFF1D4ED8), Color(0xFFEFF6FF), Color(0xFFBFDBFE))
+            norm.contains("b2b") -> Quad(Icons.Default.Handshake, Color(0xFF7E22CE), Color(0xFFFAF5FF), Color(0xFFE9D5FF))
+            else -> Quad(Icons.Default.Stars, Color(0xFFD97706), Color(0xFFFFFBEB), Color(0xFFFDE68A))
+          }
 
-          customCriteria.forEach { crit ->
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              OutlinedTextField(
-                value = customTargetInputs[crit] ?: "",
-                onValueChange = { newVal ->
-                  val digits = newVal.filter { ch -> ch.isDigit() }
-                  customTargetInputs[crit] = digits
-                  if (selectedQuarter == "ALL") {
-                    listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
-                      customTargetsByQuarter.getOrPut(q) { mutableMapOf() }[crit] = digits
-                    }
-                  }
-                },
-                label = { Text("$crit Target ($periodLabel)") },
-                placeholder = { Text("e.g. 10") },
-                leadingIcon = { Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(18.dp)) },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f).testTag("input_custom_target_${crit.replace(" ", "_")}"),
-                singleLine = true
-              )
-              if (onDeleteCriteria != null) {
-                Spacer(modifier = Modifier.width(6.dp))
-                IconButton(
-                  onClick = { onDeleteCriteria(crit) },
-                  modifier = Modifier.size(40.dp).testTag("btn_delete_criteria_${crit.replace(" ", "_")}")
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = if (isAssigned) containerBg else Color(0xFFF8FAFC),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isAssigned) borderClr else Color(0xFFE2E8F0)),
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(vertical = 4.dp)
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.weight(1f)
                 ) {
-                  Icon(Icons.Default.Delete, contentDescription = "Delete Criteria", tint = Color(0xFFDC2626), modifier = Modifier.size(20.dp))
+                  Checkbox(
+                    checked = isAssigned,
+                    onCheckedChange = { checked ->
+                      val updatedSet = selectedAssignedCriteria.toMutableSet()
+                      if (checked) {
+                        updatedSet.add(crit)
+                        if (targetInputs[crit].isNullOrBlank()) {
+                          val m = targetInputs.toMutableMap()
+                          m[crit] = when {
+                            norm.contains("credit") -> "20"
+                            norm.contains("corp") -> "10"
+                            norm.contains("b2b") -> "15"
+                            else -> "10"
+                          }
+                          targetInputs = m
+                        }
+                      } else {
+                        updatedSet.removeIf { it.equals(crit, ignoreCase = true) }
+                      }
+                      selectedAssignedCriteria = updatedSet
+                    },
+                    colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
+                    modifier = Modifier.testTag("chk_criteria_${crit.replace(" ", "_")}")
+                  )
+                  Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(16.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = crit,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = if (isAssigned) EblNavyDark else Color.Gray
+                  )
                 }
+
+                // Universal Delete button for this criterion
+                if (onDeleteCriteria != null) {
+                  IconButton(
+                    onClick = { criteriaToDelete = crit },
+                    modifier = Modifier.size(32.dp).testTag("btn_delete_criteria_${crit.replace(" ", "_")}")
+                  ) {
+                    Icon(
+                      Icons.Default.Delete,
+                      contentDescription = "সার্বজনীনভাবে মুছুন",
+                      tint = Color(0xFFDC2626),
+                      modifier = Modifier.size(16.dp)
+                    )
+                  }
+                }
+              }
+
+              if (isAssigned) {
+                Spacer(modifier = Modifier.height(4.dp))
+                OutlinedTextField(
+                  value = targetInputs[crit] ?: "",
+                  onValueChange = { newVal ->
+                    val digits = newVal.filter { ch -> ch.isDigit() }
+                    val updated = targetInputs.toMutableMap()
+                    updated[crit] = digits
+                    targetInputs = updated
+                  },
+                  label = { Text("$crit Target ($periodLabel)", fontSize = 11.sp) },
+                  placeholder = { Text("লক্ষ্যমাত্রা সংখ্যা দিন (e.g. 20)") },
+                  keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("input_target_${crit.replace(" ", "_")}"),
+                  singleLine = true
+                )
+              } else {
+                Text(
+                  text = "❌ এই RM-কে টার্গেট দেওয়া হয়নি (অ্যাপে প্রদর্শিত হবে না)",
+                  fontSize = 10.sp,
+                  color = Color.Gray,
+                  modifier = Modifier.padding(start = 36.dp, top = 2.dp)
+                )
               }
             }
           }
         }
 
-        // Add New Target Criteria Section for Admin
+        // Add New Criteria Section
         Spacer(modifier = Modifier.height(10.dp))
         if (showAddCriteriaRow) {
           Surface(
@@ -322,7 +347,7 @@ fun QuarterTargetSettingDialog(
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              Text("নতুন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Target Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+              Text("নতুন সার্বজনীন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Universal Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
               Spacer(modifier = Modifier.height(6.dp))
               Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -338,8 +363,19 @@ fun QuarterTargetSettingDialog(
                 Spacer(modifier = Modifier.width(8.dp))
                 Button(
                   onClick = {
-                    if (newCriteriaNameInput.isNotBlank()) {
-                      onAddCriteria?.invoke(newCriteriaNameInput.trim())
+                    val clean = newCriteriaNameInput.trim()
+                    if (clean.isNotBlank()) {
+                      onAddCriteria?.invoke(clean)
+                      val updatedSet = selectedAssignedCriteria.toMutableSet()
+                      updatedSet.add(clean)
+                      selectedAssignedCriteria = updatedSet
+
+                      val updatedInputs = targetInputs.toMutableMap()
+                      if (!updatedInputs.containsKey(clean)) {
+                        updatedInputs[clean] = "10"
+                      }
+                      targetInputs = updatedInputs
+
                       newCriteriaNameInput = ""
                       showAddCriteriaRow = false
                     }
@@ -365,10 +401,10 @@ fun QuarterTargetSettingDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
           text = if (selectedQuarter == "ALL")
-            "Note: Saves annual goal & distributes across all quarters. Auto-syncs to Google Sheets."
+            "Note: Saves annual goal & distributes across quarters. Auto-syncs to Google Sheets."
           else
             "Note: Target saves specifically for $selectedQuarter $selectedYear and syncs live to Google Sheets.",
           fontSize = 10.sp,
@@ -379,15 +415,34 @@ fun QuarterTargetSettingDialog(
     confirmButton = {
       Button(
         onClick = {
-          val cc = ccInput.toIntOrNull() ?: 20
-          val corp = corpInput.toIntOrNull() ?: 10
-          val b2b = b2bInput.toIntOrNull() ?: 15
+          val isCcAssigned = selectedAssignedCriteria.any { it.equals("Credit Card", ignoreCase = true) }
+          val isCorpAssigned = selectedAssignedCriteria.any { it.equals("Corporate Card", ignoreCase = true) }
+          val isB2bAssigned = selectedAssignedCriteria.any { it.equals("B2B", ignoreCase = true) }
+
+          val cc = if (isCcAssigned) (targetInputs["Credit Card"]?.toIntOrNull() ?: 20) else 0
+          val corp = if (isCorpAssigned) (targetInputs["Corporate Card"]?.toIntOrNull() ?: 10) else 0
+          val b2b = if (isB2bAssigned) (targetInputs["B2B"]?.toIntOrNull() ?: 15) else 0
+
           onSave(selectedQuarter, selectedYear, cc, corp, b2b)
-          val customMap = customTargetInputs.mapNotNull { (k, v) ->
-            val num = v.toIntOrNull()
-            if (num != null) k to num else null
-          }.toMap()
+
+          // Custom criteria targets
+          val customMap = mutableMapOf<String, Int>()
+          allCriteria.filter {
+            val norm = it.trim().lowercase()
+            !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
+          }.forEach { crit ->
+            if (selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }) {
+              val num = targetInputs[crit]?.toIntOrNull() ?: 10
+              customMap[crit] = num
+            }
+          }
           onSaveCustomTargets?.invoke(selectedQuarter, customMap)
+
+          // Save exact list of assigned criteria
+          val assignedList = allCriteria.filter { crit ->
+            selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
+          }
+          onSaveAssignedCriteria?.invoke(assignedList)
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
@@ -401,4 +456,37 @@ fun QuarterTargetSettingDialog(
       }
     }
   )
+
+  // Universal Criteria Delete Confirmation Dialog
+  if (criteriaToDelete != null) {
+    val critName = criteriaToDelete!!
+    AlertDialog(
+      onDismissRequest = { criteriaToDelete = null },
+      title = { Text("সার্বজনীনভাবে ক্রাইটেরিয়া মুছে ফেলতে চান?", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+      text = {
+        Text("'$critName' ক্রাইটেরিয়া মুছে ফেললে এটি সার্বজনীনভাবে (Universal) সমস্ত RM ও অ্যাডমিনের তালিকা থেকে সম্পূর্ণভাবে মুছে যাবে। আপনি কি নিশ্চিত?")
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            onDeleteCriteria?.invoke(critName)
+            val updated = selectedAssignedCriteria.toMutableSet()
+            updated.removeIf { it.equals(critName, ignoreCase = true) }
+            selectedAssignedCriteria = updated
+            criteriaToDelete = null
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
+        ) {
+          Text("মুছে ফেলুন (Delete)", fontWeight = FontWeight.Bold, color = Color.White)
+        }
+      },
+      dismissButton = {
+        TextButton(onClick = { criteriaToDelete = null }) {
+          Text("বাতিল")
+        }
+      }
+    )
+  }
 }
+
+private data class Quad<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)

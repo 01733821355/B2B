@@ -92,6 +92,7 @@ fun RmDashboardScreen(
   onDownloadReport: () -> Unit,
   target: RmTargetEntity? = null,
   targetCriteria: List<String> = listOf("Credit Card", "Corporate Card", "B2B"),
+  assignedCriteria: List<String> = emptyList(),
   customTargets: Map<String, Int> = emptyMap(),
   unreadSmsCount: Int = 0,
   onOpenSmsInbox: () -> Unit = {},
@@ -124,6 +125,21 @@ fun RmDashboardScreen(
   val ccTarget = currentQuarterTargets.first
   val corpTarget = currentQuarterTargets.second
   val b2bTarget = currentQuarterTargets.third
+
+  // Only show criteria assigned specifically to this RM (and not universally deleted)
+  val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets) {
+    val assigned = if (assignedCriteria.isNotEmpty()) {
+      assignedCriteria
+    } else {
+      val list = mutableListOf<String>()
+      if ((target?.creditCardTarget ?: 0) > 0) list.add("Credit Card")
+      if ((target?.corporateCardTarget ?: 0) > 0) list.add("Corporate Card")
+      if ((target?.b2bTarget ?: 0) > 0) list.add("B2B")
+      customTargets.forEach { (k, v) -> if (v > 0) list.add(k) }
+      if (list.isEmpty()) listOf("Credit Card", "Corporate Card", "B2B") else list
+    }
+    assigned.filter { a -> targetCriteria.any { it.equals(a, ignoreCase = true) } }
+  }
   Box(
     modifier = modifier
       .fillMaxSize()
@@ -462,6 +478,30 @@ fun RmDashboardScreen(
           val annualCc = target?.annualCreditCardTarget ?: (20 * 4)
           val annualCorp = target?.annualCorporateCardTarget ?: (10 * 4)
           val annualB2b = target?.annualB2bTarget ?: (15 * 4)
+
+          val annualSummaryParts = mutableListOf<String>()
+          if (activeRmCriteria.any { it.equals("Credit Card", ignoreCase = true) }) {
+            annualSummaryParts.add("CC $annualCc")
+          }
+          if (activeRmCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) {
+            annualSummaryParts.add("Corp $annualCorp")
+          }
+          if (activeRmCriteria.any { it.equals("B2B", ignoreCase = true) }) {
+            annualSummaryParts.add("B2B $annualB2b")
+          }
+          activeRmCriteria.filter {
+            val norm = it.trim().lowercase()
+            !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
+          }.forEach { crit ->
+            val annualCustom = (customTargets[crit] ?: 10) * 4
+            annualSummaryParts.add("$crit $annualCustom")
+          }
+          val annualSummaryText = if (annualSummaryParts.isNotEmpty()) {
+            "মোট: " + annualSummaryParts.joinToString(" • ")
+          } else {
+            "কোনো নির্ধারিত লক্ষ্যমাত্রা নেই"
+          }
+
           Surface(
             shape = RoundedCornerShape(8.dp),
             color = Color(0xFFF1F5F9),
@@ -483,7 +523,7 @@ fun RmDashboardScreen(
                   color = EblNavyDark
                 )
                 Text(
-                  text = "মোট: CC $annualCc • Corp $annualCorp • B2B $annualB2b",
+                  text = annualSummaryText,
                   fontSize = 10.sp,
                   color = Color(0xFF475569)
                 )
@@ -535,161 +575,174 @@ fun RmDashboardScreen(
 
           Spacer(modifier = Modifier.height(10.dp))
 
-          // 3 Columns: Credit Card, Corporate Card, B2B
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-          ) {
-            // Credit Card Goal: Achievement strictly from STC status
-            val ccAchieved = stats.stcCreditCardCount
-            val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+          // Dynamic Target Cards for ONLY this RM's assigned criteria
+          if (activeRmCriteria.isEmpty()) {
             Surface(
               shape = RoundedCornerShape(10.dp),
-              color = Color(0xFFF0FDF4),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
-              modifier = Modifier.weight(1f)
+              color = Color(0xFFF8FAFC),
+              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+              modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
-              Column(modifier = Modifier.padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
-                  Spacer(modifier = Modifier.width(4.dp))
-                  Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                  Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
-                  Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                  progress = { ccProgress },
-                  modifier = Modifier.fillMaxWidth().height(6.dp),
-                  color = Color(0xFF16A34A),
-                  trackColor = Color(0xFFDCFCE7)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = "${(ccProgress * 100).toInt()}% Done",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF15803D),
-                  maxLines = 1,
-                  softWrap = false
-                )
-              }
+              Text(
+                text = "এই কোয়ার্টারের জন্য কোনো লক্ষ্যমাত্রা সক্রিয় নেই।",
+                fontSize = 11.sp,
+                color = Color.Gray,
+                modifier = Modifier.padding(14.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+              )
             }
-
-            // Corporate Card Goal: Achievement strictly from STC status
-            val corpAchieved = stats.stcCorporateCardCount
-            val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = Color(0xFFEFF6FF),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-              modifier = Modifier.weight(1f)
-            ) {
-              Column(modifier = Modifier.padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
-                  Spacer(modifier = Modifier.width(4.dp))
-                  Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                  Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
-                  Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                  progress = { corpProgress },
-                  modifier = Modifier.fillMaxWidth().height(6.dp),
-                  color = Color(0xFF2563EB),
-                  trackColor = Color(0xFFDBEAFE)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = "${(corpProgress * 100).toInt()}% Done",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF1D4ED8),
-                  maxLines = 1,
-                  softWrap = false
-                )
-              }
-            }
-
-            // B2B Goal: Achievement strictly from STC status
-            val b2bAchieved = stats.stcB2bCount
-            val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = Color(0xFFFAF5FF),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF)),
-              modifier = Modifier.weight(1f)
-            ) {
-              Column(modifier = Modifier.padding(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                  Icon(Icons.Default.Handshake, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
-                  Spacer(modifier = Modifier.width(4.dp))
-                  Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.Bottom) {
-                  Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7E22CE))
-                  Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                }
-                Spacer(modifier = Modifier.height(6.dp))
-                LinearProgressIndicator(
-                  progress = { b2bProgress },
-                  modifier = Modifier.fillMaxWidth().height(6.dp),
-                  color = Color(0xFF9333EA),
-                  trackColor = Color(0xFFF3E8FF)
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                  text = "${(b2bProgress * 100).toInt()}% Done",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.SemiBold,
-                  color = Color(0xFF7E22CE),
-                  maxLines = 1,
-                  softWrap = false
-                )
-              }
-            }
-          }
-
-          // Custom Criteria Targets (Set by Admin, visible to RM)
-          val extraCriteria = targetCriteria.filter { crit ->
-            val norm = crit.trim().lowercase()
-            norm != "credit card" && norm != "corporate card" && norm != "b2b"
-          }
-
-          if (extraCriteria.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(10.dp))
-            androidx.compose.foundation.layout.FlowRow(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp),
-              verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-              extraCriteria.forEach { crit ->
-                val targetVal = customTargets[crit] ?: 10
-                Surface(
-                  shape = RoundedCornerShape(10.dp),
-                  color = Color(0xFFFFFBEB),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
-                  modifier = Modifier.fillMaxWidth(0.48f)
-                ) {
-                  Column(modifier = Modifier.padding(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                      Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), maxLines = 1, softWrap = false)
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(verticalAlignment = Alignment.Bottom) {
-                      Text("Target:", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
-                      Spacer(modifier = Modifier.width(4.dp))
-                      Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD97706))
+          } else {
+            val chunks = if (activeRmCriteria.size <= 3) listOf(activeRmCriteria) else activeRmCriteria.chunked(2)
+            chunks.forEachIndexed { chunkIdx, chunk ->
+              if (chunkIdx > 0) Spacer(modifier = Modifier.height(8.dp))
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+              ) {
+                chunk.forEach { crit ->
+                  val norm = crit.trim().lowercase()
+                  Box(modifier = Modifier.weight(1f)) {
+                    when {
+                      norm.contains("credit") -> {
+                        val ccAchieved = stats.stcCreditCardCount
+                        val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+                        Surface(
+                          shape = RoundedCornerShape(10.dp),
+                          color = Color(0xFFF0FDF4),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                          modifier = Modifier.fillMaxWidth()
+                        ) {
+                          Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                              Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.Bottom) {
+                              Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
+                              Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                              progress = { ccProgress },
+                              modifier = Modifier.fillMaxWidth().height(6.dp),
+                              color = Color(0xFF16A34A),
+                              trackColor = Color(0xFFDCFCE7)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                              text = "${(ccProgress * 100).toInt()}% Done",
+                              fontSize = 10.sp,
+                              fontWeight = FontWeight.SemiBold,
+                              color = Color(0xFF15803D),
+                              maxLines = 1,
+                              softWrap = false
+                            )
+                          }
+                        }
+                      }
+                      norm.contains("corp") -> {
+                        val corpAchieved = stats.stcCorporateCardCount
+                        val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+                        Surface(
+                          shape = RoundedCornerShape(10.dp),
+                          color = Color(0xFFEFF6FF),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                          modifier = Modifier.fillMaxWidth()
+                        ) {
+                          Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                              Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.Bottom) {
+                              Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
+                              Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                              progress = { corpProgress },
+                              modifier = Modifier.fillMaxWidth().height(6.dp),
+                              color = Color(0xFF2563EB),
+                              trackColor = Color(0xFFDBEAFE)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                              text = "${(corpProgress * 100).toInt()}% Done",
+                              fontSize = 10.sp,
+                              fontWeight = FontWeight.SemiBold,
+                              color = Color(0xFF1D4ED8),
+                              maxLines = 1,
+                              softWrap = false
+                            )
+                          }
+                        }
+                      }
+                      norm.contains("b2b") -> {
+                        val b2bAchieved = stats.stcB2bCount
+                        val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
+                        Surface(
+                          shape = RoundedCornerShape(10.dp),
+                          color = Color(0xFFFAF5FF),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF)),
+                          modifier = Modifier.fillMaxWidth()
+                        ) {
+                          Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                              Icon(Icons.Default.Handshake, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.Bottom) {
+                              Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7E22CE))
+                              Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            LinearProgressIndicator(
+                              progress = { b2bProgress },
+                              modifier = Modifier.fillMaxWidth().height(6.dp),
+                              color = Color(0xFF9333EA),
+                              trackColor = Color(0xFFF3E8FF)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                              text = "${(b2bProgress * 100).toInt()}% Done",
+                              fontSize = 10.sp,
+                              fontWeight = FontWeight.SemiBold,
+                              color = Color(0xFF7E22CE),
+                              maxLines = 1,
+                              softWrap = false
+                            )
+                          }
+                        }
+                      }
+                      else -> {
+                        val targetVal = customTargets[crit] ?: 10
+                        Surface(
+                          shape = RoundedCornerShape(10.dp),
+                          color = Color(0xFFFFFBEB),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                          modifier = Modifier.fillMaxWidth()
+                        ) {
+                          Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                              Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), maxLines = 1, softWrap = false)
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(verticalAlignment = Alignment.Bottom) {
+                              Text("Target:", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
+                              Spacer(modifier = Modifier.width(4.dp))
+                              Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD97706))
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }

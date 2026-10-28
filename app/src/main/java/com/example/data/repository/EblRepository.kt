@@ -2936,6 +2936,56 @@ class EblRepository(
     }
   }
 
+  fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> {
+    val cleanRm = rmCode.trim().uppercase()
+    val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
+    return kotlinx.coroutines.flow.combine(
+      database.appSettingDao().getSettingFlow(assignedKey),
+      getTargetCriteriaOptionsFlow(),
+      getTargetForRmFlow(cleanRm),
+      getRmCustomTargetsFlow(cleanRm)
+    ) { setting, allCriteria, rmTarget, customTargets ->
+      val raw = setting?.settingValue
+      if (!raw.isNullOrBlank()) {
+        val assigned = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val filtered = assigned.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }
+        filtered
+      } else {
+        val list = mutableListOf<String>()
+        val cc = rmTarget?.creditCardTarget ?: 20
+        val corp = rmTarget?.corporateCardTarget ?: 10
+        val b2b = rmTarget?.b2bTarget ?: 15
+        if (cc > 0 && allCriteria.any { it.equals("Credit Card", ignoreCase = true) }) list.add("Credit Card")
+        if (corp > 0 && allCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) list.add("Corporate Card")
+        if (b2b > 0 && allCriteria.any { it.equals("B2B", ignoreCase = true) }) list.add("B2B")
+        customTargets.forEach { (k, v) ->
+          if (v > 0 && allCriteria.any { it.equals(k, ignoreCase = true) } && !list.contains(k)) {
+            list.add(k)
+          }
+        }
+        if (list.isEmpty()) allCriteria else list
+      }
+    }
+  }
+
+  suspend fun saveRmAssignedCriteria(rmCode: String, criteria: List<String>) = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val cleanRm = rmCode.trim().uppercase()
+    val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
+    val joined = criteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = assignedKey,
+        settingValue = joined,
+        updatedBy = currentUser?.rmCode ?: "ADMIN",
+        updatedAt = now
+      )
+    )
+    applicationScope.launch { syncSettingUpsertToGoogleSheets(assignedKey, joined) }
+  }
+
+
   suspend fun updateFileStatus(
     fileId: String,
     newStatus: String,

@@ -351,12 +351,14 @@ fun EblMainApp(viewModel: AppViewModel) {
             val rmTarget = allTargets.find { it.rmCode == user.rmCode }
             val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
             val customTargets by viewModel.getRmCustomTargetsFlow(user.rmCode).collectAsState(initial = emptyMap())
+            val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(user.rmCode).collectAsState(initial = emptyList())
 
             RmDashboardScreen(
               user = user,
               stats = stats,
               target = rmTarget,
               targetCriteria = targetCriteria,
+              assignedCriteria = assignedCriteria,
               customTargets = customTargets,
               selectedTimeFilter = timeFilter,
               recentFiles = files,

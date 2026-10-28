@@ -1201,6 +1201,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> =
+    eblRepository.getRmAssignedCriteriaFlow(rmCode)
+
+  fun saveRmAssignedCriteria(rmCode: String, criteria: List<String>) {
+    viewModelScope.launch {
+      eblRepository.saveRmAssignedCriteria(rmCode, criteria)
+    }
+  }
+
   fun setRmStatus(rmCode: String, status: String) {
     viewModelScope.launch {
       val res = eblRepository.setRmStatus(rmCode, status)
