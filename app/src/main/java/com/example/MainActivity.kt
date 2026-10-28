@@ -381,6 +381,7 @@ fun EblMainApp(viewModel: AppViewModel) {
               onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
               onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
               onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) },
+              onOpenRoutePlanner = { viewModel.navigateTo(Screen.FieldRoutePlanner()) },
               onUpdateLocation = { lat, lng, addr ->
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
               },
@@ -407,7 +408,8 @@ fun EblMainApp(viewModel: AppViewModel) {
               viewModel = viewModel,
               currentUser = user,
               onAddNewFile = { viewModel.navigateTo(Screen.CustomerForm(null)) },
-              onEditFile = { fileId -> viewModel.navigateTo(Screen.CustomerForm(fileId)) }
+              onEditFile = { fileId -> viewModel.navigateTo(Screen.CustomerForm(fileId)) },
+              onOpenRoutePlanner = { selectedIds -> viewModel.navigateTo(Screen.FieldRoutePlanner(selectedIds)) }
             )
           }
 
@@ -508,6 +510,16 @@ fun EblMainApp(viewModel: AppViewModel) {
               viewModel = viewModel,
               currentUser = user,
               onNavigateBack = { viewModel.navigateBack() }
+            )
+          }
+
+          is Screen.FieldRoutePlanner -> {
+            com.example.ui.screens.rm.FieldRoutePlannerScreen(
+              viewModel = viewModel,
+              currentUser = user,
+              initialSelectedFileIds = screen.initialSelectedFileIds,
+              onBack = { viewModel.navigateBack() },
+              onEditFile = { fileId -> viewModel.navigateTo(Screen.CustomerForm(fileId)) }
             )
           }
         }

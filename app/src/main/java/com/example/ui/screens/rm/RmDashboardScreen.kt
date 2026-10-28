@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ChevronRight
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
@@ -100,6 +102,7 @@ fun RmDashboardScreen(
   onOpenDbrChecklist: () -> Unit = {},
   onOpenCommunication: () -> Unit = {},
   onOpenImportantDocuments: () -> Unit = {},
+  onOpenRoutePlanner: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   isBiometricEnabled: Boolean = false,
   onToggleBiometric: ((Boolean) -> Unit)? = null,
@@ -280,7 +283,100 @@ fun RmDashboardScreen(
           }
         }
 
-          Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Field Route Planner Smart Banner Card
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (isDark) Color(0xFF0F2642) else Color(0xFFF0FDF4),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF1E40AF) else Color(0xFF86EFAC)),
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenRoutePlanner() }
+            .testTag("rm_dashboard_route_planner_banner")
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.weight(1f)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .background(Color(0xFF16A34A), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Navigation,
+                  contentDescription = "Route Planner",
+                  tint = Color.White,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    text = "Field Route Planner",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF14532D)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF15803D)
+                  ) {
+                    Text(
+                      text = "NEW AI",
+                      fontSize = 9.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = Color.White,
+                      modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                    )
+                  }
+                }
+                Text(
+                  text = "Want to Go • গুগল ম্যাপ মাল্টি-স্টপ রুট ও অটো আপডেট",
+                  fontSize = 11.sp,
+                  color = if (isDark) Color(0xFF94A3B8) else Color(0xFF166534)
+                )
+              }
+            }
+
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFF16A34A)
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = "প্ল্যান করুন",
+                  color = Color.White,
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Icon(
+                  Icons.Default.ArrowForward,
+                  contentDescription = null,
+                  tint = Color.White,
+                  modifier = Modifier.size(12.dp)
+                )
+              }
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
           // Biometric Fingerprint Login Switch for RM
           Row(
@@ -519,15 +615,15 @@ fun RmDashboardScreen(
           if (activeRmCriteria.any { it.equals("B2B", ignoreCase = true) }) {
             annualSummaryParts.add("B2B $annualB2b")
           }
-          activeRmCriteria.filter {
-            val norm = it.trim().lowercase()
-            !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
+          val standardCritSet = setOf("Credit Card", "Corporate Card", "B2B")
+          activeRmCriteria.filter { crit ->
+            standardCritSet.none { it.equals(crit.trim(), ignoreCase = true) }
           }.forEach { crit ->
-            val sumQ = ((allQuarterCustomTargets["Q1"]?.get(crit) ?: 0) +
-                        (allQuarterCustomTargets["Q2"]?.get(crit) ?: 0) +
-                        (allQuarterCustomTargets["Q3"]?.get(crit) ?: 0) +
-                        (allQuarterCustomTargets["Q4"]?.get(crit) ?: 0))
-            val annualCustom = if (sumQ > 0) sumQ else (allQuarterCustomTargets["ALL"]?.get(crit) ?: (customTargets[crit] ?: 10) * 4)
+            val sumQ = ((allQuarterCustomTargets["Q1"]?.get(crit) ?: allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q2"]?.get(crit) ?: allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q3"]?.get(crit) ?: allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q4"]?.get(crit) ?: allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0))
+            val annualCustom = if (sumQ > 0) sumQ else (allQuarterCustomTargets["ALL"]?.get(crit) ?: allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: (customTargets[crit] ?: 0) * 4)
             annualSummaryParts.add("$crit $annualCustom")
           }
           val annualSummaryText = if (annualSummaryParts.isNotEmpty()) {
@@ -637,7 +733,7 @@ fun RmDashboardScreen(
                   val norm = crit.trim().lowercase()
                   Box(modifier = Modifier.weight(1f)) {
                     when {
-                      norm.contains("credit") -> {
+                      crit.equals("Credit Card", ignoreCase = true) -> {
                         val ccAchieved = stats.stcCreditCardCount
                         val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
@@ -676,7 +772,7 @@ fun RmDashboardScreen(
                           }
                         }
                       }
-                      norm.contains("corp") -> {
+                      crit.equals("Corporate Card", ignoreCase = true) -> {
                         val corpAchieved = stats.stcCorporateCardCount
                         val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
@@ -715,7 +811,7 @@ fun RmDashboardScreen(
                           }
                         }
                       }
-                      norm.contains("b2b") -> {
+                      crit.equals("B2B", ignoreCase = true) -> {
                         val b2bAchieved = stats.stcB2bCount
                         val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
@@ -755,7 +851,9 @@ fun RmDashboardScreen(
                         }
                       }
                       else -> {
-                        val targetVal = currentQuarterCustomTargets[crit] ?: 10
+                        val targetVal = currentQuarterCustomTargets[crit]
+                          ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(crit.trim(), ignoreCase = true) }?.value
+                          ?: 0
                         Surface(
                           shape = RoundedCornerShape(10.dp),
                           color = Color(0xFFFFFBEB),
@@ -993,7 +1091,8 @@ fun RmDashboardScreen(
     onNavigateDashboard = { /* Already on dashboard */ },
     onNavigateCommunication = onOpenCommunication,
     onNavigateDbrChecklist = onOpenDbrChecklist,
-    onNavigateImportantDocuments = onOpenImportantDocuments
+    onNavigateImportantDocuments = onOpenImportantDocuments,
+    onNavigateRoutePlanner = onOpenRoutePlanner
   )
 }
 }

@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -64,6 +65,7 @@ fun FloatableRmNavButton(
   onNavigateCommunication: (() -> Unit)? = null,
   onNavigateDbrChecklist: (() -> Unit)? = null,
   onNavigateImportantDocuments: (() -> Unit)? = null,
+  onNavigateRoutePlanner: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
   var offsetX by remember { mutableFloatStateOf(0f) }
@@ -268,6 +270,41 @@ fun FloatableRmNavButton(
                   modifier = Modifier.testTag("float_btn_important_docs")
                 ) {
                   Icon(Icons.Default.Description, contentDescription = "Important Documents")
+                }
+              }
+            }
+
+            // Option: Route Planner
+            if (onNavigateRoutePlanner != null) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(end = 4.dp)
+              ) {
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = EblNavyDark,
+                  shadowElevation = 4.dp
+                ) {
+                  Text(
+                    text = "Route Planner 🚀",
+                    color = Color(0xFF86EFAC),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                  )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                SmallFloatingActionButton(
+                  onClick = {
+                    isExpanded = false
+                    onNavigateRoutePlanner()
+                  },
+                  containerColor = Color(0xFF16A34A),
+                  contentColor = Color.White,
+                  shape = CircleShape,
+                  modifier = Modifier.testTag("float_btn_route_planner")
+                ) {
+                  Icon(Icons.Default.Navigation, contentDescription = "Field Route Planner")
                 }
               }
             }

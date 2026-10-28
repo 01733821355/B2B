@@ -32,7 +32,13 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Directions
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateListOf
 import android.widget.Toast
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalContext
@@ -92,6 +98,7 @@ fun CustomerFileListScreen(
   currentUser: UserEntity,
   onAddNewFile: () -> Unit,
   onEditFile: (String) -> Unit,
+  onOpenRoutePlanner: (List<String>) -> Unit = {},
   modifier: Modifier = Modifier
 ) {
   val files by viewModel.filteredFiles.collectAsState()
@@ -102,6 +109,9 @@ fun CustomerFileListScreen(
   val selectedCpvStatus by viewModel.selectedCpvStatusFilter.collectAsState()
   val selectedRmCode by viewModel.selectedRmCodeFilter.collectAsState()
   val pendingDocsOnly by viewModel.pendingDocsOnlyFilter.collectAsState()
+  val activeRouteCustomerIds by viewModel.activeRouteCustomerIds.collectAsState()
+
+  val selectedFileIdsForRoute = remember { mutableStateListOf<String>() }
 
   var viewingFile by remember { mutableStateOf<CustomerFileEntity?>(null) }
   var fileToDelete by remember { mutableStateOf<CustomerFileEntity?>(null) }
@@ -202,6 +212,26 @@ fun CustomerFileListScreen(
           Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
           Text("Excel", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        }
+
+        // Field Visit Route Plan Button
+        OutlinedButton(
+          onClick = {
+            onOpenRoutePlanner(selectedFileIdsForRoute.toList())
+          },
+          shape = RoundedCornerShape(8.dp),
+          contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
+          border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+          modifier = Modifier.height(34.dp).testTag("btn_list_open_route_planner")
+        ) {
+          Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(14.dp))
+          Spacer(modifier = Modifier.width(3.dp))
+          Text(
+            text = if (activeRouteCustomerIds.isNotEmpty()) "Route (${activeRouteCustomerIds.size})" else "Route",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+          )
         }
 
         IconButton(
@@ -348,41 +378,57 @@ fun CustomerFileListScreen(
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
           ) {
             Column(modifier = Modifier.padding(14.dp)) {
-              // Top line: Name & Status badges
+              // Top line: Checkbox + Name & Status badges
               Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Column(modifier = Modifier.weight(1f)) {
-                  Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (file.serialNumber.isNotBlank()) {
-                      Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = EblNavyDark,
-                        modifier = Modifier.padding(end = 6.dp)
-                      ) {
-                        Text(
-                          text = "SL #${file.serialNumber}",
-                          color = EblGold,
-                          fontSize = 11.sp,
-                          fontWeight = FontWeight.Bold,
-                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
+                Row(
+                  modifier = Modifier.weight(1f),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  val isRouteSelected = selectedFileIdsForRoute.contains(file.fileId)
+                  Checkbox(
+                    checked = isRouteSelected,
+                    onCheckedChange = { checked ->
+                      if (checked) selectedFileIdsForRoute.add(file.fileId)
+                      else selectedFileIdsForRoute.remove(file.fileId)
+                    },
+                    colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary),
+                    modifier = Modifier.size(24.dp).testTag("chk_route_file_${file.fileId}")
+                  )
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                      if (file.serialNumber.isNotBlank()) {
+                        Surface(
+                          shape = RoundedCornerShape(4.dp),
+                          color = EblNavyDark,
+                          modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                          Text(
+                            text = "SL #${file.serialNumber}",
+                            color = EblGold,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                          )
+                        }
                       }
+                      Text(
+                        text = file.customerName,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EblNavyDark
+                      )
                     }
                     Text(
-                      text = file.customerName,
-                      fontSize = 15.sp,
-                      fontWeight = FontWeight.Bold,
-                      color = EblNavyDark
+                      text = "${file.ccNumber.ifBlank { file.fileId }} • ${file.companyName}",
+                      fontSize = 12.sp,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                   }
-                  Text(
-                    text = "${file.ccNumber.ifBlank { file.fileId }} • ${file.companyName}",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                  )
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -541,6 +587,55 @@ fun CustomerFileListScreen(
     }
   }
 }
+
+    // Floating Want to Go Action Bar when 1 or more files are selected
+    if (selectedFileIdsForRoute.isNotEmpty()) {
+      Surface(
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        color = Color.White,
+        shadowElevation = 8.dp,
+        modifier = Modifier
+          .align(Alignment.BottomCenter)
+          .fillMaxWidth()
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+              text = "${selectedFileIdsForRoute.size} জন কাস্টমার নির্বাচিত",
+              fontWeight = FontWeight.Bold,
+              fontSize = 13.sp,
+              color = EblNavyDark
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(
+              onClick = { selectedFileIdsForRoute.clear() },
+              contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+              Text("Clear", fontSize = 11.sp, color = Color(0xFFDC2626))
+            }
+          }
+
+          Button(
+            onClick = {
+              onOpenRoutePlanner(selectedFileIdsForRoute.toList())
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.testTag("btn_want_to_go_floating")
+          ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Want to Go 🚀", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color.White)
+          }
+        }
+      }
+    }
 
   // Floatable & Draggable Quick Navigation Menu for RM
   if (currentUser.role == "RM") {

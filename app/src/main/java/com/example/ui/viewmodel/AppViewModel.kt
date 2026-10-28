@@ -53,6 +53,7 @@ sealed class Screen {
   object DbrChecklist : Screen()
   object CommunicationHub : Screen()
   object ImportantDocuments : Screen()
+  data class FieldRoutePlanner(val initialSelectedFileIds: List<String> = emptyList()) : Screen()
 }
 
 data class KpiStats(
@@ -112,10 +113,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   val lastLoggedRmCode = MutableStateFlow("")
 
+  // Active Field Route Planner State
+  val activeRouteCustomerIds = MutableStateFlow<List<String>>(emptyList())
+  val completedRouteCustomerIds = MutableStateFlow<List<String>>(emptyList())
+
   init {
     val cachedRm = authPrefs.getString("last_logged_rm_code", "") ?: ""
     if (cachedRm.isNotBlank()) {
       lastLoggedRmCode.value = cachedRm
+    }
+    val cachedRoute = authPrefs.getString("active_field_route_ids", "") ?: ""
+    if (cachedRoute.isNotBlank()) {
+      activeRouteCustomerIds.value = cachedRoute.split(",").map { it.trim() }.filter { it.isNotBlank() }
     }
     viewModelScope.launch {
       val dbLastRm = authRepository.getLastLoggedRmCode()
@@ -1636,8 +1645,48 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun declineIncomingCall() {}
   fun toggleMute() {}
   fun toggleSpeaker() {}
-  fun endCall() {
-    _callState.value = CallUiState.Idle
+  // Field Visit Route Planning
+  fun startRoute(fileIds: List<String>) {
+    val clean = fileIds.distinct()
+    activeRouteCustomerIds.value = clean
+    completedRouteCustomerIds.value = emptyList()
+    authPrefs.edit().putString("active_field_route_ids", clean.joinToString(",")).apply()
+  }
+
+  fun completeCustomerInRoute(fileId: String, onDone: () -> Unit = {}) {
+    viewModelScope.launch {
+      eblRepository.updateFileStatus(
+        fileId = fileId,
+        newStatus = "Collected",
+        newRemarks = "Collected via Field Visit Route Plan"
+      )
+      val updatedActive = activeRouteCustomerIds.value.filter { it != fileId }
+      activeRouteCustomerIds.value = updatedActive
+      completedRouteCustomerIds.value = (completedRouteCustomerIds.value + fileId).distinct()
+      authPrefs.edit().putString("active_field_route_ids", updatedActive.joinToString(",")).apply()
+      _uiMessage.emit("✓ ফাইল কালেকশন সম্পন্ন! রুট থেকে বাদ দেওয়া হয়েছে।")
+      onDone()
+    }
+  }
+
+  fun removeCustomerFromRoute(fileId: String) {
+    val updated = activeRouteCustomerIds.value.filter { it != fileId }
+    activeRouteCustomerIds.value = updated
+    authPrefs.edit().putString("active_field_route_ids", updated.joinToString(",")).apply()
+  }
+
+  fun addCustomerToRoute(fileId: String) {
+    if (!activeRouteCustomerIds.value.contains(fileId)) {
+      val updated = activeRouteCustomerIds.value + fileId
+      activeRouteCustomerIds.value = updated
+      authPrefs.edit().putString("active_field_route_ids", updated.joinToString(",")).apply()
+    }
+  }
+
+  fun clearRoute() {
+    activeRouteCustomerIds.value = emptyList()
+    completedRouteCustomerIds.value = emptyList()
+    authPrefs.edit().remove("active_field_route_ids").apply()
   }
 }
 

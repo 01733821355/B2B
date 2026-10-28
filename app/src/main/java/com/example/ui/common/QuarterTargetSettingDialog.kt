@@ -290,12 +290,12 @@ fun QuarterTargetSettingDialog(
                         listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
                           val qMap = targetsByQuarterState.value.toMutableMap()
                           val inner = (qMap[q] ?: mutableMapOf()).toMutableMap()
-                          if (inner[crit].isNullOrBlank() || inner[crit] == "0") {
+                          if (inner[crit].isNullOrBlank()) {
                             inner[crit] = when {
-                              norm.contains("credit") -> "20"
-                              norm.contains("corp") -> "10"
-                              norm.contains("b2b") -> "15"
-                              else -> "10"
+                              crit.equals("Credit Card", ignoreCase = true) -> "20"
+                              crit.equals("Corporate Card", ignoreCase = true) -> "10"
+                              crit.equals("B2B", ignoreCase = true) -> "15"
+                              else -> "0"
                             }
                           }
                           qMap[q] = inner
@@ -404,7 +404,7 @@ fun QuarterTargetSettingDialog(
                       val qMap = targetsByQuarterState.value.toMutableMap()
                       listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
                         val inner = (qMap[q] ?: mutableMapOf()).toMutableMap()
-                        if (!inner.containsKey(clean)) inner[clean] = "10"
+                        if (!inner.containsKey(clean)) inner[clean] = "0"
                         qMap[q] = inner
                       }
                       targetsByQuarterState.value = qMap
@@ -461,25 +461,25 @@ fun QuarterTargetSettingDialog(
 
           // Build all-quarter custom targets map
           val allQuartersResult = mutableMapOf<String, Map<String, Int>>()
-          val customCriteriaList = allCriteria.filter {
-            val norm = it.trim().lowercase()
-            !norm.contains("credit") && !norm.contains("corp") && !norm.contains("b2b")
-          }
 
           listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
             val innerMap = mutableMapOf<String, Int>()
             val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
             customCriteriaList.forEach { crit ->
               if (selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }) {
-                val num = qInputs[crit]?.toIntOrNull() ?: 10
+                val rawVal = qInputs[crit]?.trim() ?: ""
+                val num = rawVal.toIntOrNull() ?: 0
                 innerMap[crit] = num
               }
             }
             allQuartersResult[q] = innerMap
           }
 
-          onSaveAllQuarterCustomTargets?.invoke(allQuartersResult)
-          onSaveCustomTargets?.invoke(selectedQuarter, allQuartersResult[selectedQuarter] ?: emptyMap())
+          if (onSaveAllQuarterCustomTargets != null) {
+            onSaveAllQuarterCustomTargets.invoke(allQuartersResult)
+          } else {
+            onSaveCustomTargets?.invoke(selectedQuarter, allQuartersResult[selectedQuarter] ?: emptyMap())
+          }
 
           // Save assigned criteria list
           val assignedList = allCriteria.filter { crit ->
