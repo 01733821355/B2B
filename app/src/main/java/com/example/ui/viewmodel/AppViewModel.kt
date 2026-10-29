@@ -1709,23 +1709,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   ) {
     viewModelScope.launch {
       try {
+        val rawBytes = withContext(Dispatchers.IO) {
+          try {
+            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+          } catch (_: Exception) {
+            null
+          }
+        }
         val parsed = withContext(Dispatchers.IO) {
-          com.example.util.ExcelWorkbookParser.parseWorkbookFromUri(
-            context = context,
-            uri = uri,
-            fileName = fileName,
-            uploadedBy = uploadedBy
-          )
+          if (rawBytes != null && rawBytes.isNotEmpty()) {
+            com.example.util.ExcelWorkbookParser.parseWorkbookFromBytes(
+              bytes = rawBytes,
+              fileName = fileName,
+              uploadedBy = uploadedBy
+            )
+          } else {
+            com.example.util.ExcelWorkbookParser.parseWorkbookFromUri(
+              context = context,
+              uri = uri,
+              fileName = fileName,
+              uploadedBy = uploadedBy
+            )
+          }
         }
         if (parsed.sheets.isEmpty() || parsed.totalRows == 0) {
           onComplete(false, "ফাইলটিতে কোনো ডাটা বা শিট পাওয়া যায়নি!")
           return@launch
         }
-        // Save to internal storage file, auto-replacing the previous workbook
-        eblRepository.saveCompanyWorkbook(parsed)
-        onComplete(true, "সফলভাবে ${parsed.sheets.size} টি শিট এবং মোট ${parsed.totalRows} টি রেকর্ড আপলোড হয়েছে! পূর্বের ফাইল অপসারিত হয়েছে।")
+        // Save to internal storage file and sync to Google Sheets & Drive as universal master
+        eblRepository.saveCompanyWorkbook(parsed, rawFileBytes = rawBytes)
+        onComplete(true, "সফলভাবে ${parsed.sheets.size} টি শিট এবং মোট ${parsed.totalRows} টি রেকর্ড আপলোড ও ক্লাউডে সিঙ্ক হয়েছে! সকল RM এবং ব্যবহারকারী এই আপডেট দেখতে পাবেন।")
       } catch (e: Exception) {
         onComplete(false, "ফাইল আপলোড ব্যর্থ হয়েছে: ${e.localizedMessage}")
+      }
+    }
+  }
+
+  fun syncCompanyWorkbookFromCloud(onComplete: (Boolean, String) -> Unit) {
+    viewModelScope.launch {
+      try {
+        eblRepository.syncCompanyWorkbookFromCloud()
+        val current = eblRepository.getCompanyWorkbook()
+        onComplete(true, "ক্লাউড থেকে সফলভাবে কোম্পানির তথ্য সিঙ্ক করা হয়েছে (${current.totalRows} টি রেকর্ড)!")
+      } catch (e: Exception) {
+        onComplete(false, "সিঙ্ক ব্যর্থ হয়েছে: ${e.localizedMessage}")
       }
     }
   }

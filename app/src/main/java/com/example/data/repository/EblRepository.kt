@@ -4503,6 +4503,22 @@ class EblRepository(
       )
       database.importantDocumentDao().insertDocument(entity)
       count++
+
+      // Universal Company Profile Workbook Sync: If cloud has an updated master workbook, download and apply
+      if (docId.equals("DOC_COMPANY_PROFILE_MASTER", ignoreCase = true) || category.equals("Company Profile", ignoreCase = true)) {
+        val currentUploadedAt = _companyWorkbookFlow.value.uploadedAt
+        if (updatedAt > currentUploadedAt + 2000L) {
+          applicationScope.launch(Dispatchers.IO) {
+            downloadAndUpdateCompanyWorkbook(
+              fileUri = fileUri,
+              storagePath = storagePath,
+              fileName = fileName,
+              uploaderName = uploaderName,
+              updatedAt = updatedAt
+            )
+          }
+        }
+      }
     }
     return count
   }
@@ -5813,13 +5829,20 @@ class EblRepository(
     _companyWorkbookFlow.value
   }
 
-  suspend fun saveCompanyWorkbook(workbook: com.example.data.model.CompanyWorkbookData) = withContext(Dispatchers.IO) {
+  suspend fun saveCompanyWorkbook(
+    workbook: com.example.data.model.CompanyWorkbookData,
+    rawFileBytes: ByteArray? = null
+  ) = withContext(Dispatchers.IO) {
     _companyWorkbookFlow.value = workbook
+    val masterFile = context?.filesDir?.let { java.io.File(it, "ebl_company_profiles_master.xlsx") }
     try {
       context?.filesDir?.let { dir ->
         val file = java.io.File(dir, "ebl_company_profiles_workbook.json")
         val json = com.example.util.ExcelWorkbookParser.toJson(workbook)
         file.writeText(json, Charsets.UTF_8)
+        if (rawFileBytes != null && masterFile != null) {
+          masterFile.writeBytes(rawFileBytes)
+        }
       }
     } catch (e: Exception) {
       e.printStackTrace()
@@ -5828,6 +5851,99 @@ class EblRepository(
     try {
       database.appSettingDao().deleteSetting("COMPANY_PROFILE_WORKBOOK_DATA")
     } catch (_: Exception) {}
+
+    // Synchronize to Google Sheets & Drive as universal company profile master document
+    try {
+      val now = workbook.uploadedAt
+      val fileSize = if (masterFile != null && masterFile.exists()) masterFile.length() else (rawFileBytes?.size?.toLong() ?: 0L)
+      val docEntity = com.example.data.model.ImportantDocumentEntity(
+        docId = "DOC_COMPANY_PROFILE_MASTER",
+        title = "Company Profile Corporate Directory",
+        category = "Company Profile",
+        description = "Universal multi-tab corporate & payroll client directory",
+        fileName = workbook.fileName,
+        fileType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        fileSizeBytes = fileSize,
+        fileUri = "",
+        storagePath = masterFile?.absolutePath ?: "",
+        uploadedBy = workbook.uploadedBy,
+        uploaderName = workbook.uploadedBy,
+        uploaderRole = "ADMIN",
+        createdAt = now,
+        updatedAt = now,
+        isDeleted = false,
+        isSynced = false
+      )
+      database.importantDocumentDao().insertDocument(docEntity)
+      applicationScope.launch {
+        syncDocumentUpsertToGoogleSheets(docEntity)
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  suspend fun downloadAndUpdateCompanyWorkbook(
+    fileUri: String,
+    storagePath: String,
+    fileName: String,
+    uploaderName: String,
+    updatedAt: Long
+  ) = withContext(Dispatchers.IO) {
+    try {
+      var bytes: ByteArray? = null
+      val localFile = if (storagePath.isNotBlank()) java.io.File(storagePath) else null
+      if (localFile != null && localFile.exists() && localFile.length() > 0) {
+        bytes = localFile.readBytes()
+      }
+      if (bytes == null && fileUri.startsWith("http")) {
+        val tempFile = context?.filesDir?.let { java.io.File(it, "temp_remote_company_workbook.xlsx") }
+        if (tempFile != null) {
+          val success = com.example.util.AttachmentHelper.downloadRemoteFileSync(fileUri, tempFile)
+          if (success && tempFile.exists() && tempFile.length() > 0) {
+            bytes = tempFile.readBytes()
+            val masterFile = java.io.File(context.filesDir, "ebl_company_profiles_master.xlsx")
+            tempFile.copyTo(masterFile, overwrite = true)
+            tempFile.delete()
+          }
+        }
+      }
+      if (bytes != null && bytes.isNotEmpty()) {
+        val parsed = com.example.util.ExcelWorkbookParser.parseWorkbookFromBytes(
+          bytes = bytes,
+          fileName = fileName,
+          uploadedBy = uploaderName
+        )
+        if (parsed.sheets.isNotEmpty() && parsed.totalRows > 0) {
+          val finalWb = parsed.copy(uploadedAt = updatedAt)
+          _companyWorkbookFlow.value = finalWb
+          context?.filesDir?.let { dir ->
+            val jsonFile = java.io.File(dir, "ebl_company_profiles_workbook.json")
+            jsonFile.writeText(com.example.util.ExcelWorkbookParser.toJson(finalWb), Charsets.UTF_8)
+          }
+        }
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+  }
+
+  suspend fun syncCompanyWorkbookFromCloud() = withContext(Dispatchers.IO) {
+    try {
+      val doc = database.importantDocumentDao().getDocumentById("DOC_COMPANY_PROFILE_MASTER")
+      if (doc != null && doc.updatedAt > _companyWorkbookFlow.value.uploadedAt + 2000L) {
+        downloadAndUpdateCompanyWorkbook(
+          fileUri = doc.fileUri,
+          storagePath = doc.storagePath,
+          fileName = doc.fileName,
+          uploaderName = doc.uploaderName,
+          updatedAt = doc.updatedAt
+        )
+      }
+      syncGoogleSheets()
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
   }
 
   suspend fun resetCompanyWorkbook(uploadedBy: String = "Admin") = withContext(Dispatchers.IO) {

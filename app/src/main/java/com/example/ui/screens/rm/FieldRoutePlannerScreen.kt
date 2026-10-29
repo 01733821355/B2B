@@ -570,154 +570,182 @@ private fun ActiveRoutePlanView(
       }
     }
 
-    when (activeViewTab) {
-      "AI_PLAN" -> {
-        GeminiAiRouteResultView(
-          geminiResult = geminiRouteResult,
-          isLoading = isLoadingAiRoute,
-          customers = customers,
-          onOpenGoogleMapsFullRoute = onOpenGoogleMapsFullRoute,
-          onOpenSingleLocationMap = onOpenSingleLocationMap,
-          onCallCustomer = onCallCustomer,
-          onCompleteCustomer = onCompleteCustomer,
-          modifier = Modifier.weight(1f)
-        )
-      }
-      else -> {
-        LazyColumn(
-          modifier = Modifier
-            .weight(1f)
-            .padding(horizontal = 14.dp),
-          verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(vertical = 12.dp)
-      ) {
-    // Progress & Summary Banner
-    item {
-      Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-      ) {
-        Column(modifier = Modifier.padding(14.dp)) {
-          Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.weight(1f)) {
+      when (activeViewTab) {
+        "AI_PLAN" -> {
+          GeminiAiRouteResultView(
+            geminiResult = geminiRouteResult,
+            isLoading = isLoadingAiRoute,
+            customers = customers,
+            onOpenGoogleMapsFullRoute = onOpenGoogleMapsFullRoute,
+            onOpenSingleLocationMap = onOpenSingleLocationMap,
+            onCallCustomer = onCallCustomer,
+            onCompleteCustomer = onCompleteCustomer,
+            modifier = Modifier.fillMaxSize()
+          )
+        }
+        else -> {
+          LazyColumn(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(top = 12.dp, bottom = 76.dp)
           ) {
-            Column {
-              Text("চলমান রুট প্ল্যান অগ্রগতি", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-              Text("বাকি ${customers.size} টি স্টপ • সম্পন্ন $completedCount টি", fontSize = 11.5.sp, color = Color(0xFF059669), fontWeight = FontWeight.SemiBold)
+            // Progress & Summary Banner
+            item {
+              Card(
+                shape = RoundedCornerShape(12.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+              ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                  Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Column {
+                      Text("চলমান রুট প্ল্যান অগ্রগতি", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                      Text("বাকি ${customers.size} টি স্টপ • সম্পন্ন $completedCount টি", fontSize = 11.5.sp, color = Color(0xFF059669), fontWeight = FontWeight.SemiBold)
+                    }
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = Color(0xFFEFF6FF),
+                      border = BorderStroke(0.8.dp, Color(0xFF93C5FD))
+                    ) {
+                      Text(
+                        text = "${((completedCount.toFloat() / totalInitialCount.coerceAtLeast(1)) * 100).toInt()}% Done",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1D4ED8),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                      )
+                    }
+                  }
+
+                  Spacer(modifier = Modifier.height(8.dp))
+                  val progressFraction = (completedCount.toFloat() / totalInitialCount.coerceAtLeast(1)).coerceIn(0f, 1f)
+                  LinearProgressIndicator(
+                    progress = { progressFraction },
+                    modifier = Modifier.fillMaxWidth().height(7.dp),
+                    color = Color(0xFF10B981),
+                    trackColor = Color(0xFFE2E8F0)
+                  )
+
+                  Spacer(modifier = Modifier.height(12.dp))
+
+                  // Big Google Maps Master Direction Button
+                  Button(
+                    onClick = onOpenGoogleMapsFullRoute,
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                      .fillMaxWidth()
+                      .height(44.dp)
+                      .testTag("btn_open_google_maps_full_route")
+                  ) {
+                    Icon(Icons.Default.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                      text = "🗺️ Google Maps-এ সম্পূর্ণ রুট ওপেন করুন",
+                      fontSize = 12.5.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = Color.White
+                    )
+                  }
+                }
+              }
             }
-            Surface(
-              shape = RoundedCornerShape(6.dp),
-              color = Color(0xFFEFF6FF),
-              border = BorderStroke(0.8.dp, Color(0xFF93C5FD))
-            ) {
-              Text(
-                text = "${((completedCount.toFloat() / totalInitialCount.coerceAtLeast(1)) * 100).toInt()}% Done",
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color(0xFF1D4ED8),
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+
+            // AI Smart Route Direction & Order Tips
+            item {
+              Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFF0FDF4),
+                border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier.padding(12.dp),
+                  verticalAlignment = Alignment.Top
+                ) {
+                  Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(8.dp))
+                  Column {
+                    Text("🤖 AI রুট অপটিমাইজেশন ও ফিল্ড গাইড", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                      text = "কাছাকাছি এলাকা ও ট্রাফিকের সুবিধার জন্য স্টপগুলো ক্রমানুসারে সাজানো হয়েছে। যেকোনো স্টপে ফাইল নেওয়া শেষে '✓ কালেকশন সম্পন্ন' ট্যাপ করলে রুট স্বয়ংক্রিয়ভাবে আপডেট হবে।",
+                      fontSize = 10.5.sp,
+                      color = Color(0xFF14532D),
+                      lineHeight = 15.sp
+                    )
+                  }
+                }
+              }
+            }
+
+            // Stops Header
+            item {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text("পরিদর্শনের ক্রমানুসার (Visit Order)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
+                Text("${customers.size} টি স্পট অবশিষ্ট", fontSize = 11.sp, color = Color.Gray)
+              }
+            }
+
+            // Ordered Stops
+            itemsIndexed(customers, key = { _, c -> c.fileId }) { index, customer ->
+              RouteStopCard(
+                stopNumber = index + 1,
+                customer = customer,
+                isLastStop = index == customers.size - 1,
+                onComplete = { onCompleteCustomer(customer) },
+                onRemove = { onRemoveFromRoute(customer) },
+                onNavigate = {
+                  val addr = customer.officeAddress.ifBlank { customer.cpvAddress }.ifBlank { customer.companyName }
+                  onOpenSingleLocationMap(addr)
+                },
+                onCall = { onCallCustomer(customer.mobile) },
+                onWhatsApp = { onWhatsAppCustomer(customer.mobile, customer.customerName) },
+                onEdit = { onEditFile(customer.fileId) }
               )
             }
           }
-
-          Spacer(modifier = Modifier.height(8.dp))
-          val progressFraction = (completedCount.toFloat() / totalInitialCount.coerceAtLeast(1)).coerceIn(0f, 1f)
-          LinearProgressIndicator(
-            progress = { progressFraction },
-            modifier = Modifier.fillMaxWidth().height(7.dp),
-            color = Color(0xFF10B981),
-            trackColor = Color(0xFFE2E8F0)
-          )
-
-          Spacer(modifier = Modifier.height(12.dp))
-
-          // Big Google Maps Master Direction Button
-          Button(
-            onClick = onOpenGoogleMapsFullRoute,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
-            shape = RoundedCornerShape(10.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .height(44.dp)
-              .testTag("btn_open_google_maps_full_route")
-          ) {
-            Icon(Icons.Default.Map, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-              text = "🗺️ Google Maps-এ সম্পূর্ণ রুট ওপেন করুন",
-              fontSize = 12.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color.White
-            )
-          }
         }
       }
-    }
 
-    // AI Smart Route Direction & Order Tips
-    item {
+      // Floating Bottom Navigation Pill Button (matching user's authentic Google Maps screenshot)
       Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = Color(0xFFF0FDF4),
-        border = BorderStroke(1.dp, Color(0xFFBBF7D0)),
-        modifier = Modifier.fillMaxWidth()
+        shape = RoundedCornerShape(28.dp),
+        color = Color(0xFF1D4ED8),
+        shadowElevation = 8.dp,
+        modifier = Modifier
+          .align(Alignment.BottomCenter)
+          .padding(bottom = 16.dp)
+          .clickable { onOpenGoogleMapsFullRoute() }
+          .testTag("floating_navigate_in_google_maps")
       ) {
         Row(
-          modifier = Modifier.padding(12.dp),
-          verticalAlignment = Alignment.Top
+          modifier = Modifier.padding(horizontal = 22.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(18.dp))
+          Icon(Icons.Default.Navigation, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Column {
-            Text("🤖 AI রুট অপটিমাইজেশন ও ফিল্ড গাইড", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-              text = "কাছাকাছি এলাকা ও ট্রাফিকের সুবিধার জন্য স্টপগুলো ক্রমানুসারে সাজানো হয়েছে। যেকোনো স্টপে ফাইল নেওয়া শেষে '✓ কালেকশন সম্পন্ন' ট্যাপ করলে রুট স্বয়ংক্রিয়ভাবে আপডেট হবে।",
-              fontSize = 10.5.sp,
-              color = Color(0xFF14532D),
-              lineHeight = 15.sp
-            )
-          }
+          Text(
+            text = "Navigate in Google Maps",
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color.White
+          )
         }
       }
     }
-
-    // Stops Header
-    item {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Text("পরিদর্শনের ক্রমানুসার (Visit Order)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF334155))
-        Text("${customers.size} টি স্পট অবশিষ্ট", fontSize = 11.sp, color = Color.Gray)
-      }
-    }
-
-    // Ordered Stops
-    itemsIndexed(customers, key = { _, c -> c.fileId }) { index, customer ->
-      RouteStopCard(
-        stopNumber = index + 1,
-        customer = customer,
-        isLastStop = index == customers.size - 1,
-        onComplete = { onCompleteCustomer(customer) },
-        onRemove = { onRemoveFromRoute(customer) },
-        onNavigate = {
-          val addr = customer.officeAddress.ifBlank { customer.cpvAddress }.ifBlank { customer.companyName }
-          onOpenSingleLocationMap(addr)
-        },
-        onCall = { onCallCustomer(customer.mobile) },
-        onWhatsApp = { onWhatsAppCustomer(customer.mobile, customer.customerName) },
-        onEdit = { onEditFile(customer.fileId) }
-      )
-    }
   }
-}
-}
-}
 }
 
 
@@ -941,7 +969,7 @@ private fun GeminiAiRouteResultView(
       .fillMaxSize()
       .padding(horizontal = 14.dp),
     verticalArrangement = Arrangement.spacedBy(10.dp),
-    contentPadding = PaddingValues(vertical = 12.dp)
+    contentPadding = PaddingValues(top = 12.dp, bottom = 76.dp)
   ) {
     // 1. Header Banner with Prompt display
     item {

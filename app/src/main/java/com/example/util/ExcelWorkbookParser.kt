@@ -21,12 +21,11 @@ object ExcelWorkbookParser {
   private const val MAX_ROWS_PER_SHEET = 2500 // 2,500 rows per sheet limit
 
   /**
-   * Safely parses an Excel (.xlsx, .xls), CSV, or TSV file from a content Uri into a multi-tab CompanyWorkbookData.
+   * Safely parses an Excel (.xlsx, .xls), CSV, or TSV byte array into a multi-tab CompanyWorkbookData.
    * Completely wrapped in error guards so it NEVER crashes the app.
    */
-  fun parseWorkbookFromUri(
-    context: Context,
-    uri: Uri,
+  fun parseWorkbookFromBytes(
+    bytes: ByteArray,
     fileName: String,
     uploadedBy: String
   ): CompanyWorkbookData {
@@ -34,22 +33,6 @@ object ExcelWorkbookParser {
     val sheets = mutableListOf<CompanySheetData>()
 
     try {
-      val bytes = context.contentResolver.openInputStream(uri)?.use { stream ->
-        val buffer = java.io.ByteArrayOutputStream()
-        val temp = ByteArray(8192)
-        var totalRead = 0
-        var read = stream.read(temp)
-        while (read != -1) {
-          totalRead += read
-          if (totalRead > MAX_FILE_SIZE_BYTES) {
-            break
-          }
-          buffer.write(temp, 0, read)
-          read = stream.read(temp)
-        }
-        buffer.toByteArray()
-      } ?: ByteArray(0)
-
       if (bytes.isNotEmpty()) {
         val isZip = bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() &&
             bytes[2] == 0x03.toByte() && bytes[3] == 0x04.toByte()
@@ -97,6 +80,39 @@ object ExcelWorkbookParser {
       uploadedAt = System.currentTimeMillis(),
       sheets = sheets
     )
+  }
+
+  /**
+   * Safely parses an Excel (.xlsx, .xls), CSV, or TSV file from a content Uri into a multi-tab CompanyWorkbookData.
+   */
+  fun parseWorkbookFromUri(
+    context: Context,
+    uri: Uri,
+    fileName: String,
+    uploadedBy: String
+  ): CompanyWorkbookData {
+    val bytes = try {
+      context.contentResolver.openInputStream(uri)?.use { stream ->
+        val buffer = java.io.ByteArrayOutputStream()
+        val temp = ByteArray(8192)
+        var totalRead = 0
+        var read = stream.read(temp)
+        while (read != -1) {
+          totalRead += read
+          if (totalRead > MAX_FILE_SIZE_BYTES) {
+            break
+          }
+          buffer.write(temp, 0, read)
+          read = stream.read(temp)
+        }
+        buffer.toByteArray()
+      } ?: ByteArray(0)
+    } catch (e: Exception) {
+      e.printStackTrace()
+      ByteArray(0)
+    }
+
+    return parseWorkbookFromBytes(bytes, fileName, uploadedBy)
   }
 
   /**

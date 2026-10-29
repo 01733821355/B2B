@@ -39,9 +39,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -102,6 +106,7 @@ fun CompanyProfileScreen(
   var searchQuery by remember { mutableStateOf("") }
   var selectedTabFilter by remember { mutableStateOf("ALL") }
   var isUploading by remember { mutableStateOf(false) }
+  var isSyncingCloud by remember { mutableStateOf(false) }
   var showAdminUploadDialog by remember { mutableStateOf(false) }
   var selectedResultForDetails by remember { mutableStateOf<CompanySearchResult?>(null) }
 
@@ -208,29 +213,58 @@ fun CompanyProfileScreen(
           Column {
             Text(
               text = "Company Profile (কোম্পানি প্রোফাইল)",
-              fontSize = 16.sp,
+              fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
               color = Color.White
             )
             Text(
-              text = "মাল্টি-ট্যাব এক্সেল ডিরেক্টরি • ${workbook.sheets.size} টি শিট • ${workbook.totalRows} টি কোম্পানি",
-              fontSize = 11.sp,
+              text = "সার্বজনীন ডিরেক্টরি • ${workbook.sheets.size} টি শিট • ${workbook.totalRows} টি কোম্পানি",
+              fontSize = 10.5.sp,
               color = Color(0xFFCBD5E1)
             )
           }
         }
 
-        if (canManageExcel) {
-          Button(
-            onClick = { showAdminUploadDialog = true },
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          // Universal Cloud Sync Button (for all users: RM, Mentor, Admin)
+          OutlinedButton(
+            onClick = {
+              isSyncingCloud = true
+              viewModel.syncCompanyWorkbookFromCloud { _, msg ->
+                isSyncingCloud = false
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+              }
+            },
+            enabled = !isSyncingCloud,
             shape = RoundedCornerShape(8.dp),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-            modifier = Modifier.testTag("btn_open_excel_manager")
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 5.dp),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+            modifier = Modifier.testTag("btn_sync_company_profile_cloud")
           ) {
-            Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+            if (isSyncingCloud) {
+              CircularProgressIndicator(modifier = Modifier.size(13.dp), strokeWidth = 2.dp, color = Color.White)
+            } else {
+              Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+            }
             Spacer(modifier = Modifier.width(4.dp))
-            Text("আপলোড", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("সিঙ্ক", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+          }
+
+          if (canManageExcel) {
+            Button(
+              onClick = { showAdminUploadDialog = true },
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
+              shape = RoundedCornerShape(8.dp),
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+              modifier = Modifier.testTag("btn_open_excel_manager")
+            ) {
+              Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("আপলোড", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            }
           }
         }
       }
@@ -342,13 +376,29 @@ fun CompanyProfileScreen(
           color = EblNavyDark
         )
 
-        Text(
-          text = "শিট: ${workbook.fileName.take(22)}",
-          fontSize = 10.sp,
-          color = Color.Gray,
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Surface(
+            shape = RoundedCornerShape(4.dp),
+            color = Color(0xFFDCFCE7),
+            border = BorderStroke(0.5.dp, Color(0xFF86EFAC))
+          ) {
+            Text(
+              text = "☁️ সার্বজনীন ক্লাউড সক্রিয়",
+              fontSize = 9.5.sp,
+              color = Color(0xFF15803D),
+              fontWeight = FontWeight.Bold,
+              modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+            )
+          }
+          Spacer(modifier = Modifier.width(6.dp))
+          Text(
+            text = "শিট: ${workbook.fileName.take(18)}",
+            fontSize = 10.sp,
+            color = Color.Gray,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+          )
+        }
       }
     }
 
@@ -403,6 +453,12 @@ fun CompanyProfileScreen(
             onCall = { phone ->
               try {
                 val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${phone.trim()}"))
+                context.startActivity(intent)
+              } catch (_: Exception) {}
+            },
+            onEmail = { email ->
+              try {
+                val intent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${email.trim()}"))
                 context.startActivity(intent)
               } catch (_: Exception) {}
             }
@@ -612,125 +668,395 @@ private fun CompanyResultCard(
   result: CompanySearchResult,
   onCardClick: () -> Unit,
   onCopy: () -> Unit,
-  onCall: (String) -> Unit
+  onCall: (String) -> Unit,
+  onEmail: (String) -> Unit
 ) {
-  val title = result.rowData.firstOrNull() ?: "অজ্ঞাত কোম্পানি"
-  val subTitle = if (result.rowData.size > 1) result.rowData[1] else ""
-  val address = result.rowData.firstOrNull { it.contains("Dhaka", ignoreCase = true) || it.contains("Chittagong", ignoreCase = true) || it.contains("Road", ignoreCase = true) || it.contains("House", ignoreCase = true) || it.contains("Plot", ignoreCase = true) }
+  val sheetUpper = result.sheetName.uppercase()
+  val isPayroll = sheetUpper.contains("PAYROLL") ||
+    result.headers.any {
+      val hu = it.uppercase()
+      hu.contains("PAYROLL") || hu.contains("AGREEMENT") || hu.contains("HEADCOUNT") || hu.contains("SALARY")
+    }
+  val isListed = sheetUpper.contains("LISTED") || sheetUpper.contains("PUBLIC") || sheetUpper.contains("DSE")
+  val isSme = sheetUpper.contains("SME")
+  val isMnc = sheetUpper.contains("MNC") || sheetUpper.contains("MULTINATIONAL")
+
+  val title = result.rowData.firstOrNull()?.trim()?.ifBlank { "অজ্ঞাত কোম্পানি" } ?: "অজ্ঞাত কোম্পানি"
   val phone = result.rowData.firstOrNull { it.contains("+880") || (it.startsWith("01") && it.length >= 11) }
+  val email = result.rowData.firstOrNull { it.contains("@") && it.contains(".") }
+  val address = result.rowData.firstOrNull {
+    it.contains("Dhaka", ignoreCase = true) || it.contains("Chittagong", ignoreCase = true) ||
+      it.contains("Road", ignoreCase = true) || it.contains("House", ignoreCase = true) ||
+      it.contains("Plot", ignoreCase = true) || it.contains("Tower", ignoreCase = true) ||
+      it.contains("Avenue", ignoreCase = true) || it.contains("Floor", ignoreCase = true)
+  }
+
+  // Find explicit Payroll attributes
+  val agreementEntry = result.headers.zip(result.rowData).firstOrNull {
+    val h = it.first.uppercase()
+    h.contains("AGREEMENT") || h.contains("DATE") || it.first.contains("চুক্তি")
+  }
+  val headcountEntry = result.headers.zip(result.rowData).firstOrNull {
+    val h = it.first.uppercase()
+    h.contains("HEADCOUNT") || h.contains("EMPLOYEE") || h.contains("STAFF") || it.first.contains("কর্মী")
+  }
+  val branchEntry = result.headers.zip(result.rowData).firstOrNull {
+    val h = it.first.uppercase()
+    h.contains("BRANCH") || it.first.contains("শাখা")
+  }
+  val rmEntry = result.headers.zip(result.rowData).firstOrNull {
+    val h = it.first.uppercase()
+    h.contains("RM") || h.contains("OFFICER") || it.first.contains("কর্মকর্তা")
+  }
 
   Card(
-    shape = RoundedCornerShape(10.dp),
+    shape = RoundedCornerShape(12.dp),
     colors = CardDefaults.cardColors(containerColor = Color.White),
-    elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp),
+    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    border = BorderStroke(
+      1.dp,
+      if (isPayroll) Color(0xFFA7F3D0) else Color(0xFFE2E8F0)
+    ),
     modifier = Modifier
       .fillMaxWidth()
       .clickable { onCardClick() }
       .testTag("card_company_${title.take(15)}")
   ) {
-    Column(modifier = Modifier.padding(12.dp)) {
+    Column(modifier = Modifier.padding(14.dp)) {
+      // 1. Top Badges Row: Sheet category + Quick Copy
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        // Tab / Sheet Badge
-        Surface(
-          shape = RoundedCornerShape(4.dp),
-          color = Color(0xFFEFF6FF),
-          border = BorderStroke(0.8.dp, Color(0xFF93C5FD))
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-            verticalAlignment = Alignment.CenterVertically
+          if (isPayroll) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFECFDF5),
+              border = BorderStroke(1.dp, Color(0xFF6EE7B7))
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = "💼 EBL Payroll Partner",
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color(0xFF047857)
+                )
+              }
+            }
+          } else if (isListed) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFEFF6FF),
+              border = BorderStroke(1.dp, Color(0xFF93C5FD))
+            ) {
+              Text(
+                text = "📈 তালিকাভুক্ত কোম্পানি (Listed)",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1D4ED8),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+              )
+            }
+          } else if (isSme) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFFFFBEB),
+              border = BorderStroke(1.dp, Color(0xFFFDE68A))
+            ) {
+              Text(
+                text = "🏭 SME Client",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFB45309),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+              )
+            }
+          } else if (isMnc) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFFAF5FF),
+              border = BorderStroke(1.dp, Color(0xFFE9D5FF))
+            ) {
+              Text(
+                text = "🌐 Multinational (MNC)",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF7E22CE),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+              )
+            }
+          }
+
+          // Sheet Tab Indicator
+          Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color(0xFFF8FAFC),
+            border = BorderStroke(0.8.dp, Color(0xFFCBD5E1))
           ) {
-            Icon(Icons.Default.TableChart, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(11.dp))
-            Spacer(modifier = Modifier.width(3.dp))
-            Text(
-              text = result.sheetName,
-              fontSize = 10.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color(0xFF1D4ED8)
-            )
+            Row(
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Icon(Icons.Default.TableChart, contentDescription = null, tint = Color(0xFF475569), modifier = Modifier.size(11.dp))
+              Spacer(modifier = Modifier.width(3.dp))
+              Text(
+                text = result.sheetName,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFF475569)
+              )
+            }
           }
         }
 
         // Quick Copy Action
         IconButton(
           onClick = onCopy,
-          modifier = Modifier.size(24.dp)
+          modifier = Modifier.size(26.dp)
         ) {
-          Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color.Gray, modifier = Modifier.size(14.dp))
+          Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = Color(0xFF64748B), modifier = Modifier.size(15.dp))
         }
       }
 
-      Spacer(modifier = Modifier.height(6.dp))
+      Spacer(modifier = Modifier.height(8.dp))
 
+      // 2. Company Name
       Text(
         text = title,
-        fontSize = 14.sp,
+        fontSize = 15.sp,
         fontWeight = FontWeight.Bold,
         color = EblNavyDark
       )
 
-      if (subTitle.isNotBlank()) {
-        Text(
-          text = subTitle,
-          fontSize = 11.5.sp,
-          color = Color(0xFF475569)
-        )
+      Spacer(modifier = Modifier.height(6.dp))
+
+      // 3. Structured Data with Explicit Column Headers
+      if (isPayroll) {
+        // Dedicated, Beautiful Payroll Highlights
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = Color(0xFFF0FDF4),
+          border = BorderStroke(0.8.dp, Color(0xFFBBF7D0)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              // Agreement Date
+              Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.DateRange, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(agreementEntry?.first ?: "চুক্তি তারিখ", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = agreementEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF065F46)
+                )
+              }
+
+              // Employee Headcount
+              Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(headcountEntry?.first ?: "কর্মী সংখ্যা", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = headcountEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF065F46)
+                )
+              }
+            }
+
+            HorizontalDivider(color = Color(0xFFDCFCE7), thickness = 0.8.dp)
+
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              // Branch
+              Column(modifier = Modifier.weight(1f)) {
+                Text(branchEntry?.first ?: "EBL শাখা", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = branchEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF065F46)
+                )
+              }
+
+              // Assigned RM
+              Column(modifier = Modifier.weight(1f)) {
+                Text(rmEntry?.first ?: "দায়িত্বপ্রাপ্ত RM", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = rmEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  fontSize = 11.5.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = Color(0xFF065F46)
+                )
+              }
+            }
+          }
+        }
+
+        // Remaining non-null columns displayed with explicit Column Headers
+        val specialKeys = listOf(agreementEntry?.first, headcountEntry?.first, branchEntry?.first, rmEntry?.first).filterNotNull()
+        val otherColumns = result.headers.zip(result.rowData).drop(1).filter {
+          it.first !in specialKeys && it.second.isNotBlank() && it.second != phone && it.second != email && it.second != address
+        }
+
+        if (otherColumns.isNotEmpty()) {
+          Spacer(modifier = Modifier.height(6.dp))
+          Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            otherColumns.take(3).forEach { (h, v) ->
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text("$h: ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF475569))
+                Text(v, fontSize = 11.5.sp, color = Color(0xFF1E293B), maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
+            }
+          }
+        }
+      } else {
+        // General / Corporate / SME Card: All columns with explicit Column Headers!
+        Column(
+          modifier = Modifier.fillMaxWidth(),
+          verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+          result.headers.zip(result.rowData).drop(1).forEach { (header, value) ->
+            if (value.isNotBlank() && value != address && value != phone && value != email) {
+              Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFFF8FAFC),
+                border = BorderStroke(0.6.dp, Color(0xFFE2E8F0)),
+                modifier = Modifier.fillMaxWidth()
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Text(
+                    text = "$header: ",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF475569)
+                  )
+                  Text(
+                    text = value,
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF0F172A),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                  )
+                }
+              }
+            }
+          }
+        }
       }
 
+      // 4. Address Display
       if (!address.isNullOrBlank()) {
-        Spacer(modifier = Modifier.height(3.dp))
-        Text(
-          text = "📍 $address",
-          fontSize = 11.sp,
-          color = Color.Gray,
-          maxLines = 2,
-          overflow = TextOverflow.Ellipsis
-        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.Top) {
+          Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFEF4444), modifier = Modifier.size(13.dp))
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = address,
+            fontSize = 11.sp,
+            color = Color(0xFF475569),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 15.sp
+          )
+        }
       }
 
       Spacer(modifier = Modifier.height(8.dp))
       HorizontalDivider(color = Color(0xFFF1F5F9))
       Spacer(modifier = Modifier.height(6.dp))
 
-      // Bottom Row: Phone Call & Details link
+      // 5. Bottom Action Row: Call, Email, and Details Link
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
       ) {
-        if (!phone.isNullOrBlank()) {
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = Color(0xFFECFDF5),
-            border = BorderStroke(0.8.dp, Color(0xFFA7F3D0)),
-            modifier = Modifier.clickable { onCall(phone) }
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-              verticalAlignment = Alignment.CenterVertically
+        Row(
+          horizontalArrangement = Arrangement.spacedBy(6.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          if (!phone.isNullOrBlank()) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFECFDF5),
+              border = BorderStroke(0.8.dp, Color(0xFFA7F3D0)),
+              modifier = Modifier.clickable { onCall(phone) }
             ) {
-              Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(phone, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(Icons.Default.Phone, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(phone, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF065F46))
+              }
             }
           }
-        } else {
-          Text(
-            text = "${result.rowData.size} টি কলাম তথ্য",
-            fontSize = 10.5.sp,
-            color = Color.Gray
-          )
+
+          if (!email.isNullOrBlank()) {
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFEFF6FF),
+              border = BorderStroke(0.8.dp, Color(0xFF93C5FD)),
+              modifier = Modifier.clickable { onEmail(email) }
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Icon(Icons.Default.Email, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Email", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
+              }
+            }
+          }
+
+          if (phone.isNullOrBlank() && email.isNullOrBlank()) {
+            Text(
+              text = "${result.rowData.size} টি কলাম তথ্য",
+              fontSize = 10.5.sp,
+              color = Color.Gray
+            )
+          }
         }
 
         Text(
           text = "বিস্তারিত দেখুন →",
           fontSize = 11.sp,
           color = EblNavyPrimary,
-          fontWeight = FontWeight.SemiBold
+          fontWeight = FontWeight.Bold
         )
       }
     }
