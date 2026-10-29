@@ -20,9 +20,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Group
@@ -276,6 +278,44 @@ fun MentorDashboardScreen(
             Icon(Icons.Default.Campaign, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text("Events & Reports", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          OutlinedButton(
+            onClick = { onNavigate(Screen.CompanyProfile) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              contentColor = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6) else Color(0xFF93C5FD)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_company_profile")
+          ) {
+            Icon(Icons.Default.Business, contentDescription = null, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Company Profile", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+          }
+
+          OutlinedButton(
+            onClick = { onNavigate(Screen.FieldRoutePlanner()) },
+            colors = ButtonDefaults.outlinedButtonColors(
+              containerColor = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFECFDF5),
+              contentColor = if (isDark) Color(0xFF6EE7B7) else Color(0xFF059669)
+            ),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF10B981) else Color(0xFFA7F3D0)),
+            shape = RoundedCornerShape(8.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 5.dp),
+            modifier = Modifier.weight(1f).testTag("mentor_btn_route_planner")
+          ) {
+            Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(13.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Route Planner", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
         }
 

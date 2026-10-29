@@ -25,12 +25,17 @@ object GeminiTranslator {
         ${items.joinToString("\n") { "- $it" }}
       """.trimIndent()
 
-      val rawResponse = withTimeoutOrNull(12_000L) {
+      val rawResponse = withTimeoutOrNull(8_000L) {
         try {
-          val model = Firebase.ai.generativeModel("gemini-3.8-flash")
+          val model = Firebase.ai.generativeModel("gemini-2.5-flash")
           model.generateContent(prompt).text
         } catch (_: Exception) {
-          null
+          try {
+            val fallbackModel = Firebase.ai.generativeModel("gemini-1.5-flash")
+            fallbackModel.generateContent(prompt).text
+          } catch (_: Exception) {
+            null
+          }
         }
       }
 

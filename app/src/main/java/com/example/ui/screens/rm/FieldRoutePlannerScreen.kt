@@ -478,10 +478,21 @@ private fun ActiveRoutePlanView(
     return
   }
 
-  var activeViewTab by remember { mutableStateOf("MAP") } // "MAP" or "LIST"
+  var activeViewTab by remember { mutableStateOf("MAP") } // "MAP", "AI_PLAN", or "LIST"
+  val context = LocalContext.current
+  var geminiRouteResult by remember { mutableStateOf<com.example.util.GeminiRoutePlanResult?>(null) }
+  var isLoadingAiRoute by remember { mutableStateOf(false) }
+
+  androidx.compose.runtime.LaunchedEffect(customers) {
+    if (customers.isNotEmpty()) {
+      isLoadingAiRoute = true
+      geminiRouteResult = com.example.util.GeminiRoutePlanner.generateRoutePlan(context, customers)
+      isLoadingAiRoute = false
+    }
+  }
 
   Column(modifier = Modifier.fillMaxSize()) {
-    // Mode Switcher: 🗺️ রুট ম্যাপ ভিউ (Map) vs 📋 স্টপ তালিকা (Stop List)
+    // Mode Switcher: 🗺️ গুগল ম্যাপ (Map) vs ✨ Gemini AI প্ল্যান vs 📋 স্টপ তালিকা (Stop List)
     Surface(
       color = Color.White,
       shadowElevation = 2.dp,
@@ -490,9 +501,10 @@ private fun ActiveRoutePlanView(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+          .padding(horizontal = 8.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
       ) {
+        // TAB 1: Authentic Google Map View
         Surface(
           shape = RoundedCornerShape(8.dp),
           color = if (activeViewTab == "MAP") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
@@ -503,7 +515,7 @@ private fun ActiveRoutePlanView(
             .testTag("tab_route_map_view")
         ) {
           Row(
-            modifier = Modifier.padding(vertical = 7.dp),
+            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
@@ -511,18 +523,52 @@ private fun ActiveRoutePlanView(
               Icons.Default.Map,
               contentDescription = null,
               tint = if (activeViewTab == "MAP") Color.White else Color(0xFF475569),
-              modifier = Modifier.size(15.dp)
+              modifier = Modifier.size(14.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
-              text = "🗺️ রুট ম্যাপ ভিউ (Map)",
-              fontSize = 12.sp,
+              text = "🗺️ গুগল ম্যাপ",
+              fontSize = 11.5.sp,
               fontWeight = FontWeight.Bold,
-              color = if (activeViewTab == "MAP") Color.White else Color(0xFF475569)
+              color = if (activeViewTab == "MAP") Color.White else Color(0xFF475569),
+              maxLines = 1
             )
           }
         }
 
+        // TAB 2: Gemini AI Complete Route Plan (Prompt Response)
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = if (activeViewTab == "AI_PLAN") Color(0xFF16A34A) else Color(0xFFF1F5F9),
+          border = BorderStroke(1.dp, if (activeViewTab == "AI_PLAN") Color(0xFF16A34A) else Color(0xFFCBD5E1)),
+          modifier = Modifier
+            .weight(1.15f)
+            .clickable { activeViewTab = "AI_PLAN" }
+            .testTag("tab_gemini_ai_route")
+        ) {
+          Row(
+            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Icon(
+              Icons.Default.AutoAwesome,
+              contentDescription = null,
+              tint = if (activeViewTab == "AI_PLAN") Color.White else Color(0xFF16A34A),
+              modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = "✨ Gemini রুট",
+              fontSize = 11.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = if (activeViewTab == "AI_PLAN") Color.White else Color(0xFF475569),
+              maxLines = 1
+            )
+          }
+        }
+
+        // TAB 3: Stop List
         Surface(
           shape = RoundedCornerShape(8.dp),
           color = if (activeViewTab == "LIST") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
@@ -533,7 +579,7 @@ private fun ActiveRoutePlanView(
             .testTag("tab_route_list_view")
         ) {
           Row(
-            modifier = Modifier.padding(vertical = 7.dp),
+            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
@@ -541,38 +587,53 @@ private fun ActiveRoutePlanView(
               Icons.Default.Navigation,
               contentDescription = null,
               tint = if (activeViewTab == "LIST") Color.White else Color(0xFF475569),
-              modifier = Modifier.size(15.dp)
+              modifier = Modifier.size(14.dp)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
-              text = "📋 স্টপ তালিকা (${customers.size})",
-              fontSize = 12.sp,
+              text = "📋 স্টপ (${customers.size})",
+              fontSize = 11.5.sp,
               fontWeight = FontWeight.Bold,
-              color = if (activeViewTab == "LIST") Color.White else Color(0xFF475569)
+              color = if (activeViewTab == "LIST") Color.White else Color(0xFF475569),
+              maxLines = 1
             )
           }
         }
       }
     }
 
-    if (activeViewTab == "MAP") {
-      FieldRouteInteractiveMapView(
-        customers = customers,
-        completedCount = completedCount,
-        totalInitialCount = totalInitialCount,
-        onOpenGoogleMaps = onOpenGoogleMapsFullRoute,
-        onCompleteCustomer = onCompleteCustomer,
-        onCallCustomer = onCallCustomer,
-        onWhatsAppCustomer = onWhatsAppCustomer,
-        onOpenSingleLocationMap = onOpenSingleLocationMap,
-        modifier = Modifier.weight(1f)
-      )
-    } else {
-      LazyColumn(
-        modifier = Modifier
-          .weight(1f)
-          .padding(horizontal = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    when (activeViewTab) {
+      "MAP" -> {
+        FieldRouteInteractiveMapView(
+          customers = customers,
+          completedCount = completedCount,
+          totalInitialCount = totalInitialCount,
+          onOpenGoogleMaps = onOpenGoogleMapsFullRoute,
+          onCompleteCustomer = onCompleteCustomer,
+          onCallCustomer = onCallCustomer,
+          onWhatsAppCustomer = onWhatsAppCustomer,
+          onOpenSingleLocationMap = onOpenSingleLocationMap,
+          modifier = Modifier.weight(1f)
+        )
+      }
+      "AI_PLAN" -> {
+        GeminiAiRouteResultView(
+          geminiResult = geminiRouteResult,
+          isLoading = isLoadingAiRoute,
+          customers = customers,
+          onOpenGoogleMapsFullRoute = onOpenGoogleMapsFullRoute,
+          onOpenSingleLocationMap = onOpenSingleLocationMap,
+          onCallCustomer = onCallCustomer,
+          onCompleteCustomer = onCompleteCustomer,
+          modifier = Modifier.weight(1f)
+        )
+      }
+      else -> {
+        LazyColumn(
+          modifier = Modifier
+            .weight(1f)
+            .padding(horizontal = 14.dp),
+          verticalArrangement = Arrangement.spacedBy(10.dp),
         contentPadding = PaddingValues(vertical = 12.dp)
       ) {
     // Progress & Summary Banner
@@ -702,6 +763,8 @@ private fun ActiveRoutePlanView(
 }
 }
 }
+}
+
 
 @Composable
 private fun RouteStopCard(
@@ -902,6 +965,336 @@ private fun RouteStopCard(
     }
   }
 }
+
+// -------------------------------------------------------------------------
+// COMPONENT: GEMINI AI ROUTE PLAN RESULT VIEW
+// Responds to prompt: "selected customer address gulote visit korar complete and easy route plan google map a koredao"
+// -------------------------------------------------------------------------
+@Composable
+private fun GeminiAiRouteResultView(
+  geminiResult: com.example.util.GeminiRoutePlanResult?,
+  isLoading: Boolean,
+  customers: List<CustomerFileEntity>,
+  onOpenGoogleMapsFullRoute: () -> Unit,
+  onOpenSingleLocationMap: (String) -> Unit,
+  onCallCustomer: (String) -> Unit,
+  onCompleteCustomer: (CustomerFileEntity) -> Unit,
+  modifier: Modifier = Modifier
+) {
+  LazyColumn(
+    modifier = modifier
+      .fillMaxSize()
+      .padding(horizontal = 14.dp),
+    verticalArrangement = Arrangement.spacedBy(10.dp),
+    contentPadding = PaddingValues(vertical = 12.dp)
+  ) {
+    // 1. Header Banner with Prompt display
+    item {
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Surface(
+                shape = CircleShape,
+                color = Color(0xFFEFF6FF),
+                border = BorderStroke(1.dp, Color(0xFF93C5FD)),
+                modifier = Modifier.size(36.dp)
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(18.dp))
+                }
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Text(
+                  text = "Gemini AI Route Intelligence",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = EblNavyDark
+                )
+                Text(
+                  text = if (geminiResult?.isLiveAiGenerated == true) "✨ লাইভ Google Gemini AI জেনারেটেড" else "✨ ব্যাংকিং জিও-ক্লাস্টার অপ্টিমাইজড",
+                  fontSize = 11.sp,
+                  color = Color(0xFF16A34A),
+                  fontWeight = FontWeight.SemiBold
+                )
+              }
+            }
+
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFF10B981)
+            ) {
+              Text(
+                text = "${customers.size} STOPS",
+                fontSize = 10.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Prompt Box
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFF8FAFC),
+            border = BorderStroke(0.8.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(8.dp)) {
+              Text(
+                text = "💬 এক্সিকিউটেড AI প্রম্পট:",
+                fontSize = 10.5.sp,
+                color = Color.Gray,
+                fontWeight = FontWeight.SemiBold
+              )
+              Text(
+                text = "\"selected customer address gulote visit korar complete and easy route plan google map a koredao\"",
+                fontSize = 11.5.sp,
+                color = Color(0xFF1E3A8A),
+                fontWeight = FontWeight.Medium
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Distance, Time & Highway badges
+          if (geminiResult != null) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFEFF6FF),
+                modifier = Modifier.weight(1f)
+              ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                  Text("আনুমানিক দূরত্ব", fontSize = 10.sp, color = Color.Gray)
+                  Text(geminiResult.totalEstimatedDistanceKm, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
+                }
+              }
+
+              Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color(0xFFF0FDF4),
+                modifier = Modifier.weight(1f)
+              ) {
+                Column(modifier = Modifier.padding(8.dp)) {
+                  Text("আনুমানিক সময়", fontSize = 10.sp, color = Color.Gray)
+                  Text(geminiResult.totalEstimatedTime, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                }
+              }
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Master Google Maps Launch Button
+          Button(
+            onClick = onOpenGoogleMapsFullRoute,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1D4ED8)),
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(44.dp)
+              .testTag("btn_gemini_open_google_maps")
+          ) {
+            Icon(Icons.Default.Navigation, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = "🗺️ Google Maps-এ সহজ সম্পূর্ণ রুট নেভিগেশন",
+              fontSize = 12.5.sp,
+              fontWeight = FontWeight.Bold,
+              color = Color.White
+            )
+          }
+        }
+      }
+    }
+
+    // 2. AI Plan Summary Text
+    item {
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.5.dp)
+      ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Directions, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("AI রুট পরামর্শ ও ভিজিট পরিকল্পনা", fontSize = 13.5.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          if (isLoading) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+              horizontalArrangement = Arrangement.Center,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              androidx.compose.material3.CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = Color(0xFF1D4ED8))
+              Spacer(modifier = Modifier.width(8.dp))
+              Text("Gemini AI রুট প্ল্যান তৈরি করছে...", fontSize = 12.sp, color = Color.Gray)
+            }
+          } else {
+            Text(
+              text = geminiResult?.aiPlanSummary ?: "রুট তৈরি হচ্ছে...",
+              fontSize = 12.sp,
+              color = Color(0xFF334155),
+              lineHeight = 18.sp
+            )
+          }
+        }
+      }
+    }
+
+    // 3. Step by step customer visit cards
+    if (geminiResult != null && geminiResult.stepByStepGuide.isNotEmpty()) {
+      item {
+        Text(
+          text = "📍 ক্রমানুসারে স্টপ ভিজিট নির্দেশিকা (${geminiResult.stepByStepGuide.size} টি স্পট)",
+          fontSize = 13.sp,
+          fontWeight = FontWeight.Bold,
+          color = EblNavyDark,
+          modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+        )
+      }
+
+      items(geminiResult.stepByStepGuide) { step ->
+        val originalCust = customers.firstOrNull { it.customerName == step.customerName }
+        Card(
+          shape = RoundedCornerShape(10.dp),
+          colors = CardDefaults.cardColors(containerColor = Color.White),
+          elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+          border = BorderStroke(0.8.dp, Color(0xFFE2E8F0)),
+          modifier = Modifier.fillMaxWidth()
+        ) {
+          Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                  shape = CircleShape,
+                  color = Color(0xFF1D4ED8),
+                  modifier = Modifier.size(24.dp)
+                ) {
+                  Box(contentAlignment = Alignment.Center) {
+                    Text(
+                      text = "${step.stepNumber}",
+                      color = Color.White,
+                      fontSize = 12.sp,
+                      fontWeight = FontWeight.Bold
+                    )
+                  }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                  Text(
+                    text = step.customerName,
+                    fontSize = 13.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EblNavyDark
+                  )
+                  Text(
+                    text = step.companyName,
+                    fontSize = 11.sp,
+                    color = Color.Gray
+                  )
+                }
+              }
+
+              // Single stop direction
+              OutlinedButton(
+                onClick = { onOpenSingleLocationMap(step.destinationAddress) },
+                shape = RoundedCornerShape(6.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                modifier = Modifier.height(28.dp)
+              ) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(12.dp))
+                Spacer(modifier = Modifier.width(3.dp))
+                Text("ম্যাপ", fontSize = 10.5.sp, color = Color(0xFF0284C7), fontWeight = FontWeight.Bold)
+              }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+              text = "📍 ${step.destinationAddress}",
+              fontSize = 11.5.sp,
+              color = Color(0xFF475569)
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFFFEF3C7).copy(alpha = 0.5f),
+              border = BorderStroke(0.6.dp, Color(0xFFFDE68A)),
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Text(
+                text = "💡 ${step.guidanceNote}",
+                fontSize = 11.sp,
+                color = Color(0xFF92400E),
+                modifier = Modifier.padding(6.dp)
+              )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              if (step.phone.isNotBlank()) {
+                OutlinedButton(
+                  onClick = { onCallCustomer(step.phone) },
+                  shape = RoundedCornerShape(6.dp),
+                  modifier = Modifier.weight(1f).height(32.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                  Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(12.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("কল দিন", fontSize = 10.5.sp)
+                }
+              }
+
+              if (originalCust != null) {
+                Button(
+                  onClick = { onCompleteCustomer(originalCust) },
+                  colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
+                  shape = RoundedCornerShape(6.dp),
+                  modifier = Modifier.weight(1.3f).height(32.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                  Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(12.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text("কালেকশন সম্পন্ন", fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 
 // -------------------------------------------------------------------------
 // COMPONENT 2: CUSTOMER SELECTION & 'WANT TO GO' VIEW

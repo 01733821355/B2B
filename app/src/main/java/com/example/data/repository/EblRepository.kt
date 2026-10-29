@@ -5712,4 +5712,47 @@ class EblRepository(
     }
     Result.success(Unit)
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // COMPANY PROFILE EXCEL WORKBOOK PERSISTENCE (Multi-Tab Excel / CSV)
+  // -----------------------------------------------------------------------------------------------
+  fun getCompanyWorkbookFlow(): Flow<com.example.data.model.CompanyWorkbookData> {
+    return database.appSettingDao().getSettingFlow("COMPANY_PROFILE_WORKBOOK_DATA").map { setting ->
+      if (setting != null && setting.settingValue.isNotBlank()) {
+        com.example.util.ExcelWorkbookParser.fromJson(setting.settingValue)
+          ?: com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+      } else {
+        com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+      }
+    }
+  }
+
+  suspend fun getCompanyWorkbook(): com.example.data.model.CompanyWorkbookData = withContext(Dispatchers.IO) {
+    val setting = database.appSettingDao().getSetting("COMPANY_PROFILE_WORKBOOK_DATA")
+    if (setting != null && setting.settingValue.isNotBlank()) {
+      com.example.util.ExcelWorkbookParser.fromJson(setting.settingValue)
+        ?: com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+    } else {
+      com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+    }
+  }
+
+  suspend fun saveCompanyWorkbook(workbook: com.example.data.model.CompanyWorkbookData) = withContext(Dispatchers.IO) {
+    val json = com.example.util.ExcelWorkbookParser.toJson(workbook)
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity(
+        settingKey = "COMPANY_PROFILE_WORKBOOK_DATA",
+        settingValue = json,
+        updatedBy = workbook.uploadedBy,
+        updatedAt = now
+      )
+    )
+  }
+
+  suspend fun resetCompanyWorkbook(uploadedBy: String = "Admin") = withContext(Dispatchers.IO) {
+    val defaultWb = com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook(uploadedBy = uploadedBy)
+    saveCompanyWorkbook(defaultWb)
+  }
 }
+

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Handshake
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Stars
 import androidx.compose.material.icons.filled.TrendingUp
@@ -102,6 +103,7 @@ fun RmDashboardScreen(
   onOpenDbrChecklist: () -> Unit = {},
   onOpenCommunication: () -> Unit = {},
   onOpenImportantDocuments: () -> Unit = {},
+  onOpenCompanyProfile: () -> Unit = {},
   onOpenRoutePlanner: () -> Unit = {},
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   isBiometricEnabled: Boolean = false,
@@ -367,6 +369,99 @@ fun RmDashboardScreen(
                 Spacer(modifier = Modifier.width(3.dp))
                 Icon(
                   Icons.Default.ArrowForward,
+                  contentDescription = null,
+                  tint = Color.White,
+                  modifier = Modifier.size(12.dp)
+                )
+              }
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Company Profile & Multi-Tab Excel Directory Card
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (isDark) Color(0xFF0F2642) else Color(0xFFEFF6FF),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF1E40AF) else Color(0xFF93C5FD)),
+          modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenCompanyProfile() }
+            .testTag("rm_dashboard_company_profile_banner")
+        ) {
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.weight(1f)
+            ) {
+              Box(
+                modifier = Modifier
+                  .size(38.dp)
+                  .background(Color(0xFF1D4ED8), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+              ) {
+                Icon(
+                  imageVector = Icons.Default.Business,
+                  contentDescription = "Company Profile",
+                  tint = Color.White,
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Text(
+                    text = "Company Profile (কোম্পানি প্রোফাইল)",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color(0xFFF1F5F9) else Color(0xFF1E3A8A)
+                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color(0xFF1D4ED8)
+                  ) {
+                    Text(
+                      text = "EXCEL TABS",
+                      fontSize = 8.5.sp,
+                      fontWeight = FontWeight.ExtraBold,
+                      color = Color.White,
+                      modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    )
+                  }
+                }
+                Text(
+                  text = "যে কোনো নাম লিখে সমগ্র এক্সেল ফাইলের সকল ট্যাবে সার্চ করুন",
+                  fontSize = 11.sp,
+                  color = if (isDark) Color(0xFF94A3B8) else Color(0xFF2563EB)
+                )
+              }
+            }
+
+            Surface(
+              shape = RoundedCornerShape(6.dp),
+              color = Color(0xFF1D4ED8)
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Text(
+                  text = "সার্চ করুন",
+                  color = Color.White,
+                  fontSize = 11.sp,
+                  fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Icon(
+                  Icons.Default.Search,
                   contentDescription = null,
                   tint = Color.White,
                   modifier = Modifier.size(12.dp)

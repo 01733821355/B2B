@@ -8,6 +8,7 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import com.example.ui.common.EblPullRefreshBox
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1237,6 +1238,7 @@ fun DocumentChecklistSenderTab(
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   var isTranslatingWithAi by remember { mutableStateOf(false) }
+  var showGoogleTranslateHelpDialog by remember { mutableStateOf(false) }
 
   var customerName by remember { mutableStateOf("") }
   var customerMobile by remember { mutableStateOf("") }
@@ -2590,6 +2592,21 @@ fun DocumentChecklistSenderTab(
                     }
                   }
                 }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Info / Help button explaining Google API requirements
+                IconButton(
+                  onClick = { showGoogleTranslateHelpDialog = true },
+                  modifier = Modifier.size(26.dp).testTag("btn_translate_help_info")
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Translation Help",
+                    tint = Color(0xFF0284C7),
+                    modifier = Modifier.size(17.dp)
+                  )
+                }
               }
 
               Spacer(modifier = Modifier.height(8.dp))
@@ -3675,7 +3692,58 @@ fun DocumentChecklistSenderTab(
       }
     )
   }
+
+  // Translation Help Dialog (User guidance on Google API requirements)
+  if (showGoogleTranslateHelpDialog) {
+    AlertDialog(
+      onDismissRequest = { showGoogleTranslateHelpDialog = false },
+      title = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Icon(Icons.Default.Info, contentDescription = null, tint = EblNavyPrimary)
+          Spacer(modifier = Modifier.width(8.dp))
+          Text("বাংলা অনুবাদ: গুগলের কিছু অন করতে হবে কি?", fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+      },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFECFDF5),
+            border = BorderStroke(1.dp, Color(0xFFA7F3D0))
+          ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+              Text("১. অফলাইন বাংলা ডিকশনারি (সম্পূর্ণ ফ্রি ও স্বয়ংক্রিয়):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF065F46))
+              Spacer(modifier = Modifier.height(2.dp))
+              Text("গুগলের কোনো কিছু অন করার প্রয়োজন নেই! অ্যাপের ভেতর ১০০% স্বয়ংসম্পূর্ণ EBL ব্যাংকিং ডিকশনারি ইন্টিগ্রেট করা আছে। 'বাংলা' বা '✨ Gemini AI Live বাংলা' বাটনে চাপলে কোনো গুগল সেটিং অন ছাড়াই সব ডকুমেন্টের নাম নিখুঁত বাংলায় রূপান্তর হয়।", fontSize = 11.sp, color = Color(0xFF047857))
+            }
+          }
+
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = Color(0xFFEFF6FF),
+            border = BorderStroke(1.dp, Color(0xFFBFDBFE))
+          ) {
+            Column(modifier = Modifier.padding(10.dp)) {
+              Text("২. লাইভ Google Gemini AI অনুবাদ (ঐচ্ছিক):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E40AF))
+              Spacer(modifier = Modifier.height(2.dp))
+              Text("আপনি যদি ক্লাউড থেকে লাইভ AI জেনারেশন চান, তবে Google AI Studio (aistudio.google.com) থেকে একটি ফ্রি API Key এনে প্রজেক্ট সিক্রেটে দিতে পারেন। তবে কোনো কী না থাকলেও অফলাইন ডিকশনারি প্রতিটি ব্যাংকিং শব্দ শতভাগ নির্ভুলভাবে বাংলায় রূপান্তর করে দেয়।", fontSize = 11.sp, color = Color(0xFF1D4ED8))
+            }
+          }
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = { showGoogleTranslateHelpDialog = false },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+          shape = RoundedCornerShape(8.dp)
+        ) {
+          Text("বুঝেছি")
+        }
+      }
+    )
+  }
 }
+
 
 // -------------------------------------------------------------------------------------------------
 // TAB 3: AGE CALCULATOR (Any Date Format: 25 10 1997 -> 25/10/1997, 25 10 97 -> 25/10/1997)

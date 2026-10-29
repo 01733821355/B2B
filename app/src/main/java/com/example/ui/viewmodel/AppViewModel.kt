@@ -53,6 +53,7 @@ sealed class Screen {
   object DbrChecklist : Screen()
   object CommunicationHub : Screen()
   object ImportantDocuments : Screen()
+  object CompanyProfile : Screen()
   data class FieldRoutePlanner(val initialSelectedFileIds: List<String> = emptyList()) : Screen()
 }
 
@@ -184,6 +185,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   // Important Documents Flow for all users
   val importantDocuments: StateFlow<List<com.example.data.model.ImportantDocumentEntity>> = eblRepository.getAllImportantDocumentsFlow()
     .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  // Multi-tab Company Profile Workbook Flow for all users (RM, Admin, Mentor)
+  val companyWorkbook: StateFlow<com.example.data.model.CompanyWorkbookData> = eblRepository.getCompanyWorkbookFlow()
+    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook())
+
 
   // Filtered files according to user search & filters
   val filteredFiles: StateFlow<List<CustomerFileEntity>> = combine(
@@ -1688,7 +1694,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     completedRouteCustomerIds.value = emptyList()
     authPrefs.edit().remove("active_field_route_ids").apply()
   }
+
+  // -----------------------------------------------------------------------------------------------
+  // COMPANY PROFILE WORKBOOK OPERATIONS (Excel .xlsx / CSV Upload & Auto-Replace)
+  // -----------------------------------------------------------------------------------------------
+  fun uploadCompanyWorkbook(
+    context: android.content.Context,
+    uri: android.net.Uri,
+    fileName: String,
+    uploadedBy: String,
+    onComplete: (Boolean, String) -> Unit
+  ) {
+    viewModelScope.launch {
+      try {
+        val parsed = com.example.util.ExcelWorkbookParser.parseWorkbookFromUri(
+          context = context,
+          uri = uri,
+          fileName = fileName,
+          uploadedBy = uploadedBy
+        )
+        if (parsed.sheets.isEmpty() || parsed.totalRows == 0) {
+          onComplete(false, "ফাইলটিতে কোনো ডাটা বা শিট পাওয়া যায়নি!")
+          return@launch
+        }
+        // Save to database, auto-replacing the previous workbook
+        eblRepository.saveCompanyWorkbook(parsed)
+        onComplete(true, "সফলভাবে ${parsed.sheets.size} টি শিট এবং মোট ${parsed.totalRows} টি রেকর্ড আপলোড হয়েছে! পূর্বের ফাইল অপসারিত হয়েছে।")
+      } catch (e: Exception) {
+        onComplete(false, "ফাইল পার্সিং ব্যর্থ হয়েছে: ${e.localizedMessage}")
+      }
+    }
+  }
+
+  fun resetCompanyWorkbookToDefault(uploadedBy: String, onComplete: (Boolean) -> Unit) {
+    viewModelScope.launch {
+      try {
+        eblRepository.resetCompanyWorkbook(uploadedBy)
+        onComplete(true)
+      } catch (_: Exception) {
+        onComplete(false)
+      }
+    }
+  }
 }
+
 
 data class IncomingCallInfo(
   val callerName: String,

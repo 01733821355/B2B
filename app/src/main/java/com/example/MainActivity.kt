@@ -381,6 +381,7 @@ fun EblMainApp(viewModel: AppViewModel) {
               onOpenDbrChecklist = { viewModel.navigateTo(Screen.DbrChecklist) },
               onOpenCommunication = { viewModel.navigateTo(Screen.CommunicationHub) },
               onOpenImportantDocuments = { viewModel.navigateTo(Screen.ImportantDocuments) },
+              onOpenCompanyProfile = { viewModel.navigateTo(Screen.CompanyProfile) },
               onOpenRoutePlanner = { viewModel.navigateTo(Screen.FieldRoutePlanner()) },
               onUpdateLocation = { lat, lng, addr ->
                 viewModel.updateUserLocation(user.rmCode, lat, lng, addr, "LIVE_DASHBOARD_BEACON")
@@ -507,6 +508,14 @@ fun EblMainApp(viewModel: AppViewModel) {
 
           is Screen.ImportantDocuments -> {
             com.example.ui.screens.tools.ImportantDocumentsScreen(
+              viewModel = viewModel,
+              currentUser = user,
+              onNavigateBack = { viewModel.navigateBack() }
+            )
+          }
+
+          is Screen.CompanyProfile -> {
+            com.example.ui.screens.tools.CompanyProfileScreen(
               viewModel = viewModel,
               currentUser = user,
               onNavigateBack = { viewModel.navigateBack() }
