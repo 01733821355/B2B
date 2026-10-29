@@ -96,9 +96,19 @@ class EblRepository(
   val deletedPresetKeysCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedAttachmentIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
 
+  private val _companyWorkbookFlow = kotlinx.coroutines.flow.MutableStateFlow<com.example.data.model.CompanyWorkbookData>(
+    com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+  )
+
   init {
     applicationScope.launch {
       try {
+        // Purge oversize COMPANY_PROFILE_WORKBOOK_DATA blob from SQLite to avoid CursorWindow crashes
+        try {
+          database.openHelper.writableDatabase.execSQL("DELETE FROM app_settings WHERE settingKey = 'COMPANY_PROFILE_WORKBOOK_DATA'")
+        } catch (_: Exception) {}
+        loadCompanyWorkbookFromFile()
+
         val delDocs = database.appSettingDao().getSetting("deleted_doc_ids")?.settingValue ?: ""
         delDocs.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
           deletedDocIdsCache.add(it)
@@ -4529,18 +4539,11 @@ class EblRepository(
 
       if (smsId.isNotBlank() && smsId in permDeletedKeys) continue
       if (dedupeSignature in permDeletedKeys || rawSentTime in permDeletedKeys) continue
-      if (smsId.isNotBlank() && smsId in seenSmsKeys) continue
-      if (dedupeSignature in seenSmsKeys) continue
 
       if (recipientRm.isBlank() || messageText.isBlank()) continue
 
       // If user previously cleared SMS at or after this time, do NOT resurrect or notify
       if (lastClearedTime > 0L && sentTime > 0L && sentTime <= lastClearedTime) {
-        continue
-      }
-
-      // Only store/notify if it belongs to current user or user is privileged admin/mentor
-      if (recipientRm != userRmCode && !isPrivileged && recipientRm != "ALL") {
         continue
       }
 
@@ -5025,6 +5028,58 @@ class EblRepository(
           )
           database.customerFileDao().updateFile(updated)
           updatedCount++
+
+          // Save Google Sheet update notification to Room local storage so it persists
+          val changeDesc = buildString {
+            if (hasStatusChanged) append("স্ট্যাটাস: '${existing.applicationStatus}' ➔ '${updated.applicationStatus}'")
+            if (hasCpvChanged) {
+              if (isNotEmpty()) append(" | ")
+              append("CPV: '${existing.cpvStatus}' ➔ '${updated.cpvStatus}'")
+            }
+            if (hasRemarksChanged && remarksVal.isNotBlank()) {
+              if (isNotEmpty()) append(" | ")
+              append("রিমার্কস: '$remarksVal'")
+            }
+            if (hasDocsChanged && pendingDocs.isNotBlank()) {
+              if (isNotEmpty()) append(" | ")
+              append("ডকুমেন্টস: '$pendingDocs'")
+            }
+            if (hasRmChanged) {
+              if (isNotEmpty()) append(" | ")
+              append("RM পরিবর্তন: '${existing.assignedRmCode}' ➔ '$rmCode'")
+            }
+            if (isEmpty()) append("ফাইল তথ্য আপডেট")
+          }
+
+          val alertMsg = "Google Sheet আপডেট: '${updated.customerName}' (CC: ${updated.ccNumber.ifBlank { updated.fileId }}) - $changeDesc"
+
+          val notifEntity = SmsNotificationEntity(
+            recipientRmCode = updated.assignedRmCode,
+            recipientMobile = updated.mobile,
+            recipientName = updated.customerName,
+            triggeredByRole = "Google Sheets",
+            triggeredByCode = "SHEET_SYNC",
+            actionType = "SHEET_UPDATE",
+            targetType = "CUSTOMER_FILE",
+            fileId = updated.fileId,
+            customerName = updated.customerName,
+            messageText = alertMsg,
+            sentTimestamp = now,
+            status = "DELIVERED",
+            isRead = false
+          )
+          database.smsNotificationDao().insertSms(notifEntity)
+
+          context?.let { ctx ->
+            NotificationHelper.sendRmFileUpdateNotification(
+              context = ctx,
+              targetRmCode = updated.assignedRmCode,
+              ccNumber = updated.ccNumber.ifBlank { updated.fileId },
+              customerName = updated.customerName,
+              changeDetails = changeDesc,
+              updatedByRole = "Google Sheets"
+            )
+          }
         }
       } else {
         val sheetSl = obj.optString("serialNumber", obj.optString("sl", ""))
@@ -5087,6 +5142,24 @@ class EblRepository(
         )
         database.customerFileDao().insertFile(newFile)
         updatedCount++
+
+        // Save persistent notification in local database so RM & Admin have it in local storage
+        val newFileNotif = SmsNotificationEntity(
+          recipientRmCode = newFile.assignedRmCode,
+          recipientMobile = newFile.mobile,
+          recipientName = newFile.customerName,
+          triggeredByRole = "Google Sheets",
+          triggeredByCode = "SHEET_SYNC",
+          actionType = "NEW_FILE",
+          targetType = "CUSTOMER_FILE",
+          fileId = newFile.fileId,
+          customerName = newFile.customerName,
+          messageText = "Google Sheet থেকে নতুন ফাইল: '${newFile.customerName}' (${newFile.productType}, CC: ${newFile.ccNumber.ifBlank { newFile.fileId }})",
+          sentTimestamp = now,
+          status = "DELIVERED",
+          isRead = false
+        )
+        database.smsNotificationDao().insertSms(newFileNotif)
 
         // Requirement 2: When RM enters new customer file, Admin and Mentor receive SMS/notification even when app is closed
         val currentUser = authRepository.currentUser.value
@@ -5714,40 +5787,47 @@ class EblRepository(
   }
 
   // -----------------------------------------------------------------------------------------------
-  // COMPANY PROFILE EXCEL WORKBOOK PERSISTENCE (Multi-Tab Excel / CSV)
+  // COMPANY PROFILE EXCEL WORKBOOK PERSISTENCE (Multi-Tab Excel / CSV - Stored in Internal File Storage)
   // -----------------------------------------------------------------------------------------------
-  fun getCompanyWorkbookFlow(): Flow<com.example.data.model.CompanyWorkbookData> {
-    return database.appSettingDao().getSettingFlow("COMPANY_PROFILE_WORKBOOK_DATA").map { setting ->
-      if (setting != null && setting.settingValue.isNotBlank()) {
-        com.example.util.ExcelWorkbookParser.fromJson(setting.settingValue)
-          ?: com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
-      } else {
-        com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
+  private fun loadCompanyWorkbookFromFile() {
+    try {
+      val file = context?.filesDir?.let { java.io.File(it, "ebl_company_profiles_workbook.json") }
+      if (file != null && file.exists()) {
+        val jsonStr = file.readText(Charsets.UTF_8)
+        val loaded = com.example.util.ExcelWorkbookParser.fromJson(jsonStr)
+        if (loaded != null && loaded.sheets.isNotEmpty()) {
+          _companyWorkbookFlow.value = loaded
+          return
+        }
       }
+    } catch (e: Exception) {
+      e.printStackTrace()
     }
+  }
+
+  fun getCompanyWorkbookFlow(): Flow<com.example.data.model.CompanyWorkbookData> {
+    return _companyWorkbookFlow
   }
 
   suspend fun getCompanyWorkbook(): com.example.data.model.CompanyWorkbookData = withContext(Dispatchers.IO) {
-    val setting = database.appSettingDao().getSetting("COMPANY_PROFILE_WORKBOOK_DATA")
-    if (setting != null && setting.settingValue.isNotBlank()) {
-      com.example.util.ExcelWorkbookParser.fromJson(setting.settingValue)
-        ?: com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
-    } else {
-      com.example.util.ExcelWorkbookParser.getDefaultSampleWorkbook()
-    }
+    _companyWorkbookFlow.value
   }
 
   suspend fun saveCompanyWorkbook(workbook: com.example.data.model.CompanyWorkbookData) = withContext(Dispatchers.IO) {
-    val json = com.example.util.ExcelWorkbookParser.toJson(workbook)
-    val now = DateUtils.currentDhakaMillis()
-    database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity(
-        settingKey = "COMPANY_PROFILE_WORKBOOK_DATA",
-        settingValue = json,
-        updatedBy = workbook.uploadedBy,
-        updatedAt = now
-      )
-    )
+    _companyWorkbookFlow.value = workbook
+    try {
+      context?.filesDir?.let { dir ->
+        val file = java.io.File(dir, "ebl_company_profiles_workbook.json")
+        val json = com.example.util.ExcelWorkbookParser.toJson(workbook)
+        file.writeText(json, Charsets.UTF_8)
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+    // Safeguard: Ensure no large blob is left in SQLite table
+    try {
+      database.appSettingDao().deleteSetting("COMPANY_PROFILE_WORKBOOK_DATA")
+    } catch (_: Exception) {}
   }
 
   suspend fun resetCompanyWorkbook(uploadedBy: String = "Admin") = withContext(Dispatchers.IO) {

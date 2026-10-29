@@ -478,7 +478,7 @@ private fun ActiveRoutePlanView(
     return
   }
 
-  var activeViewTab by remember { mutableStateOf("MAP") } // "MAP", "AI_PLAN", or "LIST"
+  var activeViewTab by remember { mutableStateOf("AI_PLAN") } // "AI_PLAN" or "LIST"
   val context = LocalContext.current
   var geminiRouteResult by remember { mutableStateOf<com.example.util.GeminiRoutePlanResult?>(null) }
   var isLoadingAiRoute by remember { mutableStateOf(false) }
@@ -492,7 +492,7 @@ private fun ActiveRoutePlanView(
   }
 
   Column(modifier = Modifier.fillMaxSize()) {
-    // Mode Switcher: 🗺️ গুগল ম্যাপ (Map) vs ✨ Gemini AI প্ল্যান vs 📋 স্টপ তালিকা (Stop List)
+    // Mode Switcher: ✨ Gemini AI রুট ও Google Maps vs 📋 স্টপ তালিকা (Stop List)
     Surface(
       color = Color.White,
       shadowElevation = 2.dp,
@@ -501,66 +501,34 @@ private fun ActiveRoutePlanView(
       Row(
         modifier = Modifier
           .fillMaxWidth()
-          .padding(horizontal = 8.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+          .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
       ) {
-        // TAB 1: Authentic Google Map View
+        // TAB 1: Gemini AI Complete Route Plan (Prompt Response & Google Maps Navigation)
         Surface(
           shape = RoundedCornerShape(8.dp),
-          color = if (activeViewTab == "MAP") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
-          border = BorderStroke(1.dp, if (activeViewTab == "MAP") Color(0xFF1D4ED8) else Color(0xFFCBD5E1)),
+          color = if (activeViewTab == "AI_PLAN") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
+          border = BorderStroke(1.dp, if (activeViewTab == "AI_PLAN") Color(0xFF1D4ED8) else Color(0xFFCBD5E1)),
           modifier = Modifier
-            .weight(1f)
-            .clickable { activeViewTab = "MAP" }
-            .testTag("tab_route_map_view")
-        ) {
-          Row(
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Icon(
-              Icons.Default.Map,
-              contentDescription = null,
-              tint = if (activeViewTab == "MAP") Color.White else Color(0xFF475569),
-              modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            Text(
-              text = "🗺️ গুগল ম্যাপ",
-              fontSize = 11.5.sp,
-              fontWeight = FontWeight.Bold,
-              color = if (activeViewTab == "MAP") Color.White else Color(0xFF475569),
-              maxLines = 1
-            )
-          }
-        }
-
-        // TAB 2: Gemini AI Complete Route Plan (Prompt Response)
-        Surface(
-          shape = RoundedCornerShape(8.dp),
-          color = if (activeViewTab == "AI_PLAN") Color(0xFF16A34A) else Color(0xFFF1F5F9),
-          border = BorderStroke(1.dp, if (activeViewTab == "AI_PLAN") Color(0xFF16A34A) else Color(0xFFCBD5E1)),
-          modifier = Modifier
-            .weight(1.15f)
+            .weight(1.2f)
             .clickable { activeViewTab = "AI_PLAN" }
             .testTag("tab_gemini_ai_route")
         ) {
           Row(
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
             Icon(
               Icons.Default.AutoAwesome,
               contentDescription = null,
-              tint = if (activeViewTab == "AI_PLAN") Color.White else Color(0xFF16A34A),
-              modifier = Modifier.size(14.dp)
+              tint = if (activeViewTab == "AI_PLAN") Color.White else Color(0xFF1D4ED8),
+              modifier = Modifier.size(15.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
-              text = "✨ Gemini রুট",
-              fontSize = 11.5.sp,
+              text = "✨ Gemini AI রুট ও Maps",
+              fontSize = 12.sp,
               fontWeight = FontWeight.Bold,
               color = if (activeViewTab == "AI_PLAN") Color.White else Color(0xFF475569),
               maxLines = 1
@@ -568,7 +536,7 @@ private fun ActiveRoutePlanView(
           }
         }
 
-        // TAB 3: Stop List
+        // TAB 2: Stop List
         Surface(
           shape = RoundedCornerShape(8.dp),
           color = if (activeViewTab == "LIST") Color(0xFF1D4ED8) else Color(0xFFF1F5F9),
@@ -579,7 +547,7 @@ private fun ActiveRoutePlanView(
             .testTag("tab_route_list_view")
         ) {
           Row(
-            modifier = Modifier.padding(vertical = 7.dp, horizontal = 4.dp),
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 6.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
           ) {
@@ -587,12 +555,12 @@ private fun ActiveRoutePlanView(
               Icons.Default.Navigation,
               contentDescription = null,
               tint = if (activeViewTab == "LIST") Color.White else Color(0xFF475569),
-              modifier = Modifier.size(14.dp)
+              modifier = Modifier.size(15.dp)
             )
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
-              text = "📋 স্টপ (${customers.size})",
-              fontSize = 11.5.sp,
+              text = "📋 স্টপ তালিকা (${customers.size})",
+              fontSize = 12.sp,
               fontWeight = FontWeight.Bold,
               color = if (activeViewTab == "LIST") Color.White else Color(0xFF475569),
               maxLines = 1
@@ -603,19 +571,6 @@ private fun ActiveRoutePlanView(
     }
 
     when (activeViewTab) {
-      "MAP" -> {
-        FieldRouteInteractiveMapView(
-          customers = customers,
-          completedCount = completedCount,
-          totalInitialCount = totalInitialCount,
-          onOpenGoogleMaps = onOpenGoogleMapsFullRoute,
-          onCompleteCustomer = onCompleteCustomer,
-          onCallCustomer = onCallCustomer,
-          onWhatsAppCustomer = onWhatsAppCustomer,
-          onOpenSingleLocationMap = onOpenSingleLocationMap,
-          modifier = Modifier.weight(1f)
-        )
-      }
       "AI_PLAN" -> {
         GeminiAiRouteResultView(
           geminiResult = geminiRouteResult,

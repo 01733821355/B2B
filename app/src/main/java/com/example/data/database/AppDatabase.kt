@@ -204,6 +204,14 @@ abstract class AppDatabase : RoomDatabase() {
         )
           .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
           .fallbackToDestructiveMigration()
+          .addCallback(object : RoomDatabase.Callback() {
+            override fun onOpen(db: SupportSQLiteDatabase) {
+              super.onOpen(db)
+              try {
+                db.execSQL("DELETE FROM app_settings WHERE settingKey = 'COMPANY_PROFILE_WORKBOOK_DATA'")
+              } catch (_: Exception) {}
+            }
+          })
           .build()
         INSTANCE = instance
         instance

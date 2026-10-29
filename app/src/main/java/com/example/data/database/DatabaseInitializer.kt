@@ -11,6 +11,11 @@ import kotlinx.coroutines.withContext
 object DatabaseInitializer {
 
   suspend fun initializeIfNeeded(database: AppDatabase) = withContext(Dispatchers.IO) {
+    // Purge any oversize workbook blob from app_settings to prevent CursorWindow allocation failure
+    try {
+      database.openHelper.writableDatabase.execSQL("DELETE FROM app_settings WHERE settingKey = 'COMPANY_PROFILE_WORKBOOK_DATA'")
+    } catch (_: Exception) {}
+
     val targetWebAppUrl = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
 
     // Ensure SyncStatus is always configured with user's Web App URL & Spreadsheet ID on any phone

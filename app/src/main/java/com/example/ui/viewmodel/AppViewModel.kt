@@ -32,8 +32,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import com.example.ui.theme.AppThemeConfig
 import com.example.ui.theme.ThemeManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class Screen {
   object Login : Screen()
@@ -1707,21 +1709,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   ) {
     viewModelScope.launch {
       try {
-        val parsed = com.example.util.ExcelWorkbookParser.parseWorkbookFromUri(
-          context = context,
-          uri = uri,
-          fileName = fileName,
-          uploadedBy = uploadedBy
-        )
+        val parsed = withContext(Dispatchers.IO) {
+          com.example.util.ExcelWorkbookParser.parseWorkbookFromUri(
+            context = context,
+            uri = uri,
+            fileName = fileName,
+            uploadedBy = uploadedBy
+          )
+        }
         if (parsed.sheets.isEmpty() || parsed.totalRows == 0) {
           onComplete(false, "ফাইলটিতে কোনো ডাটা বা শিট পাওয়া যায়নি!")
           return@launch
         }
-        // Save to database, auto-replacing the previous workbook
+        // Save to internal storage file, auto-replacing the previous workbook
         eblRepository.saveCompanyWorkbook(parsed)
         onComplete(true, "সফলভাবে ${parsed.sheets.size} টি শিট এবং মোট ${parsed.totalRows} টি রেকর্ড আপলোড হয়েছে! পূর্বের ফাইল অপসারিত হয়েছে।")
       } catch (e: Exception) {
-        onComplete(false, "ফাইল পার্সিং ব্যর্থ হয়েছে: ${e.localizedMessage}")
+        onComplete(false, "ফাইল আপলোড ব্যর্থ হয়েছে: ${e.localizedMessage}")
       }
     }
   }

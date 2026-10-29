@@ -15,7 +15,7 @@ interface SmsNotificationDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertAll(list: List<SmsNotificationEntity>)
 
-  @Query("SELECT * FROM sms_notifications WHERE recipientRmCode = :rmCode ORDER BY sentTimestamp DESC")
+  @Query("SELECT * FROM sms_notifications WHERE recipientRmCode = :rmCode OR recipientRmCode = 'ALL' ORDER BY sentTimestamp DESC")
   fun getSmsForRmFlow(rmCode: String): Flow<List<SmsNotificationEntity>>
 
   @Query("SELECT * FROM sms_notifications ORDER BY sentTimestamp DESC")
@@ -24,7 +24,7 @@ interface SmsNotificationDao {
   @Query("SELECT * FROM sms_notifications ORDER BY sentTimestamp DESC")
   suspend fun getAllSms(): List<SmsNotificationEntity>
 
-  @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND isRead = 0")
+  @Query("SELECT COUNT(*) FROM sms_notifications WHERE (recipientRmCode = :rmCode OR recipientRmCode = 'ALL') AND isRead = 0")
   fun getUnreadSmsCountFlow(rmCode: String): Flow<Int>
 
   @Query("UPDATE sms_notifications SET isRead = 1 WHERE id = :id")
@@ -45,7 +45,7 @@ interface SmsNotificationDao {
   @Query("SELECT * FROM sms_notifications WHERE id = :id LIMIT 1")
   suspend fun getSmsById(id: Long): SmsNotificationEntity?
 
-  @Query("DELETE FROM sms_notifications WHERE id NOT IN (SELECT id FROM sms_notifications ORDER BY sentTimestamp DESC LIMIT 50)")
+  @Query("DELETE FROM sms_notifications WHERE id NOT IN (SELECT id FROM sms_notifications ORDER BY sentTimestamp DESC LIMIT 500)")
   suspend fun pruneOldSms()
 
   @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND sentTimestamp = :timestamp AND messageText = :message")

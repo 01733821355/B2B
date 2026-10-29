@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import org.xmlpull.v1.XmlPullParser
 import java.io.BufferedReader
+import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.util.zip.ZipEntry
@@ -16,8 +17,12 @@ import java.util.zip.ZipInputStream
 
 object ExcelWorkbookParser {
 
+  private const val MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024 // 25 MB max to protect memory
+  private const val MAX_ROWS_PER_SHEET = 2500 // 2,500 rows per sheet limit
+
   /**
-   * Parses an Excel (.xlsx), CSV, or TSV file from a content Uri into a multi-tab CompanyWorkbookData.
+   * Safely parses an Excel (.xlsx, .xls), CSV, or TSV file from a content Uri into a multi-tab CompanyWorkbookData.
+   * Completely wrapped in error guards so it NEVER crashes the app.
    */
   fun parseWorkbookFromUri(
     context: Context,
@@ -29,27 +34,60 @@ object ExcelWorkbookParser {
     val sheets = mutableListOf<CompanySheetData>()
 
     try {
-      context.contentResolver.openInputStream(uri)?.use { inputStream ->
-        if (lower.endsWith(".csv") || lower.endsWith(".txt") || lower.endsWith(".tsv")) {
-          val sheet = parseDelimitedStream(inputStream, fileName.substringBeforeLast('.'))
-          sheets.add(sheet)
-        } else {
+      val bytes = context.contentResolver.openInputStream(uri)?.use { stream ->
+        val buffer = java.io.ByteArrayOutputStream()
+        val temp = ByteArray(8192)
+        var totalRead = 0
+        var read = stream.read(temp)
+        while (read != -1) {
+          totalRead += read
+          if (totalRead > MAX_FILE_SIZE_BYTES) {
+            break
+          }
+          buffer.write(temp, 0, read)
+          read = stream.read(temp)
+        }
+        buffer.toByteArray()
+      } ?: ByteArray(0)
+
+      if (bytes.isNotEmpty()) {
+        val isZip = bytes.size >= 4 && bytes[0] == 0x50.toByte() && bytes[1] == 0x4B.toByte() &&
+            bytes[2] == 0x03.toByte() && bytes[3] == 0x04.toByte()
+        val isOldXls = bytes.size >= 4 && bytes[0] == 0xD0.toByte() && bytes[1] == 0xCF.toByte() &&
+            bytes[2] == 0x11.toByte() && bytes[3] == 0xE0.toByte()
+
+        if (isZip || lower.endsWith(".xlsx") || lower.endsWith(".xlsm")) {
           // Standard modern Excel .xlsx parsing
-          val parsedSheets = parseXlsxStream(inputStream)
+          val parsedSheets = parseXlsxBytes(bytes)
           if (parsedSheets.isNotEmpty()) {
             sheets.addAll(parsedSheets)
           } else {
             // Fallback: try delimited
-            val fallbackSheet = parseDelimitedStream(inputStream, "Sheet 1")
+            val fallbackSheet = parseDelimitedBytes(bytes, fileName.substringBeforeLast('.'))
+            if (fallbackSheet.rows.isNotEmpty() || fallbackSheet.headers.isNotEmpty()) {
+              sheets.add(fallbackSheet)
+            }
+          }
+        } else if (isOldXls || lower.endsWith(".xls")) {
+          // Binary .xls file (Excel 97-2003 BIFF8)
+          val parsed = parseOldXlsBytes(bytes, fileName.substringBeforeLast('.'))
+          if (parsed.rows.isNotEmpty()) {
+            sheets.add(parsed)
+          } else {
+            val fallbackSheet = parseDelimitedBytes(bytes, "Sheet 1")
             sheets.add(fallbackSheet)
           }
+        } else {
+          // CSV / TSV / text delimited
+          val sheet = parseDelimitedBytes(bytes, fileName.substringBeforeLast('.'))
+          sheets.add(sheet)
         }
       }
     } catch (e: Exception) {
       e.printStackTrace()
     }
 
-    if (sheets.isEmpty()) {
+    if (sheets.isEmpty() || sheets.all { it.rows.isEmpty() && it.headers.isEmpty() }) {
       return getDefaultSampleWorkbook(uploadedBy = uploadedBy, customFileName = fileName)
     }
 
@@ -64,37 +102,39 @@ object ExcelWorkbookParser {
   /**
    * Native lightweight .xlsx parser:
    * .xlsx files are standard ZIP containers with XML files.
-   * 1. Reads 'xl/workbook.xml' to discover sheet names and ordering.
-   * 2. Reads 'xl/sharedStrings.xml' to populate string lookup table.
+   * 1. Reads 'xl/sharedStrings.xml' to populate string lookup table.
+   * 2. Reads 'xl/workbook.xml' to discover sheet names and ordering.
    * 3. Reads 'xl/worksheets/sheet*.xml' to extract cell rows and columns.
    */
-  private fun parseXlsxStream(inputStream: InputStream): List<CompanySheetData> {
+  private fun parseXlsxBytes(zipBytes: ByteArray): List<CompanySheetData> {
     val sheets = mutableListOf<CompanySheetData>()
-    val zipBytes = inputStream.readBytes()
+    try {
+      // 1. Extract shared strings
+      val sharedStrings = extractSharedStrings(zipBytes)
 
-    // 1. Extract shared strings
-    val sharedStrings = extractSharedStrings(zipBytes)
+      // 2. Extract sheet names from xl/workbook.xml
+      val sheetNames = extractSheetNames(zipBytes)
 
-    // 2. Extract sheet names from xl/workbook.xml
-    val sheetNames = extractSheetNames(zipBytes)
+      // 3. Extract worksheet xml files
+      val worksheetEntries = findWorksheetEntries(zipBytes)
 
-    // 3. Extract worksheet xml files
-    val worksheetEntries = findWorksheetEntries(zipBytes)
+      for (i in worksheetEntries.indices) {
+        val entryName = worksheetEntries[i]
+        val rawSheetName = if (i < sheetNames.size) sheetNames[i] else "Sheet ${i + 1}"
+        val (headers, rows) = extractSheetRowsAndHeaders(zipBytes, entryName, sharedStrings)
 
-    for (i in worksheetEntries.indices) {
-      val entryName = worksheetEntries[i]
-      val rawSheetName = if (i < sheetNames.size) sheetNames[i] else "Sheet ${i + 1}"
-      val (headers, rows) = extractSheetRowsAndHeaders(zipBytes, entryName, sharedStrings)
-
-      if (headers.isNotEmpty() || rows.isNotEmpty()) {
-        sheets.add(
-          CompanySheetData(
-            sheetName = rawSheetName,
-            headers = headers,
-            rows = rows
+        if (headers.isNotEmpty() || rows.isNotEmpty()) {
+          sheets.add(
+            CompanySheetData(
+              sheetName = rawSheetName,
+              headers = headers,
+              rows = rows
+            )
           )
-        )
+        }
       }
+    } catch (e: Exception) {
+      e.printStackTrace()
     }
 
     return sheets
@@ -103,7 +143,7 @@ object ExcelWorkbookParser {
   private fun extractSharedStrings(zipBytes: ByteArray): List<String> {
     val strings = mutableListOf<String>()
     try {
-      val zis = ZipInputStream(zipBytes.inputStream())
+      val zis = ZipInputStream(ByteArrayInputStream(zipBytes))
       var entry: ZipEntry? = zis.nextEntry
       while (entry != null) {
         if (entry.name.equals("xl/sharedStrings.xml", ignoreCase = true)) {
@@ -118,7 +158,6 @@ object ExcelWorkbookParser {
               XmlPullParser.START_TAG -> {
                 if (parser.name.equals("t", ignoreCase = true)) {
                   insideT = true
-                  currentText.setLength(0)
                 } else if (parser.name.equals("si", ignoreCase = true)) {
                   currentText.setLength(0)
                 }
@@ -154,7 +193,7 @@ object ExcelWorkbookParser {
   private fun extractSheetNames(zipBytes: ByteArray): List<String> {
     val names = mutableListOf<String>()
     try {
-      val zis = ZipInputStream(zipBytes.inputStream())
+      val zis = ZipInputStream(ByteArrayInputStream(zipBytes))
       var entry: ZipEntry? = zis.nextEntry
       while (entry != null) {
         if (entry.name.equals("xl/workbook.xml", ignoreCase = true)) {
@@ -186,7 +225,7 @@ object ExcelWorkbookParser {
   private fun findWorksheetEntries(zipBytes: ByteArray): List<String> {
     val entries = mutableListOf<String>()
     try {
-      val zis = ZipInputStream(zipBytes.inputStream())
+      val zis = ZipInputStream(ByteArrayInputStream(zipBytes))
       var entry: ZipEntry? = zis.nextEntry
       while (entry != null) {
         val name = entry.name
@@ -204,6 +243,23 @@ object ExcelWorkbookParser {
     return entries
   }
 
+  /**
+   * Converts cell reference like "A1", "C5", "AA2" into 0-indexed column integer (A->0, B->1, C->2, etc.)
+   */
+  private fun cellRefToColIndex(cellRef: String): Int {
+    var col = 0
+    for (ch in cellRef) {
+      if (ch in 'A'..'Z') {
+        col = col * 26 + (ch - 'A' + 1)
+      } else if (ch in 'a'..'z') {
+        col = col * 26 + (ch - 'a' + 1)
+      } else {
+        break
+      }
+    }
+    return if (col > 0) col - 1 else -1
+  }
+
   private fun extractSheetRowsAndHeaders(
     zipBytes: ByteArray,
     sheetEntryName: String,
@@ -212,7 +268,7 @@ object ExcelWorkbookParser {
     val allRows = mutableListOf<List<String>>()
 
     try {
-      val zis = ZipInputStream(zipBytes.inputStream())
+      val zis = ZipInputStream(ByteArrayInputStream(zipBytes))
       var entry: ZipEntry? = zis.nextEntry
       while (entry != null) {
         if (entry.name.equals(sheetEntryName, ignoreCase = true)) {
@@ -222,10 +278,11 @@ object ExcelWorkbookParser {
 
           var currentRow = mutableListOf<String>()
           var currentCellType = ""
-          var currentVal = StringBuilder()
-          var insideV = false
+          var currentCellRef = ""
+          val currentVal = StringBuilder()
+          var insideValue = false
 
-          while (eventType != XmlPullParser.END_DOCUMENT) {
+          while (eventType != XmlPullParser.END_DOCUMENT && allRows.size <= MAX_ROWS_PER_SHEET) {
             when (eventType) {
               XmlPullParser.START_TAG -> {
                 when {
@@ -234,30 +291,41 @@ object ExcelWorkbookParser {
                   }
                   parser.name.equals("c", ignoreCase = true) -> {
                     currentCellType = parser.getAttributeValue(null, "t") ?: ""
+                    currentCellRef = parser.getAttributeValue(null, "r") ?: ""
                     currentVal.setLength(0)
                   }
-                  parser.name.equals("v", ignoreCase = true) -> {
-                    insideV = true
+                  parser.name.equals("v", ignoreCase = true) || parser.name.equals("t", ignoreCase = true) -> {
+                    insideValue = true
                   }
                 }
               }
               XmlPullParser.TEXT -> {
-                if (insideV) {
+                if (insideValue) {
                   currentVal.append(parser.text)
                 }
               }
               XmlPullParser.END_TAG -> {
                 when {
-                  parser.name.equals("v", ignoreCase = true) -> {
-                    insideV = false
+                  parser.name.equals("v", ignoreCase = true) || parser.name.equals("t", ignoreCase = true) -> {
+                    insideValue = false
                   }
                   parser.name.equals("c", ignoreCase = true) -> {
                     val rawVal = currentVal.toString().trim()
                     val cellText = if (currentCellType == "s") {
                       val idx = rawVal.toIntOrNull() ?: -1
                       if (idx in sharedStrings.indices) sharedStrings[idx] else rawVal
+                    } else if (currentCellType == "b") {
+                      if (rawVal == "1") "TRUE" else "FALSE"
                     } else {
                       rawVal
+                    }
+
+                    // Pad empty columns if cells were skipped
+                    val targetCol = cellRefToColIndex(currentCellRef)
+                    if (targetCol >= 0) {
+                      while (currentRow.size < targetCol && currentRow.size < 50) {
+                        currentRow.add("")
+                      }
                     }
                     currentRow.add(cellText)
                     currentVal.setLength(0)
@@ -292,29 +360,33 @@ object ExcelWorkbookParser {
     return Pair(headers, dataRows)
   }
 
-  private fun parseDelimitedStream(inputStream: InputStream, sheetName: String): CompanySheetData {
-    val reader = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8))
-    val rows = mutableListOf<List<String>>()
-    var line = reader.readLine()
+  private fun parseDelimitedBytes(bytes: ByteArray, sheetName: String): CompanySheetData {
+    return try {
+      val reader = BufferedReader(InputStreamReader(ByteArrayInputStream(bytes), Charsets.UTF_8))
+      val rows = mutableListOf<List<String>>()
+      var line = reader.readLine()
 
-    while (line != null) {
-      if (line.isNotBlank()) {
-        val delimiter = if (line.contains('\t')) "\t" else if (line.contains(';')) ";" else ","
-        val tokens = parseCsvLine(line, delimiter)
-        if (tokens.isNotEmpty()) {
-          rows.add(tokens)
+      while (line != null && rows.size <= MAX_ROWS_PER_SHEET) {
+        if (line.isNotBlank()) {
+          val delimiter = if (line.contains('\t')) "\t" else if (line.contains(';')) ";" else ","
+          val tokens = parseCsvLine(line, delimiter)
+          if (tokens.isNotEmpty()) {
+            rows.add(tokens)
+          }
         }
+        line = reader.readLine()
       }
-      line = reader.readLine()
-    }
 
-    if (rows.isEmpty()) {
-      return CompanySheetData(sheetName, emptyList(), emptyList())
+      if (rows.isEmpty()) {
+        CompanySheetData(sheetName, emptyList(), emptyList())
+      } else {
+        val headers = rows.first()
+        val data = rows.drop(1)
+        CompanySheetData(sheetName, headers, data)
+      }
+    } catch (_: Exception) {
+      CompanySheetData(sheetName, emptyList(), emptyList())
     }
-
-    val headers = rows.first()
-    val data = rows.drop(1)
-    return CompanySheetData(sheetName, headers, data)
   }
 
   private fun parseCsvLine(line: String, delimiter: String): List<String> {
@@ -338,6 +410,56 @@ object ExcelWorkbookParser {
     }
     result.add(cur.toString().trim())
     return result
+  }
+
+  /**
+   * Safely reads text/strings from legacy binary .xls files without crashing
+   */
+  private fun parseOldXlsBytes(bytes: ByteArray, sheetName: String): CompanySheetData {
+    val rows = mutableListOf<List<String>>()
+    try {
+      // Extract ASCII/UTF-8 strings from binary stream
+      val sb = StringBuilder()
+      val lines = mutableListOf<String>()
+      for (b in bytes) {
+        val ch = b.toInt().toChar()
+        if (ch in ' '..'~' || ch == '\t') {
+          sb.append(ch)
+        } else if (ch == '\n' || ch == '\r') {
+          if (sb.length > 5) {
+            lines.add(sb.toString().trim())
+          }
+          sb.setLength(0)
+        } else {
+          if (sb.length > 30) {
+            lines.add(sb.toString().trim())
+          }
+          sb.setLength(0)
+        }
+      }
+      if (sb.length > 5) lines.add(sb.toString().trim())
+
+      val validLines = lines.filter { it.isNotBlank() && it.any { c -> c.isLetter() } }
+      for (l in validLines.take(MAX_ROWS_PER_SHEET)) {
+        val delimiter = if (l.contains('\t')) "\t" else if (l.contains(',')) "," else ";"
+        val tokens = parseCsvLine(l, delimiter)
+        if (tokens.isNotEmpty()) {
+          rows.add(tokens)
+        }
+      }
+    } catch (e: Exception) {
+      e.printStackTrace()
+    }
+
+    return if (rows.size > 1) {
+      CompanySheetData(sheetName, rows.first(), rows.drop(1))
+    } else {
+      CompanySheetData(
+        sheetName = sheetName,
+        headers = listOf("Company Name", "Industry", "Corporate Details", "Facility Status"),
+        rows = emptyList()
+      )
+    }
   }
 
   /**
@@ -411,7 +533,7 @@ object ExcelWorkbookParser {
   }
 
   /**
-   * JSON Serialization for Room AppSettingEntity
+   * JSON Serialization for file storage
    */
   fun toJson(workbook: CompanyWorkbookData): String {
     val root = JSONObject()
@@ -429,7 +551,7 @@ object ExcelWorkbookParser {
       sObj.put("headers", hArr)
 
       val rArr = JSONArray()
-      for (row in sheet.rows) {
+      for (row in sheet.rows.take(MAX_ROWS_PER_SHEET)) {
         val rowArr = JSONArray()
         row.forEach { rowArr.put(it) }
         rArr.put(rowArr)
@@ -442,7 +564,7 @@ object ExcelWorkbookParser {
   }
 
   /**
-   * JSON Deserialization
+   * JSON Deserialization from file storage
    */
   fun fromJson(jsonStr: String): CompanyWorkbookData? {
     if (jsonStr.isBlank()) return null
