@@ -5940,7 +5940,7 @@ class EblRepository(
           updatedAt = doc.updatedAt
         )
       }
-      syncGoogleSheets()
+      pullDataFromGoogleSheets()
     } catch (e: Exception) {
       e.printStackTrace()
     }
