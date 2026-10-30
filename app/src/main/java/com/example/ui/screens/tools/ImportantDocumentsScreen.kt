@@ -137,6 +137,7 @@ fun ImportantDocumentsScreen(
 
   val categories = listOf(
     "All",
+    "Company Profile (কোম্পানি প্রোফাইল)",
     "Policies & Circulars",
     "Forms & Formats",
     "Product Guidelines",
@@ -705,6 +706,7 @@ fun UploadOrEditDocDialog(
   var categoryExpanded by remember { mutableStateOf(false) }
 
   val categories = listOf(
+    "Company Profile (কোম্পানি প্রোফাইল)",
     "Policies & Circulars",
     "Forms & Formats",
     "Product Guidelines",

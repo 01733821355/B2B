@@ -444,14 +444,13 @@ class EblRepository(
     val targetSms = allSms.find { it.id == id }
     database.smsNotificationDao().deleteSms(id)
 
-    // Store in persistent deleted_sms_ids setting
+    // Store in persistent deleted_sms_ids setting (use timestamp, not local autoincrement integer ID)
     val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
     val toAdd = mutableListOf<String>()
-    toAdd.add(id.toString())
     if (targetSms != null && targetSms.sentTimestamp > 0L) {
       toAdd.add(targetSms.sentTimestamp.toString())
     }
-    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + toAdd).distinct().joinToString(",")
+    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() && it.length >= 10 } + toAdd).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
     )
@@ -470,7 +469,6 @@ class EblRepository(
     try {
       val prefs = context?.getSharedPreferences("notification_prefs", Context.MODE_PRIVATE)
       val deletedSet = (prefs?.getStringSet("permanently_deleted_sms_keys", emptySet()) ?: emptySet()).toMutableSet()
-      deletedSet.add(id.toString())
       targetSms?.let {
         deletedSet.add("${it.recipientRmCode}_${it.fileId ?: ""}_${it.messageText.take(20).hashCode()}")
         if (it.sentTimestamp > 0L) deletedSet.add(it.sentTimestamp.toString())
@@ -482,8 +480,6 @@ class EblRepository(
     targetSms?.let {
       syncSmsDeletionToGoogleSheets(it.id.toString(), it.sentTimestamp.toString(), it.messageText)
     } ?: syncSmsDeletionToGoogleSheets(id.toString())
-
-    database.smsNotificationDao().pruneOldSms()
   }
 
   suspend fun notifySmsDispatchedToAll(
@@ -556,30 +552,32 @@ class EblRepository(
 
   suspend fun clearAllSms() = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
+    val userRm = currentUser?.rmCode?.trim()?.uppercase() ?: "ALL"
     val now = DateUtils.currentDhakaMillis()
     val allSms = database.smsNotificationDao().getAllSms()
     val currentDel = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
-    val newDelIds = allSms.flatMap { listOf(it.id.toString(), it.sentTimestamp.toString()) }
+    val newDelIds = allSms.mapNotNull { if (it.sentTimestamp > 0L) it.sentTimestamp.toString() else null }
     newDelIds.forEach { deletedSmsIdsCache.add(it) }
-    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() } + newDelIds).distinct().joinToString(",")
+    val updatedDel = (currentDel.split(",").filter { it.isNotBlank() && it.length >= 10 } + newDelIds).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity("deleted_sms_ids", updatedDel, currentUser?.rmCode ?: "SYSTEM", now)
+      AppSettingEntity("deleted_sms_ids", updatedDel, userRm, now)
     )
 
+    // Store clear timestamp per-user so other users' notifications are NOT deleted or suppressed
     database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity("last_cleared_sms_timestamp", now.toString(), currentUser?.rmCode ?: "SYSTEM", now)
+      AppSettingEntity("last_cleared_sms_timestamp_$userRm", now.toString(), userRm, now)
     )
+    database.appSettingDao().deleteSetting("last_cleared_sms_timestamp")
 
     val currentSigs = database.appSettingDao().getSetting("deleted_sms_signatures")?.settingValue ?: ""
     val newSigs = allSms.filter { !it.fileId.isNullOrBlank() }.map { "${it.fileId}_${it.recipientRmCode}_${it.actionType}" }
     val updatedSigs = (currentSigs.split(",").filter { it.isNotBlank() } + newSigs).distinct().joinToString(",")
     database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity("deleted_sms_signatures", updatedSigs, currentUser?.rmCode ?: "SYSTEM", now)
+      AppSettingEntity("deleted_sms_signatures", updatedSigs, userRm, now)
     )
 
     database.smsNotificationDao().clearAllSms()
-    database.smsNotificationDao().pruneOldSms()
-    syncClearSmsToGoogleSheets("ALL")
+    syncClearSmsToGoogleSheets(userRm)
   }
 
   fun getFileByIdFlow(fileId: String): Flow<CustomerFileEntity?> {
@@ -4160,17 +4158,15 @@ class EblRepository(
           database.communicationDao().deleteMessage(chatId)
         }
       } else if (key.equals("deleted_sms_ids", true)) {
-        val delList = value.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val delList = value.split(",").map { it.trim() }.filter { it.isNotBlank() && it.length >= 10 }
         val currentDel = existing?.settingValue ?: ""
-        val currentList = currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        val currentList = currentDel.split(",").map { it.trim() }.filter { it.isNotBlank() && it.length >= 10 }
         val merged = (currentList + delList + deletedSmsIdsCache).distinct()
         database.appSettingDao().insertOrUpdateSetting(
           AppSettingEntity("deleted_sms_ids", merged.joinToString(","), "GoogleSheets_Universal", now)
         )
         deletedSmsIdsCache.addAll(merged)
-        for (sId in merged) {
-          sId.toLongOrNull()?.let { database.smsNotificationDao().deleteSms(it) }
-        }
+        // Local notifications must never be deleted by arbitrary foreign autoincrement ID
       } else if (key.equals("deleted_rm_codes", true)) {
         val delList = value.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }
         val currentDel = existing?.settingValue ?: ""
@@ -4505,9 +4501,22 @@ class EblRepository(
       count++
 
       // Universal Company Profile Workbook Sync: If cloud has an updated master workbook, download and apply
-      if (docId.equals("DOC_COMPANY_PROFILE_MASTER", ignoreCase = true) || category.equals("Company Profile", ignoreCase = true)) {
+      val isCompanyDoc = docId.equals("DOC_COMPANY_PROFILE_MASTER", ignoreCase = true) ||
+        category.contains("Company", ignoreCase = true) ||
+        category.contains("Profile", ignoreCase = true) ||
+        category.contains("কোম্পানি", ignoreCase = true) ||
+        title.contains("Company", ignoreCase = true) ||
+        title.contains("Profile", ignoreCase = true) ||
+        title.contains("কোম্পানি", ignoreCase = true) ||
+        title.contains("Payroll", ignoreCase = true) ||
+        fileName.contains("Company", ignoreCase = true) ||
+        fileName.contains("Profile", ignoreCase = true) ||
+        fileName.contains("কোম্পানি", ignoreCase = true) ||
+        (fileName.endsWith(".xlsx", ignoreCase = true) || fileName.endsWith(".xls", ignoreCase = true) || fileName.endsWith(".csv", ignoreCase = true))
+
+      if (isCompanyDoc) {
         val currentUploadedAt = _companyWorkbookFlow.value.uploadedAt
-        if (updatedAt > currentUploadedAt + 2000L) {
+        if (currentUploadedAt == 0L || updatedAt > currentUploadedAt || _companyWorkbookFlow.value.fileName.startsWith("Sample_")) {
           applicationScope.launch(Dispatchers.IO) {
             downloadAndUpdateCompanyWorkbook(
               fileUri = fileUri,
@@ -4534,8 +4543,11 @@ class EblRepository(
 
     val delSmsSetting = database.appSettingDao().getSetting("deleted_sms_ids")?.settingValue ?: ""
     val deletedSmsIdSet = (delSmsSetting.split(",").map { it.trim() }.filter { it.isNotBlank() } + deletedSmsIdsCache).toSet()
-    val lastClearedTimeStr = database.appSettingDao().getSetting("last_cleared_sms_timestamp_$userRmCode")?.settingValue
-      ?: database.appSettingDao().getSetting("last_cleared_sms_timestamp")?.settingValue ?: "0"
+    val lastClearedTimeStr = if (userRmCode.isNotBlank()) {
+      database.appSettingDao().getSetting("last_cleared_sms_timestamp_$userRmCode")?.settingValue ?: "0"
+    } else {
+      "0"
+    }
     val lastClearedTime = lastClearedTimeStr.toLongOrNull() ?: 0L
 
     val notifPrefs = context?.getSharedPreferences("notification_prefs", Context.MODE_PRIVATE)
@@ -5897,12 +5909,13 @@ class EblRepository(
         bytes = localFile.readBytes()
       }
       if (bytes == null && fileUri.startsWith("http")) {
-        val tempFile = context?.filesDir?.let { java.io.File(it, "temp_remote_company_workbook.xlsx") }
+        val ext = if (fileName.contains('.')) fileName.substringAfterLast('.').lowercase() else "xlsx"
+        val tempFile = context?.filesDir?.let { java.io.File(it, "temp_remote_company_workbook.$ext") }
         if (tempFile != null) {
           val success = com.example.util.AttachmentHelper.downloadRemoteFileSync(fileUri, tempFile)
           if (success && tempFile.exists() && tempFile.length() > 0) {
             bytes = tempFile.readBytes()
-            val masterFile = java.io.File(context.filesDir, "ebl_company_profiles_master.xlsx")
+            val masterFile = java.io.File(context.filesDir, "ebl_company_profiles_master.$ext")
             tempFile.copyTo(masterFile, overwrite = true)
             tempFile.delete()
           }
@@ -5930,17 +5943,38 @@ class EblRepository(
 
   suspend fun syncCompanyWorkbookFromCloud() = withContext(Dispatchers.IO) {
     try {
-      val doc = database.importantDocumentDao().getDocumentById("DOC_COMPANY_PROFILE_MASTER")
-      if (doc != null && doc.updatedAt > _companyWorkbookFlow.value.uploadedAt + 2000L) {
-        downloadAndUpdateCompanyWorkbook(
-          fileUri = doc.fileUri,
-          storagePath = doc.storagePath,
-          fileName = doc.fileName,
-          uploaderName = doc.uploaderName,
-          updatedAt = doc.updatedAt
-        )
-      }
+      // 1. Pull latest documents and settings from Google Sheets
       pullDataFromGoogleSheets()
+
+      // 2. Locate latest company profile / master workbook from active documents
+      val allDocs = database.importantDocumentDao().getAllActiveDocuments()
+      val matchingDoc = allDocs.firstOrNull { doc ->
+        doc.docId.equals("DOC_COMPANY_PROFILE_MASTER", ignoreCase = true) ||
+          doc.category.contains("Company", ignoreCase = true) ||
+          doc.category.contains("Profile", ignoreCase = true) ||
+          doc.category.contains("কোম্পানি", ignoreCase = true) ||
+          doc.title.contains("Company", ignoreCase = true) ||
+          doc.title.contains("Profile", ignoreCase = true) ||
+          doc.title.contains("কোম্পানি", ignoreCase = true) ||
+          doc.title.contains("Payroll", ignoreCase = true) ||
+          doc.fileName.contains("Company", ignoreCase = true) ||
+          doc.fileName.contains("Profile", ignoreCase = true) ||
+          doc.fileName.contains("কোম্পানি", ignoreCase = true) ||
+          (doc.fileName.endsWith(".xlsx", ignoreCase = true) || doc.fileName.endsWith(".xls", ignoreCase = true) || doc.fileName.endsWith(".csv", ignoreCase = true))
+      }
+
+      if (matchingDoc != null) {
+        val currentUploadedAt = _companyWorkbookFlow.value.uploadedAt
+        if (currentUploadedAt == 0L || matchingDoc.updatedAt > currentUploadedAt || _companyWorkbookFlow.value.fileName.startsWith("Sample_")) {
+          downloadAndUpdateCompanyWorkbook(
+            fileUri = matchingDoc.fileUri,
+            storagePath = matchingDoc.storagePath,
+            fileName = matchingDoc.fileName,
+            uploaderName = matchingDoc.uploaderName,
+            updatedAt = matchingDoc.updatedAt
+          )
+        }
+      }
     } catch (e: Exception) {
       e.printStackTrace()
     }

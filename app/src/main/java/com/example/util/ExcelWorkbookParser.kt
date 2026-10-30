@@ -543,7 +543,7 @@ object ExcelWorkbookParser {
     return CompanyWorkbookData(
       fileName = customFileName,
       uploadedBy = uploadedBy,
-      uploadedAt = System.currentTimeMillis(),
+      uploadedAt = 0L,
       sheets = listOf(sheet1, sheet2, sheet3, sheet4)
     )
   }

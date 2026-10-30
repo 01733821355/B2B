@@ -344,16 +344,29 @@ object AttachmentHelper {
 
   fun downloadRemoteFileSync(urlStr: String, destFile: File): Boolean {
     val fileId = extractGoogleDriveFileId(urlStr)
-    val isPdf = destFile.name.endsWith(".pdf", ignoreCase = true)
+    val lowerName = destFile.name.lowercase()
+    val isImage = listOf("jpg", "jpeg", "png", "webp", "bmp").any { lowerName.endsWith(".$it") }
+    val isSpreadsheet = listOf("xlsx", "xls", "csv", "tsv", "xlsm").any { lowerName.endsWith(".$it") }
     val candidateUrls = mutableListOf<String>()
 
     if (fileId != null) {
-      if (!isPdf) {
+      if (isSpreadsheet) {
+        // Direct Google Sheets export and drive downloads
+        candidateUrls.add("https://docs.google.com/spreadsheets/d/$fileId/export?format=xlsx")
+        candidateUrls.add("https://drive.google.com/uc?export=download&id=$fileId&confirm=t")
+        candidateUrls.add("https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t")
+        candidateUrls.add("https://docs.google.com/uc?id=$fileId&export=download")
+      } else if (isImage) {
+        // High-resolution image direct endpoints
         candidateUrls.add("https://lh3.googleusercontent.com/d/$fileId")
         candidateUrls.add("https://drive.google.com/thumbnail?id=$fileId&sz=w2000")
+        candidateUrls.add("https://drive.google.com/uc?export=download&id=$fileId")
+      } else {
+        // General documents (PDF, DOCX, etc.)
+        candidateUrls.add("https://drive.google.com/uc?export=download&id=$fileId&confirm=t")
+        candidateUrls.add("https://drive.usercontent.google.com/download?id=$fileId&export=download&confirm=t")
+        candidateUrls.add("https://docs.google.com/uc?id=$fileId&export=download")
       }
-      candidateUrls.add("https://drive.google.com/uc?export=download&id=$fileId")
-      candidateUrls.add("https://docs.google.com/uc?id=$fileId&export=download")
     }
     candidateUrls.add(urlStr)
 
@@ -391,7 +404,15 @@ object AttachmentHelper {
             val headerBytes = ByteArray(100)
             val bytesRead = tempFile.inputStream().use { it.read(headerBytes) }
             val headerStr = String(headerBytes, 0, bytesRead.coerceAtLeast(0)).trim().lowercase()
-            if (!headerStr.startsWith("<!doctype") && !headerStr.startsWith("<html")) {
+
+            val isHtml = headerStr.startsWith("<!doctype") || headerStr.startsWith("<html")
+            val isImageHeader = bytesRead >= 2 && (
+              (headerBytes[0] == 0xFF.toByte() && headerBytes[1] == 0xD8.toByte()) || // JPEG
+              (headerBytes[0] == 0x89.toByte() && headerBytes[1] == 0x50.toByte())    // PNG
+            )
+
+            // If we are downloading a spreadsheet, reject image thumbnails or html pages
+            if (!isHtml && !(isSpreadsheet && isImageHeader)) {
               tempFile.copyTo(destFile, overwrite = true)
               tempFile.delete()
               return true

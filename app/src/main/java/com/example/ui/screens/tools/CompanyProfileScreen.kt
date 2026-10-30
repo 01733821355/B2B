@@ -146,6 +146,10 @@ fun CompanyProfileScreen(
     }
   }
 
+  androidx.compose.runtime.LaunchedEffect(Unit) {
+    viewModel.syncCompanyWorkbookFromCloud { _, _ -> }
+  }
+
   // Cross-Tab Search Algorithm
   val searchResults by remember(workbook, searchQuery, selectedTabFilter) {
     derivedStateOf {

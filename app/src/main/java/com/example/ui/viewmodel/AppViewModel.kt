@@ -137,20 +137,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }
     }
 
-    // Automatically pull latest data from Google Sheets on application launch
-    // and periodically (every 20s) while app is active, so other users get new data & photos fast!
+    // Immediately pull latest data from Google Sheets on application launch
     viewModelScope.launch {
-      delay(800)
       try {
         eblRepository.pullDataFromGoogleSheets()
       } catch (_: Exception) {}
-
-      while (true) {
-        delay(20_000)
-        try {
-          eblRepository.pullDataFromGoogleSheets()
-        } catch (_: Exception) {}
-      }
     }
   }
 
@@ -477,7 +468,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Does NOT push local preset data to Google Sheets unless explicitly requested by the user via button.
     viewModelScope.launch {
       while (true) {
-        delay(4_000) // 4-second fast cross-device background pull interval
+        delay(1_500) // 1.5-second ultra-fast cross-device background pull interval
         if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
