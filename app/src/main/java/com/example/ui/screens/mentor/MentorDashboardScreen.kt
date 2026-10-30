@@ -54,6 +54,17 @@ import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.ui.platform.LocalContext
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.shape.CircleShape
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -94,14 +105,39 @@ fun MentorDashboardScreen(
   val auditLogs by viewModel.auditLogs.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
+  val appCustomIconUrl by viewModel.appCustomIconUrl.collectAsState()
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
   val allFiles by viewModel.allFiles.collectAsState()
   val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
 
   var showDeletedRecordsDialog by remember { mutableStateOf(false) }
   var showEditAppNameDialog by remember { mutableStateOf(false) }
   var newAppNameInput by remember { mutableStateOf("") }
+  var showEditAppIconDialog by remember { mutableStateOf(false) }
+  var newAppIconUrlInput by remember { mutableStateOf("") }
   var mentorTargetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
+
+  val iconPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      coroutineScope.launch {
+        val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+          context,
+          uri,
+          "app_icon_${System.currentTimeMillis()}.png"
+        )
+        if (saved != null) {
+          viewModel.setAppCustomIcon(saved.storagePath) { success, _ ->
+            if (success) {
+              Toast.makeText(context, "Universal App Icon সফলভাবে আপডেট হয়েছে!", Toast.LENGTH_SHORT).show()
+            }
+          }
+        }
+      }
+    }
+  }
 
   val isRefreshing by viewModel.isRefreshing.collectAsState()
 
@@ -615,6 +651,99 @@ fun MentorDashboardScreen(
       }
     }
 
+    // Universal App Icon / Logo Configuration (EXCLUSIVE TO MENTOR)
+    item {
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 6.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Row(
+          modifier = Modifier.padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f)
+          ) {
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF312E81)),
+              contentAlignment = Alignment.Center
+            ) {
+              if (appCustomIconUrl.isNotBlank()) {
+                AsyncImage(
+                  model = appCustomIconUrl,
+                  contentDescription = "Current App Icon",
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+                  contentScale = ContentScale.Crop
+                )
+              } else {
+                Icon(
+                  imageVector = Icons.Default.Image,
+                  contentDescription = null,
+                  tint = EblGold,
+                  modifier = Modifier.size(22.dp)
+                )
+              }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Text(
+                text = "Universal App Icon / Logo",
+                fontSize = 11.sp,
+                color = Color.Gray
+              )
+              Text(
+                text = if (appCustomIconUrl.isNotBlank()) "Custom Icon Active" else "Default Icon",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = EblNavyDark
+              )
+              Text(
+                text = "সবার অ্যাপে নতুন আইকন সিঙ্ক হবে • Configured by Mentor",
+                fontSize = 10.sp,
+                color = Color(0xFF059669)
+              )
+            }
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(
+              onClick = {
+                iconPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+              },
+              colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_mentor_pick_app_icon")
+            ) {
+              Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Upload", fontSize = 11.sp)
+            }
+            OutlinedButton(
+              onClick = {
+                newAppIconUrlInput = appCustomIconUrl
+                showEditAppIconDialog = true
+              },
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_mentor_edit_app_icon_url")
+            ) {
+              Text("URL", fontSize = 11.sp)
+            }
+          }
+        }
+      }
+    }
+
     // Time filter pills
     item {
       TimeFilterBar(
@@ -914,6 +1043,65 @@ fun MentorDashboardScreen(
       dismissButton = {
         OutlinedButton(onClick = { showEditAppNameDialog = false }) {
           Text("Cancel")
+        }
+      }
+    )
+  }
+
+  // Universal App Icon / Logo Edit Dialog
+  if (showEditAppIconDialog) {
+    AlertDialog(
+      onDismissRequest = { showEditAppIconDialog = false },
+      title = { Text("Universal App Icon / Logo পরিবর্তন", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+      text = {
+        Column {
+          Text(
+            "একটি ইমেজ URL বা Google Drive Image Link দিন, অথবা সরাসরি ডিভাইস থেকে ছবি আপলোড করুন:",
+            fontSize = 12.sp,
+            color = Color.Gray
+          )
+          Spacer(modifier = Modifier.height(8.dp))
+          OutlinedTextField(
+            value = newAppIconUrlInput,
+            onValueChange = { newAppIconUrlInput = it },
+            placeholder = { Text("https://example.com/logo.png বা ড্রাইভ লিঙ্ক", fontSize = 12.sp) },
+            modifier = Modifier.fillMaxWidth().testTag("input_new_app_icon_url"),
+            singleLine = true
+          )
+          Spacer(modifier = Modifier.height(10.dp))
+          Button(
+            onClick = {
+              showEditAppIconDialog = false
+              iconPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("গ্যালারি থেকে ছবি নির্বাচন করুন (Pick from Device)", fontSize = 11.sp)
+          }
+        }
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            val clean = newAppIconUrlInput.trim()
+            viewModel.setAppCustomIcon(clean) { success, _ ->
+              if (success) {
+                showEditAppIconDialog = false
+                Toast.makeText(context, "Universal App Icon সফলভাবে আপডেট হয়েছে!", Toast.LENGTH_SHORT).show()
+              }
+            }
+          },
+          colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
+        ) {
+          Text("সংরক্ষণ করুন (Save Icon)")
+        }
+      },
+      dismissButton = {
+        OutlinedButton(onClick = { showEditAppIconDialog = false }) {
+          Text("বাতিল")
         }
       }
     )

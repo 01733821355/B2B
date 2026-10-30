@@ -57,8 +57,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
@@ -82,6 +84,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
   appCustomName: String = "RM File Management Suite",
+  appCustomIconUrl: String = "",
   lastLoggedRmCode: String = "",
   onLogin: (String, String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit,
   onBiometricLogin: ((String, Double?, Double?, String?, (Boolean, String?) -> Unit) -> Unit)? = null,
@@ -308,13 +311,25 @@ fun LoginScreen(
         Box(
           modifier = Modifier
             .size(68.dp)
-            .background(currentTheme.secondary, CircleShape),
+            .clip(CircleShape)
+            .background(currentTheme.secondary),
           contentAlignment = Alignment.Center
         ) {
-          Text(
-            text = currentTheme.id.emoji,
-            fontSize = 32.sp
-          )
+          if (appCustomIconUrl.isNotBlank()) {
+            AsyncImage(
+              model = appCustomIconUrl,
+              contentDescription = "App Logo",
+              modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape),
+              contentScale = ContentScale.Crop
+            )
+          } else {
+            Text(
+              text = currentTheme.id.emoji,
+              fontSize = 32.sp
+            )
+          }
         }
       }
 

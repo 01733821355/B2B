@@ -127,6 +127,7 @@ fun EblMainApp(viewModel: AppViewModel) {
   val currentScreen by viewModel.currentScreen.collectAsState()
   val syncStatus by viewModel.syncStatus.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
+  val appCustomIconUrl by viewModel.appCustomIconUrl.collectAsState()
   val unreadSmsCount by viewModel.unreadSmsCount.collectAsState()
   val rmSmsList by viewModel.rmSmsNotifications.collectAsState()
   val allSmsList by viewModel.allSmsNotifications.collectAsState()
@@ -229,6 +230,7 @@ fun EblMainApp(viewModel: AppViewModel) {
   if (currentUser == null) {
     LoginScreen(
       appCustomName = appCustomName,
+      appCustomIconUrl = appCustomIconUrl,
       lastLoggedRmCode = lastLoggedRmCode,
       onLogin = { username, password, lat, lng, addr, callback ->
         viewModel.login(username, password, lat, lng, addr, callback)
@@ -274,6 +276,7 @@ fun EblMainApp(viewModel: AppViewModel) {
         EblTopBar(
           user = user,
           appCustomName = appCustomName,
+          appCustomIconUrl = appCustomIconUrl,
           canNavigateBack = canGoBack,
           onNavigateBack = {
             if (!viewModel.navigateBack()) {

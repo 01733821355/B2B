@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +24,9 @@ import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -72,6 +76,7 @@ import java.time.format.DateTimeFormatter
 fun EblTopBar(
   user: UserEntity?,
   appCustomName: String = "RM File Management Suite",
+  appCustomIconUrl: String = "",
   canNavigateBack: Boolean,
   onNavigateBack: () -> Unit,
   onLogout: () -> Unit,
@@ -126,18 +131,30 @@ fun EblTopBar(
           )
         }
       } else {
-        // App & Active Theme Monogram Avatar Badge
+        // App Custom Icon or Active Theme Monogram Avatar Badge
         Box(
           modifier = Modifier
             .padding(start = 12.dp)
             .size(36.dp)
-            .background(currentTheme.secondary, CircleShape),
+            .clip(CircleShape)
+            .background(currentTheme.secondary),
           contentAlignment = Alignment.Center
         ) {
-          Text(
-            text = currentTheme.id.emoji,
-            fontSize = 18.sp
-          )
+          if (appCustomIconUrl.isNotBlank()) {
+            AsyncImage(
+              model = appCustomIconUrl,
+              contentDescription = "App Icon",
+              modifier = Modifier
+                .fillMaxSize()
+                .clip(CircleShape),
+              contentScale = ContentScale.Crop
+            )
+          } else {
+            Text(
+              text = currentTheme.id.emoji,
+              fontSize = 18.sp
+            )
+          }
         }
       }
     },

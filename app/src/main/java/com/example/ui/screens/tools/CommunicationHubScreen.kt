@@ -1,6 +1,10 @@
 package com.example.ui.screens.tools
 
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -70,6 +74,15 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.layout.heightIn
+import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -119,6 +132,14 @@ fun CommunicationHubScreen(
 
   var messageInput by remember { mutableStateOf("") }
   var showCreateEventDialog by remember { mutableStateOf(false) }
+  var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+  var enlargedPhotoUrl by remember { mutableStateOf<String?>(null) }
+  val coroutineScope = rememberCoroutineScope()
+  val photoPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    selectedImageUri = uri
+  }
 
   var activeResponseEvent by remember { mutableStateOf<TeamEventEntity?>(null) }
   var activeViewEventSubmissions by remember { mutableStateOf<TeamEventEntity?>(null) }
@@ -449,6 +470,9 @@ fun CommunicationHubScreen(
             onCallSender = {},
             onDelete = {
               viewModel.deleteChatMessage(msg.id)
+            },
+            onPhotoClick = { url ->
+              enlargedPhotoUrl = url
             }
           )
         }
@@ -461,41 +485,139 @@ fun CommunicationHubScreen(
       shadowElevation = 8.dp,
       modifier = Modifier.fillMaxWidth()
     ) {
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        OutlinedTextField(
-          value = messageInput,
-          onValueChange = { messageInput = it },
-          placeholder = { Text("টিমের সবার জন্য মেসেজ লিখুন...", fontSize = 13.sp) },
-          maxLines = 3,
-          shape = RoundedCornerShape(24.dp),
-          modifier = Modifier
-            .weight(1f)
-            .testTag("input_team_chat_message")
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        IconButton(
-          onClick = {
-            if (messageInput.isNotBlank()) {
-              val txt = messageInput.trim()
-              messageInput = ""
-              viewModel.sendChatMessage(txt)
+      Column(modifier = Modifier.fillMaxWidth()) {
+        // Thumbnail preview if an image was picked
+        if (selectedImageUri != null) {
+          Surface(
+            color = Color(0xFFF1F5F9),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+              .fillMaxWidth()
+              .padding(horizontal = 8.dp, vertical = 4.dp)
+          ) {
+            Row(
+              modifier = Modifier.padding(6.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              AsyncImage(
+                model = selectedImageUri,
+                contentDescription = "Selected Photo",
+                modifier = Modifier
+                  .size(44.dp)
+                  .clip(RoundedCornerShape(6.dp)),
+                contentScale = ContentScale.Crop
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = "সংযুক্ত ছবি (Photo Attached)",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1E293B),
+                modifier = Modifier.weight(1f)
+              )
+              IconButton(
+                onClick = { selectedImageUri = null },
+                modifier = Modifier.size(28.dp)
+              ) {
+                Icon(Icons.Default.Close, contentDescription = "Remove Photo", tint = Color.Gray, modifier = Modifier.size(16.dp))
+              }
             }
-          },
+          }
+        }
+
+        Row(
           modifier = Modifier
-            .size(44.dp)
-            .background(EblNavyPrimary, CircleShape)
-            .testTag("btn_send_chat_message")
+            .fillMaxWidth()
+            .padding(8.dp),
+          verticalAlignment = Alignment.CenterVertically
         ) {
-          Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
+          // Photo attachment button
+          IconButton(
+            onClick = {
+              photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            modifier = Modifier
+              .size(42.dp)
+              .testTag("btn_attach_photo_chat")
+          ) {
+            Icon(
+              imageVector = Icons.Default.AddPhotoAlternate,
+              contentDescription = "Attach Photo",
+              tint = EblNavyPrimary,
+              modifier = Modifier.size(24.dp)
+            )
+          }
+
+          Spacer(modifier = Modifier.width(4.dp))
+
+          OutlinedTextField(
+            value = messageInput,
+            onValueChange = { messageInput = it },
+            placeholder = { Text("টিমের সবার জন্য মেসেজ লিখুন...", fontSize = 13.sp) },
+            maxLines = 3,
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+              .weight(1f)
+              .testTag("input_team_chat_message")
+          )
+
+          Spacer(modifier = Modifier.width(8.dp))
+
+          IconButton(
+            onClick = {
+              if (messageInput.isNotBlank() || selectedImageUri != null) {
+                val txt = messageInput.trim()
+                val uri = selectedImageUri
+                messageInput = ""
+                selectedImageUri = null
+                coroutineScope.launch {
+                  var photoUrl: String? = null
+                  if (uri != null) {
+                    val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+                      context,
+                      uri,
+                      "chat_photo_${System.currentTimeMillis()}.jpg"
+                    )
+                    photoUrl = saved.storagePath
+                  }
+                  viewModel.sendChatMessage(
+                    text = if (txt.isBlank() && photoUrl != null) "📷 ছবি পাঠানো হয়েছে" else txt,
+                    attachmentUrl = photoUrl
+                  )
+                }
+              }
+            },
+            modifier = Modifier
+              .size(44.dp)
+              .background(EblNavyPrimary, CircleShape)
+              .testTag("btn_send_chat_message")
+          ) {
+            Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(18.dp))
+          }
         }
       }
+    }
+
+    // Enlarged Photo Viewer Dialog
+    if (enlargedPhotoUrl != null) {
+      AlertDialog(
+        onDismissRequest = { enlargedPhotoUrl = null },
+        text = {
+          AsyncImage(
+            model = enlargedPhotoUrl,
+            contentDescription = "Enlarged Chat Photo",
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Fit
+          )
+        },
+        confirmButton = {
+          TextButton(onClick = { enlargedPhotoUrl = null }) {
+            Text("Close (বন্ধ করুন)")
+          }
+        }
+      )
     }
   }
 }
@@ -505,7 +627,8 @@ fun ChatBubbleItem(
   message: ChatMessageEntity,
   isMine: Boolean,
   onCallSender: () -> Unit,
-  onDelete: () -> Unit = {}
+  onDelete: () -> Unit = {},
+  onPhotoClick: ((String) -> Unit)? = null
 ) {
   Row(
     modifier = Modifier.fillMaxWidth(),
@@ -557,11 +680,28 @@ fun ChatBubbleItem(
         shadowElevation = 1.dp
       ) {
         Column(modifier = Modifier.padding(10.dp)) {
-          Text(
-            text = message.messageText,
-            color = if (isMine) Color.White else Color(0xFF1E293B),
-            fontSize = 13.sp
-          )
+          // Attached Photo
+          if (!message.attachmentUrl.isNullOrBlank()) {
+            AsyncImage(
+              model = message.attachmentUrl,
+              contentDescription = "Photo Attachment",
+              contentScale = ContentScale.Crop,
+              modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 220.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { onPhotoClick?.invoke(message.attachmentUrl!!) }
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+          }
+
+          if (message.messageText.isNotBlank()) {
+            Text(
+              text = message.messageText,
+              color = if (isMine) Color.White else Color(0xFF1E293B),
+              fontSize = 13.sp
+            )
+          }
           Spacer(modifier = Modifier.height(4.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),

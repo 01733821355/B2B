@@ -127,7 +127,7 @@ fun RmDashboardScreen(
 
   var selectedKpiQuarter by remember { mutableStateOf(DateUtils.getCurrentQuarter()) }
   val isAnnual = selectedKpiQuarter.equals("Annual", ignoreCase = true)
-  val currentQuarterTargets = target?.getTargetForQuarter(selectedKpiQuarter) ?: Triple(20, 10, 15)
+  val currentQuarterTargets = target?.getTargetForQuarter(selectedKpiQuarter) ?: Triple(0, 0, 0)
   val ccTarget = currentQuarterTargets.first
   val corpTarget = currentQuarterTargets.second
   val b2bTarget = currentQuarterTargets.third
@@ -158,22 +158,37 @@ fun RmDashboardScreen(
     }
   }
 
-  // Only show criteria assigned specifically to this RM (and not universally deleted)
-  val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets, allQuarterCustomTargets) {
+  // Only show criteria assigned specifically to this RM where target is > 0
+  val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets, allQuarterCustomTargets, selectedKpiQuarter, ccTarget, corpTarget, b2bTarget, currentQuarterCustomTargets) {
     val assigned = if (assignedCriteria.isNotEmpty()) {
       assignedCriteria
     } else {
       val list = mutableListOf<String>()
-      if ((target?.creditCardTarget ?: 0) > 0) list.add("Credit Card")
-      if ((target?.corporateCardTarget ?: 0) > 0) list.add("Corporate Card")
-      if ((target?.b2bTarget ?: 0) > 0) list.add("B2B")
+      if (ccTarget > 0) list.add("Credit Card")
+      if (corpTarget > 0) list.add("Corporate Card")
+      if (b2bTarget > 0) list.add("B2B")
       customTargets.forEach { (k, v) -> if (v > 0) list.add(k) }
       allQuarterCustomTargets.values.forEach { qm ->
         qm.forEach { (k, v) -> if (v > 0 && !list.contains(k)) list.add(k) }
       }
-      if (list.isEmpty()) listOf("Credit Card", "Corporate Card", "B2B") else list
+      list
     }
-    assigned.filter { a -> targetCriteria.any { it.equals(a, ignoreCase = true) } }
+    // Strictly filter out any criteria where target in this selected period is <= 0
+    assigned.filter { a ->
+      val inOptions = targetCriteria.any { it.equals(a, ignoreCase = true) }
+      if (!inOptions) return@filter false
+      when {
+        a.equals("Credit Card", ignoreCase = true) -> ccTarget > 0
+        a.equals("Corporate Card", ignoreCase = true) -> corpTarget > 0
+        a.equals("B2B", ignoreCase = true) -> b2bTarget > 0
+        else -> {
+          val customVal = currentQuarterCustomTargets[a]
+            ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(a, true) }?.value
+            ?: 0
+          customVal > 0
+        }
+      }
+    }
   }
   Box(
     modifier = modifier

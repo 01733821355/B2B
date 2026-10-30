@@ -1404,6 +1404,7 @@ class EblRepository(
         put("timestamp", DateUtils.formatDateTime(msg.timestamp))
         put("messageType", msg.messageType)
         put("eventId", msg.eventId ?: "")
+        put("attachmentUrl", msg.attachmentUrl ?: "")
       }
 
       val payload = org.json.JSONObject().apply {
@@ -3065,6 +3066,58 @@ class EblRepository(
       )
     )
     applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson) }
+
+    // Also update RmTargetEntity with all 4 quarters targets
+    val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)
+    val q1Map = quarterlyTargets["Q1"] ?: emptyMap()
+    val q2Map = quarterlyTargets["Q2"] ?: emptyMap()
+    val q3Map = quarterlyTargets["Q3"] ?: emptyMap()
+    val q4Map = quarterlyTargets["Q4"] ?: emptyMap()
+
+    val q1Cc = q1Map["Credit Card"] ?: existingTarget.q1CreditCardTarget
+    val q1Corp = q1Map["Corporate Card"] ?: existingTarget.q1CorporateCardTarget
+    val q1B2b = q1Map["B2B"] ?: existingTarget.q1B2bTarget
+
+    val q2Cc = q2Map["Credit Card"] ?: existingTarget.q2CreditCardTarget
+    val q2Corp = q2Map["Corporate Card"] ?: existingTarget.q2CorporateCardTarget
+    val q2B2b = q2Map["B2B"] ?: existingTarget.q2B2bTarget
+
+    val q3Cc = q3Map["Credit Card"] ?: existingTarget.q3CreditCardTarget
+    val q3Corp = q3Map["Corporate Card"] ?: existingTarget.q3CorporateCardTarget
+    val q3B2b = q3Map["B2B"] ?: existingTarget.q3B2bTarget
+
+    val q4Cc = q4Map["Credit Card"] ?: existingTarget.q4CreditCardTarget
+    val q4Corp = q4Map["Corporate Card"] ?: existingTarget.q4CorporateCardTarget
+    val q4B2b = q4Map["B2B"] ?: existingTarget.q4B2bTarget
+
+    val curQ = DateUtils.getCurrentQuarter()
+    val curCc = when (curQ) { "Q1" -> q1Cc; "Q2" -> q2Cc; "Q3" -> q3Cc; else -> q4Cc }
+    val curCorp = when (curQ) { "Q1" -> q1Corp; "Q2" -> q2Corp; "Q3" -> q3Corp; else -> q4Corp }
+    val curB2b = when (curQ) { "Q1" -> q1B2b; "Q2" -> q2B2b; "Q3" -> q3B2b; else -> q4B2b }
+
+    val updatedTarget = existingTarget.copy(
+      activeQuarter = curQ,
+      creditCardTarget = curCc,
+      corporateCardTarget = curCorp,
+      b2bTarget = curB2b,
+      q1CreditCardTarget = q1Cc,
+      q1CorporateCardTarget = q1Corp,
+      q1B2bTarget = q1B2b,
+      q2CreditCardTarget = q2Cc,
+      q2CorporateCardTarget = q2Corp,
+      q2B2bTarget = q2B2b,
+      q3CreditCardTarget = q3Cc,
+      q3CorporateCardTarget = q3Corp,
+      q3B2bTarget = q3B2b,
+      q4CreditCardTarget = q4Cc,
+      q4CorporateCardTarget = q4Corp,
+      q4B2bTarget = q4B2b,
+      updatedAt = now
+    )
+    database.rmTargetDao().insertOrUpdateTarget(updatedTarget)
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString(), "APP", now)
+    )
   }
 
   fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> {
@@ -3083,9 +3136,9 @@ class EblRepository(
         filtered
       } else {
         val list = mutableListOf<String>()
-        val cc = rmTarget?.creditCardTarget ?: 20
-        val corp = rmTarget?.corporateCardTarget ?: 10
-        val b2b = rmTarget?.b2bTarget ?: 15
+        val cc = rmTarget?.creditCardTarget ?: 0
+        val corp = rmTarget?.corporateCardTarget ?: 0
+        val b2b = rmTarget?.b2bTarget ?: 0
         if (cc > 0 && allCriteria.any { it.equals("Credit Card", ignoreCase = true) }) list.add("Credit Card")
         if (corp > 0 && allCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) list.add("Corporate Card")
         if (b2b > 0 && allCriteria.any { it.equals("B2B", ignoreCase = true) }) list.add("B2B")
@@ -3094,7 +3147,7 @@ class EblRepository(
             list.add(k)
           }
         }
-        if (list.isEmpty()) allCriteria else list
+        list
       }
     }
   }
@@ -4049,7 +4102,7 @@ class EblRepository(
             updatedAt = now
           )
         )
-      } else if (!isRecentLocalTargetChange) {
+      } else if (!isRecentLocalTargetChange && (obj.has("creditCardTarget") || obj.has("q1CreditCardTarget") || obj.has("corporateCardTarget"))) {
         if (existingTarget.creditCardTarget != ccTarget ||
             existingTarget.corporateCardTarget != corpTarget ||
             existingTarget.b2bTarget != b2bTarget ||
@@ -4739,6 +4792,7 @@ class EblRepository(
       val messageText = obj.optString("messageText").trim()
       val timestamp = DateUtils.parseDateTime(obj.optString("timestamp")) ?: now
       val messageType = obj.optString("messageType", "TEXT").trim()
+      val attachmentUrl = obj.optString("attachmentUrl").trim().ifBlank { null }
 
       if (messageType == "EVENT" && deletedEventIds.any { dEvt -> messageText.contains(dEvt, ignoreCase = true) }) continue
 
@@ -4751,7 +4805,8 @@ class EblRepository(
         messageText = messageText,
         timestamp = timestamp,
         messageType = messageType,
-        eventId = eventId
+        eventId = eventId,
+        attachmentUrl = attachmentUrl
       )
       database.communicationDao().insertMessage(entity)
       count++
@@ -5402,7 +5457,8 @@ class EblRepository(
     messageText: String,
     recipientRmCode: String? = null,
     messageType: String = "TEXT",
-    eventId: String? = null
+    eventId: String? = null,
+    attachmentUrl: String? = null
   ): Result<com.example.data.model.ChatMessageEntity> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
@@ -5416,13 +5472,25 @@ class EblRepository(
       messageText = messageText.trim(),
       timestamp = now,
       messageType = messageType,
-      eventId = eventId
+      eventId = eventId,
+      attachmentUrl = attachmentUrl
     )
     database.communicationDao().insertMessage(msg)
     applicationScope.launch {
       syncChatUpsertToGoogleSheets(msg)
     }
     Result.success(msg)
+  }
+
+  suspend fun setAppCustomIcon(iconUrl: String) = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("app_custom_icon_url", iconUrl, currentUser?.rmCode ?: "MENTOR", now)
+    )
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("app_custom_icon_url", iconUrl)
+    }
   }
 
   suspend fun deleteChatMessage(id: String): Result<Unit> = withContext(Dispatchers.IO) {

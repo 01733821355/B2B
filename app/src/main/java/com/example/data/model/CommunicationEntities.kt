@@ -20,8 +20,9 @@ data class ChatMessageEntity(
   val recipientRmCode: String? = null, // null for General Team Hub broadcast, or specific RM code
   val messageText: String,
   val timestamp: Long,
-  val messageType: String = "TEXT", // "TEXT", "EVENT", "CALL_LOG", "ANNOUNCEMENT"
-  val eventId: String? = null
+  val messageType: String = "TEXT", // "TEXT", "EVENT", "CALL_LOG", "ANNOUNCEMENT", "IMAGE"
+  val eventId: String? = null,
+  val attachmentUrl: String? = null
 )
 
 @Entity(

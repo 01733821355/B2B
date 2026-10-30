@@ -100,6 +100,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   val appCustomName: StateFlow<String> = eblRepository.getAppCustomNameFlow()
     .stateIn(viewModelScope, SharingStarted.Eagerly, "RM File Management Suite")
 
+  val appCustomIconUrl: StateFlow<String> = database.appSettingDao().getSettingFlow("app_custom_icon_url")
+    .map { it?.settingValue ?: "" }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
   val fileStatusOptions: StateFlow<List<String>> = eblRepository.getFileStatusOptionsFlow()
     .stateIn(
       viewModelScope,
@@ -766,6 +770,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       val res = eblRepository.setAppCustomName(name)
       res.onSuccess {
         _uiMessage.emit("Universal App name set to '$name'.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun setAppCustomIcon(iconUrl: String, onResult: (Boolean, String?) -> Unit) {
+    viewModelScope.launch {
+      val res = runCatching { eblRepository.setAppCustomIcon(iconUrl) }
+      res.onSuccess {
+        _uiMessage.emit("Universal App Icon updated.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
@@ -1507,11 +1523,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     recipientRmCode: String? = null,
     messageType: String = "TEXT",
     eventId: String? = null,
+    attachmentUrl: String? = null,
     onResult: (Boolean, String?) -> Unit = { _, _ -> }
   ) {
-    if (text.isBlank()) return
+    if (text.isBlank() && attachmentUrl.isNullOrBlank()) return
     viewModelScope.launch {
-      val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId)
+      val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId, attachmentUrl)
       res.onSuccess {
         onResult(true, null)
       }.onFailure { err ->
