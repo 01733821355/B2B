@@ -11,7 +11,7 @@ object ChecklistTranslator {
   const val GOOGLE_TRANSLATION_GUIDE_BANGLA = """
 গুগলের কিছু অন করতে হবে কি না:
 ১. অফলাইন ব্যাংকিং ডিকশনারি (সম্পূর্ণ ফ্রি ও স্বয়ংক্রিয়):
-   কোনো কিছু অন করার প্রয়োজন নেই! অ্যাপে শতভাগ সম্পূর্ণ EBL ব্যাংকিং ডিকশনারি ইন্টিগ্রেট করা আছে। যে কোনো ডকুমেন্ট বা টেক্সট সাথে সাথে নিখুঁত প্রাতিষ্ঠানিক বাংলায় কনভার্ট হয়।
+   কোনো কিছু অন করার প্রয়োজন নেই! অ্যাপে শতভাগ সম্পূর্ণ ব্যাংকিং ডিকশনারি ইন্টিগ্রেট করা আছে। যে কোনো ডকুমেন্ট বা টেক্সট সাথে সাথে নিখুঁত প্রাতিষ্ঠানিক বাংলায় কনভার্ট হয়।
 
 ২. লাইভ Gemini AI অনুবাদ:
    আপনি যদি Google Cloud বা Gemini AI থেকে সরাসরি লাইভ অনুবাদ পেতে চান, তবে Google AI Studio (aistudio.google.com) থেকে একটি ফ্রি Gemini API Key নিয়ে অ্যাপে কনফিগার করতে পারেন। তবে এটি ঐচ্ছিক—কোনো কী ছাড়াও সব অনুবাদ নিখুঁতভাবে চলবে।
@@ -156,22 +156,22 @@ object ChecklistTranslator {
   fun getHeaderTemplate(language: ChecklistLanguage): String {
     return when (language) {
       ChecklistLanguage.ENGLISH ->
-        "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
+        "Dear {CUSTOMER_NAME},\nGreetings from B2B Banking Suite.\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
       ChecklistLanguage.BANGLA ->
-        "প্রিয় {CUSTOMER_NAME},\nইস্টার্ন ব্যাংক পিএলসি (EBL)-এর পক্ষ থেকে আন্তরিক শুভেচ্ছা।\n{PRESET_NAME}-এর আবেদন প্রক্রিয়াকরণের জন্য অনুগ্রহ করে নিচের প্রয়োজনীয় ডকুমেন্টসগুলো প্রদান করুন:"
+        "প্রিয় {CUSTOMER_NAME},\nব্যাংকিং ও ফাইন্যান্স স্যুট-এর পক্ষ থেকে আন্তরিক শুভেচ্ছা।\n{PRESET_NAME}-এর আবেদন প্রক্রিয়াকরণের জন্য অনুগ্রহ করে নিচের প্রয়োজনীয় ডকুমেন্টসগুলো প্রদান করুন:"
       ChecklistLanguage.BILINGUAL ->
-        "প্রিয় / Dear {CUSTOMER_NAME},\nইস্টার্ন ব্যাংক পিএলসি (EBL)-এর পক্ষ থেকে শুভেচ্ছা। Greetings from Eastern Bank PLC.\n{PRESET_NAME}-এর জন্য প্রয়োজনীয় ডকুমেন্টস / Required documents for your application:"
+        "প্রিয় / Dear {CUSTOMER_NAME},\nব্যাংকিং স্যুট-এর পক্ষ থেকে শুভেচ্ছা। Greetings from B2B Banking Suite.\n{PRESET_NAME}-এর জন্য প্রয়োজনীয় ডকুমেন্টস / Required documents for your application:"
     }
   }
 
   fun getRegardsTemplate(language: ChecklistLanguage): String {
     return when (language) {
       ChecklistLanguage.ENGLISH ->
-        "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
+        "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nB2B Banking & Operations"
       ChecklistLanguage.BANGLA ->
-        "যেকোনো তথ্য বা সহায়তার জন্য যোগাযোগ করুন:\n{RM_NAME}\nআরএম কোড: {RM_CODE}\nমোবাইল: {RM_PHONE}\nইস্টার্ন ব্যাংক পিএলসি"
+        "যেকোনো তথ্য বা সহায়তার জন্য যোগাযোগ করুন:\n{RM_NAME}\nআরএম কোড: {RM_CODE}\nমোবাইল: {RM_PHONE}\nব্যাংকিং ও ফাইন্যান্স স্যুট"
       ChecklistLanguage.BILINGUAL ->
-        "যেকোনো প্রয়োজনে যোগাযোগ করুন / For any query, contact:\n{RM_NAME}\nRM Code: {RM_CODE} | Mobile: {RM_PHONE}\nEastern Bank PLC (EBL)"
+        "যেকোনো প্রয়োজনে যোগাযোগ করুন / For any query, contact:\n{RM_NAME}\nRM Code: {RM_CODE} | Mobile: {RM_PHONE}\nB2B Banking & Operations"
     }
   }
 

@@ -15,8 +15,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 
 object NotificationHelper {
-  const val CHANNEL_ID = "rm_mentor_updates_channel"
-  const val CHANNEL_RM_APPROVAL_ID = "rm_mentor_approvals_channel"
+  const val CHANNEL_ID = "b2b_alerts_channel_v2"
+  const val CHANNEL_RM_APPROVAL_ID = "b2b_approvals_channel_v2"
   private const val PREF_NAME = "app_notification_prefs"
   private const val KEY_NOTIFICATION_ASKED = "notification_permission_asked_once"
 
@@ -30,32 +30,40 @@ object NotificationHelper {
 
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+      val audioAttributes = AudioAttributes.Builder()
+        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+        .build()
+
       val channel1 = NotificationChannel(
         CHANNEL_ID,
         "File & Data Updates",
-        NotificationManager.IMPORTANCE_LOW
+        NotificationManager.IMPORTANCE_HIGH
       ).apply {
-        description = "Silent in-app data and file update notifications"
-        enableLights(false)
-        enableVibration(false)
-        vibrationPattern = null
+        description = "High priority team and file update alerts"
+        enableLights(true)
+        lightColor = Color.BLUE
+        enableVibration(true)
+        vibrationPattern = longArrayOf(0, 250, 150, 250)
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        setShowBadge(false)
-        setSound(null, null)
+        setShowBadge(true)
+        setSound(soundUri, audioAttributes)
       }
 
       val channel2 = NotificationChannel(
         CHANNEL_RM_APPROVAL_ID,
         "RM Assignments & Approvals",
-        NotificationManager.IMPORTANCE_LOW
+        NotificationManager.IMPORTANCE_HIGH
       ).apply {
-        description = "Silent alerts when an RM is assigned by Admin"
-        enableLights(false)
-        enableVibration(false)
-        vibrationPattern = null
+        description = "High priority alerts when an RM is assigned by Admin"
+        enableLights(true)
+        lightColor = Color.GREEN
+        enableVibration(true)
+        vibrationPattern = longArrayOf(0, 250, 150, 250)
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-        setShowBadge(false)
-        setSound(null, null)
+        setShowBadge(true)
+        setSound(soundUri, audioAttributes)
       }
 
       val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
@@ -116,10 +124,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText(if (!customMessage.isNullOrBlank()) customMessage else "Attention RM $targetRmCode:\nYour customer file data was modified by $updatedByRole.\n\nRecord: $refDisplay\nCustomer: $customerName\nModifications: $changeDetails")
         )
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -156,10 +164,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("New RM assigned pending your approval\n\nRM: $rmName\nCode: $rmCode\nAssigned by: Admin\nStatus: Pending Mentor Approval")
         )
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_STATUS)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -198,10 +206,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("Attention RM $targetRmCode ($rmName):\nYour account information was updated by $updatedByRole.\n\nDetails: $details")
         )
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_STATUS)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -242,10 +250,10 @@ object NotificationHelper {
         .setContentTitle("SMS / Team Hub: $senderTitle")
         .setContentText(messageText)
         .setStyle(NotificationCompat.BigTextStyle().bigText("$senderTitle:\n$messageText"))
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -304,10 +312,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("New Customer File Created!\n\nCustomer: $customerName\nProduct: $productType\nFile ID: $fileId\nEntered by: RM $rmName ($rmCode)")
         )
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_STATUS)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -345,10 +353,10 @@ object NotificationHelper {
           NotificationCompat.BigTextStyle()
             .bigText("New Team Event Announcement!\n\nEvent: $eventTitle\nTarget Date: $targetDate\nPosted by: $creatorName")
         )
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_EVENT)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
@@ -380,9 +388,9 @@ object NotificationHelper {
         .setContentTitle(title)
         .setContentText(message)
         .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        .setSilent(true)
+        .setDefaults(NotificationCompat.DEFAULT_ALL)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
       NotificationManagerCompat.from(context).notify(notificationId, builder.build())

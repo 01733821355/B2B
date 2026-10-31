@@ -206,7 +206,7 @@ fun DbrAndChecklistScreen(
               fontWeight = FontWeight.Bold
             )
             Text(
-              text = "Eastern Bank PLC Retail Credit Assessment & Tools",
+              text = "Retail Credit Assessment & Documentation Tools",
               color = EblGold,
               fontSize = 11.sp
             )
@@ -1131,7 +1131,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             OutlinedButton(
               onClick = {
                 val report = """
-[EBL Sales Suite - DBR Assessment]
+[Sales Suite - DBR Assessment]
 Customer: ${customerName.ifBlank { "Applicant" }}
 Segment: $selectedSegment
 Monthly Salary: BDT ${nf.format(salary.roundToInt())}
@@ -1149,7 +1149,7 @@ Assessed by RM: ${currentUser.name} (${currentUser.rmCode})
                 """.trimIndent()
 
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                val clip = ClipData.newPlainText("EBL DBR Assessment", report)
+                val clip = ClipData.newPlainText("DBR Assessment", report)
                 clipboard.setPrimaryClip(clip)
                 Toast.makeText(context, "DBR Assessment copied to clipboard!", Toast.LENGTH_SHORT).show()
               },
@@ -1164,7 +1164,7 @@ Assessed by RM: ${currentUser.name} (${currentUser.rmCode})
             Button(
               onClick = {
                 val shareText = """
-EBL Retail Credit Assessment:
+Retail Credit Assessment:
 Customer: ${customerName.ifBlank { "Applicant" }}
 Salary: BDT ${nf.format(salary.roundToInt())}
 Total Debt Obligation: BDT ${nf.format(totalDebtObligation.roundToInt())}
@@ -1370,12 +1370,12 @@ fun DocumentChecklistSenderTab(
   val savedHeaderTpl = appSettingsList.find {
     it.settingKey == "CHECKLIST_HEADER_TEMPLATE" || it.settingKey.equals("Checklist Header", ignoreCase = true)
   }?.settingValue
-    ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
+    ?: "Dear {CUSTOMER_NAME},\nGreetings from B2B Banking Suite.\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
 
   val savedRegardsTpl = appSettingsList.find {
     it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" || it.settingKey.equals("Checklist Footer", ignoreCase = true)
   }?.settingValue
-    ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
+    ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nB2B Banking & Operations"
 
   val savedCorpDocsJson = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_DOCS" }?.settingValue
   val savedCorpCompanyDocs = appSettingsList.find { it.settingKey == "CHECKLIST_CORP_COMPANY_DOCS" }?.settingValue
@@ -3464,7 +3464,7 @@ fun DocumentChecklistSenderTab(
               OutlinedButton(
                 onClick = {
                   val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                  val clip = ClipData.newPlainText("EBL Document Checklist", formattedMessage)
+                  val clip = ClipData.newPlainText("Document Checklist", formattedMessage)
                   clipboard.setPrimaryClip(clip)
                   Toast.makeText(context, "Checklist copied to clipboard!", Toast.LENGTH_SHORT).show()
                 },
@@ -3714,7 +3714,7 @@ fun DocumentChecklistSenderTab(
             Column(modifier = Modifier.padding(10.dp)) {
               Text("১. অফলাইন বাংলা ডিকশনারি (সম্পূর্ণ ফ্রি ও স্বয়ংক্রিয়):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF065F46))
               Spacer(modifier = Modifier.height(2.dp))
-              Text("গুগলের কোনো কিছু অন করার প্রয়োজন নেই! অ্যাপের ভেতর ১০০% স্বয়ংসম্পূর্ণ EBL ব্যাংকিং ডিকশনারি ইন্টিগ্রেট করা আছে। 'বাংলা' বা '✨ Gemini AI Live বাংলা' বাটনে চাপলে কোনো গুগল সেটিং অন ছাড়াই সব ডকুমেন্টের নাম নিখুঁত বাংলায় রূপান্তর হয়।", fontSize = 11.sp, color = Color(0xFF047857))
+              Text("গুগলের কোনো কিছু অন করার প্রয়োজন নেই! অ্যাপের ভেতর ১০০% স্বয়ংসম্পূর্ণ ব্যাংকিং ডিকশনারি ইন্টিগ্রেট করা আছে। 'বাংলা' বা '✨ Gemini AI Live বাংলা' বাটনে চাপলে কোনো গুগল সেটিং অন ছাড়াই সব ডকুমেন্টের নাম নিখুঁত বাংলায় রূপান্তর হয়।", fontSize = 11.sp, color = Color(0xFF047857))
             }
           }
 
@@ -4457,7 +4457,7 @@ fun AgeCalculatorTab(
           OutlinedButton(
             onClick = {
               val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-              val clip = ClipData.newPlainText("EBL Age Assessment", fullReportText)
+              val clip = ClipData.newPlainText("Age Assessment", fullReportText)
               clipboard?.setPrimaryClip(clip)
               Toast.makeText(context, "✓ বয়স ও যোগ্যতার রিপোর্ট কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
             },

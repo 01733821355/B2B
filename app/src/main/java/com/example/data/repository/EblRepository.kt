@@ -92,6 +92,7 @@ class EblRepository(
   val deletedFileIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedSmsIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedChatIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+  val localDeletedChatIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedRmCodesCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedPresetKeysCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
   val deletedAttachmentIdsCache: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
@@ -133,6 +134,12 @@ class EblRepository(
         delChats.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
           deletedChatIdsCache.add(it)
           deletedChatIdsCache.add(it.uppercase())
+        }
+        val localDelChats = database.appSettingDao().getSetting("local_deleted_chat_ids")?.settingValue ?: ""
+        localDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() }.forEach {
+          localDeletedChatIdsCache.add(it)
+          localDeletedChatIdsCache.add(it.uppercase())
+          localDeletedChatIdsCache.add(it.lowercase())
         }
         val delRms = database.appSettingDao().getSetting("deleted_rm_codes")?.settingValue ?: ""
         delRms.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.forEach {
@@ -383,7 +390,7 @@ class EblRepository(
       val rmName = targetRmUser?.name ?: rmCode
       val formattedTime = DateUtils.formatDateTime(now)
       val qLabel = if (cleanQ in listOf("Q1", "Q2", "Q3", "Q4")) "$cleanQ $year" else "All Quarters $year"
-      val smsMessage = "[EBL Alert] Dear $rmName ($rmCode), your $qLabel sales target was set by ${currentUser.role} (${currentUser.rmCode}). Targets -> CC: $creditCardTarget, Corp: $corporateCardTarget, B2B: $b2bTarget. Timestamp: $formattedTime. EBL Sales Suite."
+      val smsMessage = "[Alert] Dear $rmName ($rmCode), your $qLabel sales target was set by ${currentUser.role} (${currentUser.rmCode}). Targets -> CC: $creditCardTarget, Corp: $corporateCardTarget, B2B: $b2bTarget. Timestamp: $formattedTime. Sales Suite."
 
       var smsStatus = "DELIVERED"
       if (context != null && rmMobile.isNotBlank()) {
@@ -490,7 +497,7 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
     val now = DateUtils.currentDhakaMillis()
     val allUsers = database.userDao().getAllUsers()
-    val alertMsg = "[EBL SMS Notice] Checklist SMS dispatched to '$customerName' ($customerMobile) by ${currentUser?.name ?: "User"} (${currentUser?.role ?: "RM"}). Message: ${messageText.take(80)}..."
+    val alertMsg = "[SMS Notice] Checklist SMS dispatched to '$customerName' ($customerMobile) by ${currentUser?.name ?: "User"} (${currentUser?.role ?: "RM"}). Message: ${messageText.take(80)}..."
 
     for (u in allUsers) {
       database.smsNotificationDao().insertSms(
@@ -514,7 +521,7 @@ class EblRepository(
     context?.let { ctx ->
       NotificationHelper.sendIncomingSmsNotification(
         context = ctx,
-        senderTitle = "EBL Notice: $customerName",
+        senderTitle = "Notice: $customerName",
         messageText = alertMsg
       )
     }
@@ -740,7 +747,7 @@ class EblRepository(
       val adminAndMentorUsers = database.userDao().getAllUsers().filter { it.role == "ADMIN" || it.role == "MENTOR" }
       val formattedTime = DateUtils.formatDateTime(now)
       for (mgr in adminAndMentorUsers) {
-        val alertMsg = "[EBL Alert] 📢 New Customer Data Added: '${entity.customerName}' (${entity.productType}) entered by ${currentUser.name} (${currentUser.role}, RM: ${currentUser.rmCode}). Assigned RM: ${entity.assignedRmCode}. Time: $formattedTime."
+        val alertMsg = "[Alert] 📢 New Customer Data Added: '${entity.customerName}' (${entity.productType}) entered by ${currentUser.name} (${currentUser.role}, RM: ${currentUser.rmCode}). Assigned RM: ${entity.assignedRmCode}. Time: $formattedTime."
         var mgrSmsStatus = "DELIVERED"
         if (context != null && mgr.mobile.isNotBlank()) {
           val sent = SmsService.sendSms(context, mgr.mobile, alertMsg)
@@ -1614,7 +1621,7 @@ class EblRepository(
     val rmName = targetRmUser?.name ?: file.assignedRmCode
     val formattedTime = DateUtils.formatDateTime(now)
 
-    val smsMessage = "[EBL Alert] ATTENTION: Dear $rmName (${file.assignedRmCode}), your customer file $fileId ('${file.customerName}') was DELETED by ${currentUser.name} (${currentUser.role}). Timestamp: $formattedTime. EBL Sales Suite."
+    val smsMessage = "[Alert] ATTENTION: Dear $rmName (${file.assignedRmCode}), your customer file $fileId ('${file.customerName}') was DELETED by ${currentUser.name} (${currentUser.role}). Timestamp: $formattedTime. Sales Suite."
 
     var smsStatus = "DELIVERED"
     if (context != null && rmMobile.isNotBlank()) {
@@ -1681,7 +1688,7 @@ class EblRepository(
       val rmName = targetRmUser?.name ?: file.assignedRmCode
       val formattedTime = DateUtils.formatDateTime(now)
 
-      val smsMessage = "[EBL Alert] Dear $rmName (${file.assignedRmCode}), your customer file $fileId ('${file.customerName}') was RESTORED by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. EBL Sales Suite."
+      val smsMessage = "[Alert] Dear $rmName (${file.assignedRmCode}), your customer file $fileId ('${file.customerName}') was RESTORED by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. Sales Suite."
 
       var smsStatus = "DELIVERED"
       if (context != null && rmMobile.isNotBlank()) {
@@ -1742,7 +1749,7 @@ class EblRepository(
       val rmName = targetRmUser?.name ?: file.assignedRmCode
       val formattedTime = DateUtils.formatDateTime(now)
 
-      val smsMessage = "[EBL Alert] ATTENTION: Dear $rmName (${file.assignedRmCode}), customer file $fileId ('${file.customerName}') was PERMANENTLY REMOVED by Mentor (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. EBL Sales Suite."
+      val smsMessage = "[Alert] ATTENTION: Dear $rmName (${file.assignedRmCode}), customer file $fileId ('${file.customerName}') was PERMANENTLY REMOVED by Mentor (${currentUser.name.ifBlank { currentUser.rmCode }}). Timestamp: $formattedTime. Sales Suite."
 
       var smsStatus = "DELIVERED"
       if (context != null && rmMobile.isNotBlank()) {
@@ -2055,7 +2062,7 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     val formattedTime = DateUtils.formatDateTime(now)
     val passNote = if (!newPassword.isNullOrBlank()) " Password was updated." else ""
-    val smsMessage = "[EBL Alert] Dear ${name.trim()} ($rmCode), your RM profile details were updated by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}).$passNote Timestamp: $formattedTime. EBL Sales Suite."
+    val smsMessage = "[Alert] Dear ${name.trim()} ($rmCode), your RM profile details were updated by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}).$passNote Timestamp: $formattedTime. Sales Suite."
 
     var smsStatus = "DELIVERED"
     if (context != null && rmUpdateMobile.isNotBlank()) {
@@ -2192,7 +2199,7 @@ class EblRepository(
 
     val formattedTime = DateUtils.formatDateTime(now)
     val editorName = currentUser.name.ifBlank { currentUser.rmCode }
-    val smsMessage = "[EBL Alert] Dear ${existing.name} ($rmCode), your RM password was reset by ${currentUser.role} ($editorName). New Temporary Password: $newPassword. Timestamp: $formattedTime."
+    val smsMessage = "[Alert] Dear ${existing.name} ($rmCode), your RM password was reset by ${currentUser.role} ($editorName). New Temporary Password: $newPassword. Timestamp: $formattedTime."
     var smsStatus = "DELIVERED"
     if (context != null && existing.mobile.isNotBlank()) {
       val sent = SmsService.sendSms(context, existing.mobile, smsMessage)
@@ -2438,7 +2445,7 @@ class EblRepository(
     val now = DateUtils.currentDhakaMillis()
     val formattedTime = DateUtils.formatDateTime(now)
     val editorName = currentUser.name.ifBlank { currentUser.rmCode }
-    val smsMessage = "[EBL Alert] Dear ${user?.name ?: rmCode} ($rmCode), your RM account status was changed to '$newStatus' by ${currentUser.role} ($editorName). Timestamp: $formattedTime."
+    val smsMessage = "[Alert] Dear ${user?.name ?: rmCode} ($rmCode), your RM account status was changed to '$newStatus' by ${currentUser.role} ($editorName). Timestamp: $formattedTime."
     var smsStatus = "DELIVERED"
     if (context != null && user != null && user.mobile.isNotBlank()) {
       val sent = SmsService.sendSms(context, user.mobile, smsMessage)
@@ -2587,7 +2594,7 @@ class EblRepository(
     // 1. Alert New RM
     val newRmName = targetRmUser?.name ?: newRmCode
     val newRmMobile = targetRmUser?.mobile ?: ""
-    val msgForNewRm = "[EBL Alert] Dear $newRmName ($newRmCode), customer file ${file.fileId} ('${file.customerName}') has been REASSIGNED to you by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Please follow up. Timestamp: $formattedTime."
+    val msgForNewRm = "[Alert] Dear $newRmName ($newRmCode), customer file ${file.fileId} ('${file.customerName}') has been REASSIGNED to you by ${currentUser.role} (${currentUser.name.ifBlank { currentUser.rmCode }}). Please follow up. Timestamp: $formattedTime."
 
     var newSmsStatus = "DELIVERED"
     if (context != null && newRmMobile.isNotBlank()) {
@@ -2616,7 +2623,7 @@ class EblRepository(
     // 2. Alert Old RM
     val oldRmName = oldRmUser?.name ?: oldRmCode
     val oldRmMobile = oldRmUser?.mobile ?: ""
-    val msgForOldRm = "[EBL Alert] Notice: Dear $oldRmName ($oldRmCode), customer file ${file.fileId} ('${file.customerName}') previously assigned to you was reassigned to RM $newRmCode by ${currentUser.role}. Timestamp: $formattedTime."
+    val msgForOldRm = "[Alert] Notice: Dear $oldRmName ($oldRmCode), customer file ${file.fileId} ('${file.customerName}') previously assigned to you was reassigned to RM $newRmCode by ${currentUser.role}. Timestamp: $formattedTime."
 
     var oldSmsStatus = "DELIVERED"
     if (context != null && oldRmMobile.isNotBlank()) {
@@ -3439,7 +3446,7 @@ class EblRepository(
         // Guarantee Checklist Header row exists
         if (!hasHdrKey) {
           val hdr = allSettings.find { it.settingKey == "CHECKLIST_HEADER_TEMPLATE" }?.settingValue
-            ?: "Dear {CUSTOMER_NAME},\nGreetings from Eastern Bank PLC (EBL).\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
+            ?: "Dear {CUSTOMER_NAME},\nGreetings from B2B Banking Suite.\nTo process your application for {PRESET_NAME}, please provide the following required documents:"
           settingsArray.put(JSONObject().apply {
             put("settingKey", "Checklist Header")
             put("settingValue", hdr)
@@ -3451,7 +3458,7 @@ class EblRepository(
         // Guarantee Checklist Footer row exists
         if (!hasFtrKey) {
           val ftr = allSettings.find { it.settingKey == "CHECKLIST_REGARDS_TEMPLATE" }?.settingValue
-            ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nEastern Bank PLC"
+            ?: "For any query or assistance, please contact:\n{RM_NAME}\nRM Code: {RM_CODE}\nMobile: {RM_PHONE}\nB2B Banking & Operations"
           settingsArray.put(JSONObject().apply {
             put("settingKey", "Checklist Footer")
             put("settingValue", ftr)
@@ -4788,7 +4795,7 @@ class EblRepository(
     for (i in 0 until sheetChatJson.length()) {
       val obj = sheetChatJson.optJSONObject(i) ?: continue
       val id = obj.optString("id").trim()
-      if (id.isBlank() || id in deletedChatIds || id.uppercase() in deletedChatIds) continue
+      if (id.isBlank() || id in deletedChatIds || id.uppercase() in deletedChatIds || id in localDeletedChatIdsCache || id.uppercase() in localDeletedChatIdsCache) continue
       val eventId = obj.optString("eventId").trim().ifBlank { null }
       if (eventId != null && (eventId in deletedEventIds || eventId.uppercase() in deletedEventIds || "EVENT_$eventId" in deletedChatIds || "EVENT_${eventId.uppercase()}" in deletedChatIds)) continue
 
@@ -5547,6 +5554,23 @@ class EblRepository(
     applicationScope.launch {
       syncChatDeletionToGoogleSheets(id)
     }
+    Result.success(Unit)
+  }
+
+  suspend fun deleteChatMessageForMe(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    database.communicationDao().deleteMessage(id)
+    localDeletedChatIdsCache.add(id)
+    localDeletedChatIdsCache.add(id.uppercase())
+    localDeletedChatIdsCache.add(id.lowercase())
+
+    val currentLocalDelChats = database.appSettingDao().getSetting("local_deleted_chat_ids")?.settingValue ?: ""
+    val updatedLocalDelChats = (currentLocalDelChats.split(",").map { it.trim() }.filter { it.isNotBlank() } + id + id.uppercase() + id.lowercase()).distinct().joinToString(",")
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("local_deleted_chat_ids", updatedLocalDelChats, currentUser?.rmCode ?: "RM", now)
+    )
+    // Local device only deletion: does not sync to Google Sheets, keeping the message intact for other users
     Result.success(Unit)
   }
 

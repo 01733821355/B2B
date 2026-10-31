@@ -216,7 +216,7 @@ fun RmDashboardScreen(
       com.example.ui.common.ThemeVisualBanner(
         title = "Welcome, ${user.name}",
         subtitle = "RM Code: ${user.rmCode} • ${user.officeAddress}",
-        badgeText = "Relationship Manager • EBL Sales Suite",
+        badgeText = "Relationship Manager • Sales Suite",
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
       )
     }

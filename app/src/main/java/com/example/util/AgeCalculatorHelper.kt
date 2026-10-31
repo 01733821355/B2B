@@ -354,7 +354,7 @@ object AgeCalculatorHelper {
     }
 
     val summaryBuilder = StringBuilder()
-    summaryBuilder.appendLine("🎂 EBL Age & Eligibility Assessment")
+    summaryBuilder.appendLine("🎂 Age & Eligibility Assessment")
     summaryBuilder.appendLine("━━━━━━━━━━━━━━━━━━━━━━━━━")
     summaryBuilder.appendLine("• Date of Birth: ${birth.formattedSlash} (${birth.formattedPretty})")
     summaryBuilder.appendLine("• Calculated As On: $formattedAsOn")

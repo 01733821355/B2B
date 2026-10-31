@@ -1559,6 +1559,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
+  fun deleteChatMessageForMe(id: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.deleteChatMessageForMe(id)
+      res.onSuccess {
+        _uiMessage.emit("Message deleted for you.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
   fun createTeamEvent(
     title: String,
     description: String,

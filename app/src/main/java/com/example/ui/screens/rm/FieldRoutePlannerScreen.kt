@@ -1650,7 +1650,7 @@ private fun sendWhatsApp(context: Context, phone: String, customerName: String) 
     return
   }
   val formattedNumber = if (clean.startsWith("880")) clean else if (clean.startsWith("0")) "88$clean" else "880$clean"
-  val text = "Dear $customerName, Greetings from Eastern Bank PLC (EBL). I am on my way to collect your application documents."
+  val text = "Dear $customerName, Greetings from B2B Banking Suite. I am on my way to collect your application documents."
   val uri = Uri.parse("https://wa.me/$formattedNumber?text=${Uri.encode(text)}")
   val intent = Intent(Intent.ACTION_VIEW, uri)
   try {

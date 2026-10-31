@@ -207,9 +207,9 @@ function cleanStaleSheetSms(smsSheet) {
           if (!isNaN(parsed)) rowTime = parsed;
         } catch (e) {}
       }
-      var ageMs = rowTime > 0 ? (now - rowTime) : 999999;
-      // Sheet keeps notification only for 15 seconds transit buffer; auto-deletes after 15s
-      if (ageMs > 15000 || ageMs < -60000) {
+      var ageMs = rowTime > 0 ? (now - rowTime) : 0;
+      // Sheet keeps notification queue for 24 hours so devices can poll even when app was closed
+      if (ageMs > 86400000) {
         toDelete.push(r + 1);
       }
     }

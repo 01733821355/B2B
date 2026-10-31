@@ -204,7 +204,7 @@ fun LoginScreen(
 
     BiometricHelper.promptBiometricLogin(
       activity = activity,
-      title = "EBL Fingerprint Sign In",
+      title = "Fingerprint Sign In",
       subtitle = "Authenticate RM $targetCode",
       description = "Scan your registered fingerprint to enter the portal",
       negativeButtonText = "Use Password",

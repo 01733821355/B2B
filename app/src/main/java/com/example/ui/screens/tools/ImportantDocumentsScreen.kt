@@ -878,7 +878,7 @@ fun UploadOrEditDocDialog(
             errorMessage = null
           },
           label = { Text("Custom Document Name *") },
-          placeholder = { Text("e.g. EBL Credit Card Policy Circular 2026") },
+          placeholder = { Text("e.g. Credit Card Policy Circular 2026") },
           modifier = Modifier.fillMaxWidth().testTag("input_doc_title"),
           shape = RoundedCornerShape(8.dp),
           colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = EblNavyPrimary)

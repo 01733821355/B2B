@@ -562,7 +562,7 @@ fun CompanyProfileScreen(
                   uploadedBy = "${currentUser.name} (${currentUser.role})"
                 ) { success ->
                   if (success) {
-                    Toast.makeText(context, "ডিফল্ট EBL কর্পোরেট ডাটাবেজ রিলোড করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "ডিফল্ট কর্পোরেট ডাটাবেজ রিলোড করা হয়েছে!", Toast.LENGTH_SHORT).show()
                     showAdminUploadDialog = false
                   }
                 }
@@ -572,7 +572,7 @@ fun CompanyProfileScreen(
             ) {
               Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("ডিফল্ট EBL ডাটাবেজ রিলোড করুন", fontSize = 11.5.sp)
+              Text("ডিফল্ট ডাটাবেজ রিলোড করুন", fontSize = 11.5.sp)
             }
           }
         }
@@ -748,7 +748,7 @@ private fun CompanyResultCard(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Text(
-                  text = "💼 EBL Payroll Partner",
+                  text = "💼 Payroll Partner",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
                   color = Color(0xFF047857)
@@ -897,7 +897,7 @@ private fun CompanyResultCard(
             ) {
               // Branch
               Column(modifier = Modifier.weight(1f)) {
-                Text(branchEntry?.first ?: "EBL শাখা", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                Text(branchEntry?.first ?: "শাখা / Branch", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                   text = branchEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",

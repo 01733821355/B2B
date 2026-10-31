@@ -347,7 +347,7 @@ fun SmsNotificationsDialog(
                 onDelete = { onDeleteSms(sms.id) },
                 onCopy = {
                   val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                  val clip = ClipData.newPlainText("EBL SMS Alert", sms.messageText)
+                  val clip = ClipData.newPlainText("SMS Alert", sms.messageText)
                   clipboard.setPrimaryClip(clip)
                   Toast.makeText(context, "SMS text copied!", Toast.LENGTH_SHORT).show()
                 }

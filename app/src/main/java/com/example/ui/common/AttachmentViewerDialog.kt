@@ -223,25 +223,6 @@ fun AttachmentViewerDialog(
           )
         }
 
-        if (attachment.fileUri.startsWith("http")) {
-          Spacer(modifier = Modifier.height(6.dp))
-          Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = Color(0xFFEFF6FF),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-          ) {
-            Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-              verticalAlignment = Alignment.CenterVertically
-            ) {
-              Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(4.dp))
-              Text("Google Drive Storage (mdbappyhossain017@gmail.com)", fontSize = 10.sp, color = Color(0xFF1D4ED8), fontWeight = FontWeight.SemiBold)
-            }
-          }
-        }
-
         Spacer(modifier = Modifier.height(10.dp))
 
         // Content Preview Box
@@ -265,8 +246,7 @@ fun AttachmentViewerDialog(
               Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(modifier = Modifier.size(36.dp), color = EblNavyPrimary)
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Google Drive থেকে ডাউনলোড হচ্ছে...", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
-                Text("Cloud Storage: mdbappyhossain017@gmail.com", fontSize = 10.sp, color = Color.Gray)
+                Text("Downloading file...", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
               }
             }
           } else if (isImage) {
@@ -310,9 +290,9 @@ fun AttachmentViewerDialog(
                   Spacer(modifier = Modifier.height(6.dp))
                   Text(
                     text = if (isLocalOnly) {
-                      "ছবিটি অন্য ইউজারের ফোনের লোকাল স্টোরেজে ছিল, ক্লাউডে (Google Drive) নেই।"
+                      "File is stored locally on device."
                     } else {
-                      "ছবি লোড করা যায়নি। নিচে ওপেন বাটনে ক্লিক করুন।"
+                      "Preview not available. Tap Open below."
                     },
                     fontSize = 11.sp,
                     color = Color.Gray,
@@ -383,7 +363,7 @@ fun AttachmentViewerDialog(
                   color = Color(0xFF991B1B)
                 )
                 Text(
-                  text = "ট্যাপ করে PDF রিডারে ওপেন করুন (Drive / Adobe)",
+                  text = "Tap to open in PDF Viewer",
                   fontSize = 11.sp,
                   color = Color(0xFFB91C1C)
                 )
@@ -414,7 +394,7 @@ fun AttachmentViewerDialog(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                  text = "Banking Document File",
+                  text = "Document File",
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,
                   color = EblNavyDark
@@ -453,14 +433,6 @@ fun AttachmentViewerDialog(
                 Text("Customer File ID:", fontSize = 11.sp, color = Color.Gray)
                 Text(attachment.fileId, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
               }
-              Spacer(modifier = Modifier.height(3.dp))
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-              ) {
-                Text("Sync Status:", fontSize = 11.sp, color = Color.Gray)
-                Text("Cloud & Local Synced ✓", fontSize = 11.sp, color = Color(0xFF059669), fontWeight = FontWeight.SemiBold)
-              }
             }
           }
         }
@@ -485,7 +457,7 @@ fun AttachmentViewerDialog(
           ) {
             Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("ওপেন করুন", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Open", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
 
           // Download / Save Button
@@ -501,7 +473,7 @@ fun AttachmentViewerDialog(
           ) {
             Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("ডাউনলোড", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("Download", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
 
           // Share Button

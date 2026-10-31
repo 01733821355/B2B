@@ -479,22 +479,22 @@ object ExcelWorkbookParser {
   }
 
   /**
-   * Pre-loaded default sample multi-tab EBL Company Profiles.
+   * Pre-loaded default sample multi-tab Company Profiles.
    */
   fun getDefaultSampleWorkbook(
-    uploadedBy: String = "Eastern Bank PLC Corporate Admin",
-    customFileName: String = "EBL_Corporate_Client_Profiles_Master.xlsx"
+    uploadedBy: String = "Corporate Banking Admin",
+    customFileName: String = "Corporate_Client_Profiles_Master.xlsx"
   ): CompanyWorkbookData {
     val sheet1 = CompanySheetData(
       sheetName = "Listed Corporates (কর্পোরেট ক্লায়েন্ট)",
       headers = listOf("Company Name", "Industry / Sector", "Category Tier", "Corporate Address", "Payroll Agreement", "Authorized Contact", "Contact Phone"),
       rows = listOf(
-        listOf("Square Pharmaceuticals Ltd.", "Pharmaceuticals & Healthcare", "Tier A+ (Prime)", "Square Centre, 48 Mohakhali C/A, Dhaka-1212", "Active (EBL Payroll)", "Md. Tanvir Hossain (HR Head)", "+8801711001122"),
-        listOf("Beximco Communications Ltd. (Akash)", "Telecommunications & Media", "Tier A (Corporate)", "SAMU Tower, Gulshan-1, Dhaka", "Active (EBL Payroll)", "Rezaul Karim (Finance Lead)", "+8801819223344"),
+        listOf("Square Pharmaceuticals Ltd.", "Pharmaceuticals & Healthcare", "Tier A+ (Prime)", "Square Centre, 48 Mohakhali C/A, Dhaka-1212", "Active (Payroll Partner)", "Md. Tanvir Hossain (HR Head)", "+8801711001122"),
+        listOf("Beximco Communications Ltd. (Akash)", "Telecommunications & Media", "Tier A (Corporate)", "SAMU Tower, Gulshan-1, Dhaka", "Active (Payroll Partner)", "Rezaul Karim (Finance Lead)", "+8801819223344"),
         listOf("PRAN-RFL Group", "FMCG & Agro Processing", "Tier A+ (Prime)", "PRAN-RFL Center, 105 Middle Badda, Dhaka", "Active (Full Salary)", "Kamrul Hasan (Group Admin)", "+8801730005566"),
         listOf("Grameenphone Ltd.", "Telecommunications", "MNC / Top Corporate", "GPHouse, Basundhara, Baridhara, Dhaka-1229", "Active (Executive Card)", "Fahim Ahmed (Corporate Affairs)", "+8801711556677"),
         listOf("Walton Hi-Tech Industries PLC", "Consumer Electronics & Tech", "Tier A+ (Prime)", "Chandra, Gazipur / Head Office: Plot-1088, Block-I, Bashundhara R/A", "Active (Corporate Card)", "Mahfuzur Rahman (Director)", "+8801678998877"),
-        listOf("Renata PLC", "Pharmaceuticals", "Tier A (Corporate)", "Plot # 1, Milk Vita Road, Section-7, Mirpur, Dhaka", "Active (EBL Payroll)", "Syed Nazmul Huda (Finance)", "+8801912345678"),
+        listOf("Renata PLC", "Pharmaceuticals", "Tier A (Corporate)", "Plot # 1, Milk Vita Road, Section-7, Mirpur, Dhaka", "Active (Payroll Partner)", "Syed Nazmul Huda (Finance)", "+8801912345678"),
         listOf("Apex Footwear Limited", "Leather & Footwear Manufacturing", "Tier A (Export)", "House # 6, Road # 137, Block # SE(D), Gulshan-1, Dhaka", "Active (Payroll Partner)", "Ashikur Rahman (HR Ops)", "+8801844112233"),
         listOf("ACI Limited", "Conglomerate & Healthcare", "Tier A+ (Prime)", "ACI Centre, 245 Tejgaon I/A, Dhaka-1208", "Active (Full Agreement)", "Dr. Arifuzzaman (HR Head)", "+8801713445566"),
         listOf("Bashundhara Group", "Conglomerate & Heavy Industry", "Tier A+ (Prime)", "Bashundhara Industrial Complex, Baridhara, Dhaka", "Active (Corporate Banking)", "Monirul Islam (Finance VP)", "+8801755667788"),
@@ -504,13 +504,13 @@ object ExcelWorkbookParser {
 
     val sheet2 = CompanySheetData(
       sheetName = "Payroll Accounts (পেরোল পার্টনার্স)",
-      headers = listOf("Company Name", "Agreement Date", "Employee Headcount", "Registered Office", "EBL Branch", "Dedicated RM", "Hotline / Email"),
+      headers = listOf("Company Name", "Agreement Date", "Employee Headcount", "Registered Office", "Assigned Branch", "Dedicated RM", "Hotline / Email"),
       rows = listOf(
         listOf("Unilever Bangladesh Limited", "15 Jan 2021", "2,400+ Staff", "ZN Tower, Plot 2, Road 8, Gulshan-1, Dhaka", "Gulshan Branch", "Sabbir Hossain (RM-01)", "payroll@unilever-bd.com"),
-        listOf("British American Tobacco BD", "10 Mar 2019", "1,850+ Staff", "New DOHS Road, Mohakhali, Dhaka-1206", "Principal Branch", "Farzana Yeasmin (RM-04)", "ebl.batb@bat.com"),
+        listOf("British American Tobacco BD", "10 Mar 2019", "1,850+ Staff", "New DOHS Road, Mohakhali, Dhaka-1206", "Principal Branch", "Farzana Yeasmin (RM-04)", "corp.batb@bat.com"),
         listOf("Robi Axiata PLC", "22 Jul 2020", "3,100+ Staff", "53 Gulshan South Avenue, Gulshan 1, Dhaka", "Gulshan Branch", "Mahmudul Hasan (RM-02)", "corporate.payroll@robi.com.bd"),
-        listOf("Nestle Bangladesh PLC", "05 Sep 2021", "950+ Staff", "Ninakabbo, Level 4, 227/A Tejgaon-Gulshan Link Road", "Tejgaon Branch", "Sabbir Hossain (RM-01)", "nestle.ebl@nestle.com"),
-        listOf("Standard Chartered Global Tech", "18 Feb 2022", "1,200+ Staff", "Silver Tower, Gulshan-2, Dhaka", "North Gulshan Branch", "Tasnim Sultana (RM-03)", "hr.ebl@sc.com"),
+        listOf("Nestle Bangladesh PLC", "05 Sep 2021", "950+ Staff", "Ninakabbo, Level 4, 227/A Tejgaon-Gulshan Link Road", "Tejgaon Branch", "Sabbir Hossain (RM-01)", "nestle.corp@nestle.com"),
+        listOf("Standard Chartered Global Tech", "18 Feb 2022", "1,200+ Staff", "Silver Tower, Gulshan-2, Dhaka", "North Gulshan Branch", "Tasnim Sultana (RM-03)", "hr.corp@sc.com"),
         listOf("Marico Bangladesh Limited", "12 Nov 2020", "800+ Staff", "House 1, Road 1, Sector 1, Uttara, Dhaka", "Uttara Branch", "Rahim Uddin (RM-05)", "marico.accounts@marico.com")
       )
     )
@@ -530,7 +530,7 @@ object ExcelWorkbookParser {
 
     val sheet4 = CompanySheetData(
       sheetName = "MNC & Listed (বহুজাতিক ও তালিকাভুক্ত)",
-      headers = listOf("Company Name", "Origin Country", "Stock Symbol", "Registered Headquarters", "Company Profile Summary", "EBL Facility Status"),
+      headers = listOf("Company Name", "Origin Country", "Stock Symbol", "Registered Headquarters", "Company Profile Summary", "Banking Facility Status"),
       rows = listOf(
         listOf("Huawei Technologies (BD) Ltd.", "China (Global MNC)", "Private MNC", "Lotus Kamal Tower-Two, 59 & 61 Gulshan Avenue, Dhaka", "Global ICT infrastructure and smart devices provider, 1,500+ professionals.", "Corporate Credit Cards, Payroll, Dual Currency L/C"),
         listOf("Samsung Electronics BD", "South Korea (MNC)", "Private MNC", "Silver Tower, 52 Gulshan Avenue, Dhaka-1212", "Leading consumer electronics and mobile division headquarter in Bangladesh.", "Corporate Cards, Dual Currency Corporate Facility"),
