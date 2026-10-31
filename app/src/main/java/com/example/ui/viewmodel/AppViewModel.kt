@@ -1524,17 +1524,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     messageType: String = "TEXT",
     eventId: String? = null,
     attachmentUrl: String? = null,
+    replyToMessageId: String? = null,
+    replyToSenderName: String? = null,
+    replyToText: String? = null,
     onResult: (Boolean, String?) -> Unit = { _, _ -> }
   ) {
     if (text.isBlank() && attachmentUrl.isNullOrBlank()) return
     viewModelScope.launch {
-      val res = eblRepository.sendChatMessage(text, recipientRmCode, messageType, eventId, attachmentUrl)
+      val res = eblRepository.sendChatMessage(
+        text, recipientRmCode, messageType, eventId, attachmentUrl,
+        replyToMessageId, replyToSenderName, replyToText
+      )
       res.onSuccess {
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
       }
     }
+  }
+
+  suspend fun uploadFileToGoogleDrive(file: java.io.File, fileName: String, fileType: String): Result<String> {
+    return eblRepository.uploadFileToGoogleDrive(file, fileName, fileType)
   }
 
   fun deleteChatMessage(id: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {

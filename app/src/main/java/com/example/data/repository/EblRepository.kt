@@ -1405,6 +1405,9 @@ class EblRepository(
         put("messageType", msg.messageType)
         put("eventId", msg.eventId ?: "")
         put("attachmentUrl", msg.attachmentUrl ?: "")
+        put("replyToMessageId", msg.replyToMessageId ?: "")
+        put("replyToSenderName", msg.replyToSenderName ?: "")
+        put("replyToText", msg.replyToText ?: "")
       }
 
       val payload = org.json.JSONObject().apply {
@@ -3642,6 +3645,10 @@ class EblRepository(
             put("timestamp", DateUtils.formatDateTime(m.timestamp))
             put("messageType", m.messageType)
             put("eventId", m.eventId ?: "")
+            put("attachmentUrl", m.attachmentUrl ?: "")
+            put("replyToMessageId", m.replyToMessageId ?: "")
+            put("replyToSenderName", m.replyToSenderName ?: "")
+            put("replyToText", m.replyToText ?: "")
           })
         }
 
@@ -4793,6 +4800,9 @@ class EblRepository(
       val timestamp = DateUtils.parseDateTime(obj.optString("timestamp")) ?: now
       val messageType = obj.optString("messageType", "TEXT").trim()
       val attachmentUrl = obj.optString("attachmentUrl").trim().ifBlank { null }
+      val replyToMessageId = obj.optString("replyToMessageId").trim().ifBlank { null }
+      val replyToSenderName = obj.optString("replyToSenderName").trim().ifBlank { null }
+      val replyToText = obj.optString("replyToText").trim().ifBlank { null }
 
       if (messageType == "EVENT" && deletedEventIds.any { dEvt -> messageText.contains(dEvt, ignoreCase = true) }) continue
 
@@ -4806,7 +4816,10 @@ class EblRepository(
         timestamp = timestamp,
         messageType = messageType,
         eventId = eventId,
-        attachmentUrl = attachmentUrl
+        attachmentUrl = attachmentUrl,
+        replyToMessageId = replyToMessageId,
+        replyToSenderName = replyToSenderName,
+        replyToText = replyToText
       )
       database.communicationDao().insertMessage(entity)
       count++
@@ -5458,11 +5471,32 @@ class EblRepository(
     recipientRmCode: String? = null,
     messageType: String = "TEXT",
     eventId: String? = null,
-    attachmentUrl: String? = null
+    attachmentUrl: String? = null,
+    replyToMessageId: String? = null,
+    replyToSenderName: String? = null,
+    replyToText: String? = null
   ): Result<com.example.data.model.ChatMessageEntity> = withContext(Dispatchers.IO) {
     val user = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized."))
     val now = DateUtils.currentDhakaMillis()
+
+    var finalAttachmentUrl = attachmentUrl
+    // If an attachment is a local file path, upload to Google Drive so all users can see it
+    if (!finalAttachmentUrl.isNullOrBlank() && !finalAttachmentUrl.startsWith("http")) {
+      try {
+        val localF = java.io.File(finalAttachmentUrl)
+        if (localF.exists()) {
+          val fName = localF.name.ifBlank { "chat_photo_${System.currentTimeMillis()}.jpg" }
+          val driveRes = uploadFileToGoogleDrive(localF, fName, "image/jpeg")
+          if (driveRes.isSuccess && !driveRes.getOrNull().isNullOrBlank()) {
+            finalAttachmentUrl = driveRes.getOrNull()
+          }
+        }
+      } catch (_: Exception) {}
+    }
+
+    val finalType = if (!finalAttachmentUrl.isNullOrBlank() && messageType == "TEXT") "IMAGE" else messageType
+
     val msg = com.example.data.model.ChatMessageEntity(
       id = "MSG-${System.currentTimeMillis()}-${SecurityUtils.generateUniqueId().take(4)}",
       senderRmCode = user.rmCode,
@@ -5471,9 +5505,12 @@ class EblRepository(
       recipientRmCode = recipientRmCode,
       messageText = messageText.trim(),
       timestamp = now,
-      messageType = messageType,
+      messageType = finalType,
       eventId = eventId,
-      attachmentUrl = attachmentUrl
+      attachmentUrl = finalAttachmentUrl,
+      replyToMessageId = replyToMessageId,
+      replyToSenderName = replyToSenderName,
+      replyToText = replyToText
     )
     database.communicationDao().insertMessage(msg)
     applicationScope.launch {

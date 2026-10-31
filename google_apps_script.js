@@ -93,7 +93,7 @@ function setupAllSheets() {
 
   // 9. Chat_And_Calls Tab
   getOrCreateSheet(ss, 'Chat_And_Calls', [
-    'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL'
+    'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL', 'Reply To ID', 'Reply To Sender', 'Reply To Text'
   ], '#1D4ED8');
 
   // 10. Team_Events Tab
@@ -393,7 +393,10 @@ function extractAllSheetChat(sheet) {
       messageType: String(row[6] || 'TEXT'),
       eventId: String(row[7] || ''),
       timestamp: String(row[8] || ''),
-      attachmentUrl: String(row[9] || '')
+      attachmentUrl: String(row[9] || ''),
+      replyToMessageId: String(row[10] || ''),
+      replyToSenderName: String(row[11] || ''),
+      replyToText: String(row[12] || '')
     });
   }
   return list;
@@ -691,7 +694,7 @@ function doPost(e) {
 
     // 9. Auto-create & format 'Chat_And_Calls' Tab
     var chatSheet = getOrCreateSheet(ss, 'Chat_And_Calls', [
-      'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL'
+      'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL', 'Reply To ID', 'Reply To Sender', 'Reply To Text'
     ], '#1D4ED8');
 
     // 10. Auto-create & format 'Team_Events' Tab
@@ -1150,7 +1153,10 @@ function doPost(e) {
           msgU.messageType || 'TEXT',
           msgU.eventId || '',
           msgU.timestamp || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
-          msgU.attachmentUrl || ''
+          msgU.attachmentUrl || '',
+          msgU.replyToMessageId || '',
+          msgU.replyToSenderName || '',
+          msgU.replyToText || ''
         ];
         if (foundMsgRow > 0) {
           chatSheet.getRange(foundMsgRow, 1, 1, msgRowU.length).setValues([msgRowU]);
@@ -1991,7 +1997,11 @@ function doPost(e) {
             m.messageText || '',
             m.messageType || 'TEXT',
             m.eventId || '',
-            m.timestamp || ''
+            m.timestamp || '',
+            m.attachmentUrl || '',
+            m.replyToMessageId || '',
+            m.replyToSenderName || '',
+            m.replyToText || ''
           ]);
           chatMap[mid] = true;
         }

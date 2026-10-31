@@ -146,7 +146,7 @@ function setupAllSheets() {
   getOrCreateSheet(ss, 'SMS_Notifications', ['Notification ID', 'Recipient RM Code', 'Recipient Name', 'Recipient Mobile', 'Triggered By Role', 'Triggered By Code', 'Action Type', 'Target ID', 'Message Text', 'Delivery Status', 'Timestamp'], '#991B1B');
   getOrCreateSheet(ss, 'RM_Location_Logs', ['RM Code', 'RM Name', 'Latitude', 'Longitude', 'Location Address', 'Timestamp', 'Source Action'], '#0F766E');
   getOrCreateSheet(ss, 'Important_Documents', ['Doc ID', 'Title', 'Category', 'Description', 'File Name', 'File Type', 'File Size (Bytes)', 'File URI', 'Storage Path', 'Uploaded By', 'Uploader Name', 'Uploader Role', 'Created At', 'Last Updated'], '#047857');
-  getOrCreateSheet(ss, 'Chat_And_Calls', ['Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL'], '#1D4ED8');
+  getOrCreateSheet(ss, 'Chat_And_Calls', ['Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL', 'Reply To ID', 'Reply To Sender', 'Reply To Text'], '#1D4ED8');
   getOrCreateSheet(ss, 'Team_Events', ['Event ID', 'Title', 'Description', 'Creator RM', 'Creator Name', 'Target Date', 'Allowed Fields', 'Status', 'Created At', 'Close Time'], '#7E22CE');
   getOrCreateSheet(ss, 'Event_Submissions', ['Response ID', 'Event ID', 'RM Code', 'RM Name', 'Files Count', 'Requested Date', 'Location', 'Remarks', 'Customer Entries JSON', 'Submitted At'], '#B45309');
 
@@ -436,7 +436,10 @@ function extractAllSheetChat(sheet) {
       messageType: String(row[6] || 'TEXT'),
       eventId: String(row[7] || ''),
       timestamp: String(row[8] || ''),
-      attachmentUrl: String(row[9] || '')
+      attachmentUrl: String(row[9] || ''),
+      replyToMessageId: String(row[10] || ''),
+      replyToSenderName: String(row[11] || ''),
+      replyToText: String(row[12] || '')
     });
   }
   return list;
@@ -734,7 +737,7 @@ function doPost(e) {
 
     // 9. Auto-create & format 'Chat_And_Calls' Tab
     var chatSheet = getOrCreateSheet(ss, 'Chat_And_Calls', [
-      'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL'
+      'Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL', 'Reply To ID', 'Reply To Sender', 'Reply To Text'
     ], '#1D4ED8');
 
     // 10. Auto-create & format 'Team_Events' Tab
@@ -1215,7 +1218,10 @@ function doPost(e) {
           msgU.messageType || 'TEXT',
           msgU.eventId || '',
           msgU.timestamp || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
-          msgU.attachmentUrl || ''
+          msgU.attachmentUrl || '',
+          msgU.replyToMessageId || '',
+          msgU.replyToSenderName || '',
+          msgU.replyToText || ''
         ];
         if (foundMsgRow > 0) {
           chatSheet.getRange(foundMsgRow, 1, 1, msgRowU.length).setValues([msgRowU]);
@@ -2030,7 +2036,11 @@ function doPost(e) {
             m.messageText || '',
             m.messageType || 'TEXT',
             m.eventId || '',
-            m.timestamp || ''
+            m.timestamp || '',
+            m.attachmentUrl || '',
+            m.replyToMessageId || '',
+            m.replyToSenderName || '',
+            m.replyToText || ''
           ]);
           chatMap[mid] = true;
         }

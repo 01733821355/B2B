@@ -22,7 +22,10 @@ data class ChatMessageEntity(
   val timestamp: Long,
   val messageType: String = "TEXT", // "TEXT", "EVENT", "CALL_LOG", "ANNOUNCEMENT", "IMAGE"
   val eventId: String? = null,
-  val attachmentUrl: String? = null
+  val attachmentUrl: String? = null,
+  val replyToMessageId: String? = null,
+  val replyToSenderName: String? = null,
+  val replyToText: String? = null
 )
 
 @Entity(
