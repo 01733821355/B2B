@@ -1459,6 +1459,5 @@ fun MentorDashboardScreen(
         }
       }
     )
-    )
   }
 }
