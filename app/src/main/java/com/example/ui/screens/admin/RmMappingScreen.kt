@@ -802,6 +802,18 @@ fun RmMappingScreen(
           if (success) settingTargetsRm = null
         }
       },
+      onSaveAllQuarters = { year, q1Cc, q1Corp, q1B2b, q2Cc, q2Corp, q2B2b, q3Cc, q3Corp, q3B2b, q4Cc, q4Corp, q4B2b ->
+        viewModel.setRmAllQuarterTargets(
+          rmCode = settingTargetsRm!!.rmCode,
+          year = year,
+          q1Cc = q1Cc, q1Corp = q1Corp, q1B2b = q1B2b,
+          q2Cc = q2Cc, q2Corp = q2Corp, q2B2b = q2B2b,
+          q3Cc = q3Cc, q3Corp = q3Corp, q3B2b = q3B2b,
+          q4Cc = q4Cc, q4Corp = q4Corp, q4B2b = q4B2b
+        ) { success, _ ->
+          if (success) settingTargetsRm = null
+        }
+      },
       onSaveCustomTargets = { quarter, customMap ->
         viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap, quarter)
       },

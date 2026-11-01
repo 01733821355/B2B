@@ -312,10 +312,15 @@ class EblRepository(
       q4B2bTarget = q4B2b,
       updatedAt = now
     )
-    database.rmTargetDao().insertTarget(updated)
+    database.rmTargetDao().insertOrUpdateTarget(updated)
     try {
-      database.appSettingDao().insertSetting(
-        com.example.data.model.AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString())
+      database.appSettingDao().insertOrUpdateSetting(
+        com.example.data.model.AppSettingEntity(
+          settingKey = "RM_TARGET_UPDATED_AT_$cleanRm",
+          settingValue = now.toString(),
+          updatedBy = "SYSTEM",
+          updatedAt = now
+        )
       )
     } catch (_: Exception) {}
 

@@ -69,6 +69,7 @@ fun QuarterTargetSettingDialog(
   onDeleteCriteria: ((String) -> Unit)? = null,
   initialCustomTargets: Map<String, Int> = emptyMap(),
   allQuarterCustomTargets: Map<String, Map<String, Int>> = emptyMap(),
+  onDismiss: () -> Unit,
   onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
   onSaveAllQuarters: ((
     year: Int,
