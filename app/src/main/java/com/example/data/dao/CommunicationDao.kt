@@ -25,6 +25,9 @@ interface CommunicationDao {
   @Query("DELETE FROM chat_messages WHERE id = :id")
   suspend fun deleteMessage(id: String)
 
+  @Query("SELECT * FROM chat_messages WHERE id = :id LIMIT 1")
+  suspend fun getMessageById(id: String): ChatMessageEntity?
+
   @Query("SELECT * FROM chat_messages ORDER BY timestamp DESC LIMIT 200")
   suspend fun getAllMessages(): List<ChatMessageEntity>
 

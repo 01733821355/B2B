@@ -581,8 +581,8 @@ fun LoginScreen(
 
                 if (target.isNotBlank()) {
                   val statusMsg = when {
-                    isPassOk -> "✓ কুইক ফিঙ্গারপ্রিন্ট সক্রিয় ($target) - সরাসরি ঢুকুন"
-                    else -> "পাসওয়ার্ড দিয়ে একবার লগইন করুন (এরপর ফিঙ্গারপ্রিন্ট চালু হবে)"
+                    isPassOk -> "✓ Quick Fingerprint Active ($target) - Tap to Login"
+                    else -> "Login with password once to enable Fingerprint"
                   }
                   Text(
                     text = statusMsg,

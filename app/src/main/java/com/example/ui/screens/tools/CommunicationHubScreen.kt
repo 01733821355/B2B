@@ -185,7 +185,7 @@ fun CommunicationHubScreen(
         viewModel.submitEventResponse(evt.eventId, filesCount, reqDate, loc, remarks, customerEntriesJson) { success, _ ->
           if (success) {
             activeResponseEvent = null
-            Toast.makeText(context, "✓ আপনার এন্ট্রি ও কাস্টমার তালিকা সফলভাবে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "✓ Entry and customer list saved successfully!", Toast.LENGTH_SHORT).show()
           }
         }
       }
@@ -247,7 +247,7 @@ fun CommunicationHubScreen(
           appendLine("----------------------------------------")
         }
         clipboardManager.setText(AnnotatedString(summaryText))
-        Toast.makeText(context, "✓ ইভেন্ট ও কাস্টমার তালিকা (১ কাস্টমার ১ রো) কপি হয়েছে!", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "✓ Event entries copied to clipboard!", Toast.LENGTH_SHORT).show()
       },
       onDownloadPdf = {
         if (currentUser != null) {
@@ -301,7 +301,7 @@ fun CommunicationHubScreen(
               overflow = TextOverflow.Ellipsis
             )
             Text(
-              text = "লাইভ মেসেজিং ও টিম ইভেন্ট প্ল্যাটফর্ম",
+              text = "Live Messaging & Team Event Platform",
               fontSize = 11.sp,
               color = EblGold,
               maxLines = 1,
@@ -319,7 +319,7 @@ fun CommunicationHubScreen(
             ) {
               Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyDark, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("+ নতুন ইভেন্ট", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+              Text("+ New Event", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
             }
           }
         }
@@ -395,7 +395,7 @@ fun CommunicationHubScreen(
           Icon(Icons.Default.Event, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = "Team Events / টিম ইভেন্ট:",
+            text = "Team Events:",
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = EblNavyDark,
@@ -414,7 +414,7 @@ fun CommunicationHubScreen(
           ) {
             Icon(Icons.Default.Add, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("+ নতুন ইভেন্ট", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+            Text("+ New Event", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
           }
         }
       }
@@ -441,7 +441,7 @@ fun CommunicationHubScreen(
               Icon(Icons.Default.People, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(48.dp))
               Spacer(modifier = Modifier.height(8.dp))
               Text("No messages yet in Team Hub.", color = Color.Gray, fontSize = 13.sp)
-              Text("নিচের বাটন দিয়ে মেসেজ বা টিম ইভেন্ট তৈরি করুন।", color = Color.Gray, fontSize = 11.sp)
+              Text("Use the buttons below to send a message or create an event.", color = Color.Gray, fontSize = 11.sp)
             }
           }
         }
@@ -590,13 +590,13 @@ fun CommunicationHubScreen(
               Spacer(modifier = Modifier.width(8.dp))
               Column(modifier = Modifier.weight(1f)) {
                 Text(
-                  text = "সংযুক্ত ছবি (Photo Attached)",
+                  text = "Photo Attached",
                   fontSize = 12.sp,
                   fontWeight = FontWeight.Medium,
                   color = Color(0xFF1E293B)
                 )
                 Text(
-                  text = "পাঠানোর পর স্বয়ংক্রিয়ভাবে Google Drive-এ সেভ হবে",
+                  text = "Uploads automatically to Google Drive",
                   fontSize = 10.sp,
                   color = Color(0xFF059669)
                 )
@@ -642,7 +642,7 @@ fun CommunicationHubScreen(
             onValueChange = { messageInput = it },
             placeholder = {
               Text(
-                text = if (replyingToMessage != null) "রিপ্লাই লিখুন..." else "টিমের সবার জন্য মেসেজ লিখুন...",
+                text = if (replyingToMessage != null) "Type reply..." else "Type a message to the team...",
                 fontSize = 13.sp
               )
             },
@@ -679,7 +679,7 @@ fun CommunicationHubScreen(
                       val driveRes = viewModel.uploadFileToGoogleDrive(saved.file, saved.fileName, saved.fileType)
                       if (driveRes.isSuccess && !driveRes.getOrNull().isNullOrBlank()) {
                         photoUrl = driveRes.getOrNull()
-                        Toast.makeText(context, "✓ ছবি ড্রাইভে আপলোড হয়েছে!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "✓ Photo uploaded to Drive!", Toast.LENGTH_SHORT).show()
                       } else {
                         // Fallback to local path; eblRepository will also attempt upload
                         photoUrl = saved.storagePath
@@ -693,14 +693,14 @@ fun CommunicationHubScreen(
 
                   val replyText = rep?.let { r ->
                     when {
-                      !r.attachmentUrl.isNullOrBlank() && r.messageText.isNotBlank() -> "📷 [ছবি] ${r.messageText}"
-                      !r.attachmentUrl.isNullOrBlank() -> "📷 [ছবি / Photo]"
+                      !r.attachmentUrl.isNullOrBlank() && r.messageText.isNotBlank() -> "📷 [Photo] ${r.messageText}"
+                      !r.attachmentUrl.isNullOrBlank() -> "📷 [Photo]"
                       else -> r.messageText
                     }
                   }
 
                   viewModel.sendChatMessage(
-                    text = if (txt.isBlank() && photoUrl != null) "📷 ছবি পাঠানো হয়েছে" else txt,
+                    text = if (txt.isBlank() && photoUrl != null) "📷 Photo sent" else txt,
                     attachmentUrl = photoUrl,
                     replyToMessageId = rep?.id,
                     replyToSenderName = rep?.senderName,
@@ -1206,9 +1206,9 @@ fun EventCardItem(
     AlertDialog(
       onDismissRequest = { showDeleteConfirmDialog = false },
       icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color(0xFFDC2626)) },
-      title = { Text("ইভেন্ট মুছে ফেলবেন?", fontWeight = FontWeight.Bold) },
+      title = { Text("Delete Event?", fontWeight = FontWeight.Bold) },
       text = {
-        Text("আপনি কি নিশ্চিত যে '${event.title}' ইভেন্টটি মুছে ফেলতে চান? এটি অ্যাপ এবং গুগল শিট (Google Sheet) উভয় থেকেই সম্পূর্ণ মুছে যাবে।")
+        Text("Are you sure you want to delete '${event.title}'? This will remove it from both the app and Google Sheets.")
       },
       confirmButton = {
         Button(
@@ -1218,12 +1218,12 @@ fun EventCardItem(
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
         ) {
-          Text("হ্যাঁ, ডিলিট করুন")
+          Text("Yes, Delete")
         }
       },
       dismissButton = {
         TextButton(onClick = { showDeleteConfirmDialog = false }) {
-          Text("বাতিল")
+          Text("Cancel")
         }
       }
     )
@@ -1233,9 +1233,9 @@ fun EventCardItem(
     AlertDialog(
       onDismissRequest = { showCloseConfirmDialog = false },
       icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFDC2626)) },
-      title = { Text("ইভেন্টটি সমাপ্ত/বন্ধ করবেন?", fontWeight = FontWeight.Bold) },
+      title = { Text("Close this Event?", fontWeight = FontWeight.Bold) },
       text = {
-        Text("আপনি কি নিশ্চিত যে '${event.title}' ইভেন্টটি বন্ধ করতে চান? বন্ধ করার পর RM-রা আর কোনো নতুন তথ্য এন্ট্রি দিতে পারবে না। ফলাফল ও রিপোর্ট সংরক্ষিত থাকবে।")
+        Text("Are you sure you want to close '${event.title}'? Once closed, RMs cannot submit new entries. Existing entries and reports will remain saved.")
       },
       confirmButton = {
         Button(
@@ -1245,12 +1245,12 @@ fun EventCardItem(
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
         ) {
-          Text("হ্যাঁ, ইভেন্ট বন্ধ করুন")
+          Text("Yes, Close Event")
         }
       },
       dismissButton = {
         TextButton(onClick = { showCloseConfirmDialog = false }) {
-          Text("বাতিল")
+          Text("Cancel")
         }
       }
     )
@@ -1294,7 +1294,7 @@ fun EventCardItem(
               color = Color(0xFFFEE2E2)
             ) {
               Text(
-                text = "🔴 CLOSED (সময় শেষ)",
+                text = "🔴 CLOSED",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFDC2626),
@@ -1307,7 +1307,7 @@ fun EventCardItem(
               color = Color(0xFFFEF3C7)
             ) {
               Text(
-                text = "⏳ শেষ সময়: ${event.closeTime}",
+                text = "⏳ Deadline: ${event.closeTime}",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFFB45309),
@@ -1343,7 +1343,7 @@ fun EventCardItem(
               ) {
                 Icon(Icons.Default.Lock, contentDescription = "Close Event", tint = Color(0xFFDC2626), modifier = Modifier.size(12.dp))
                 Spacer(modifier = Modifier.width(3.dp))
-                Text("বন্ধ করুন", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+                Text("Close", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
               }
             }
           }
@@ -1394,7 +1394,7 @@ fun EventCardItem(
           if (isExpired) {
             Button(
               onClick = {
-                Toast.makeText(context, "এই ইভেন্টের সময়সীমা শেষ হয়েছে। নতুন এন্ট্রি বন্ধ রয়েছে।", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "This event has expired. Submissions are closed.", Toast.LENGTH_LONG).show()
               },
               colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFE2E8F0),
@@ -1410,7 +1410,7 @@ fun EventCardItem(
             ) {
               Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("সময় শেষ (এন্ট্রি বন্ধ)", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              Text("Closed (Submissions Over)", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           } else {
             Button(
@@ -1426,7 +1426,7 @@ fun EventCardItem(
             ) {
               Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("তথ্য এন্ট্রি দিন", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+              Text("Submit Details", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
           }
         }
@@ -1444,7 +1444,7 @@ fun EventCardItem(
           ) {
             Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(15.dp), tint = Color.White)
             Spacer(modifier = Modifier.width(4.dp))
-            Text("ফলাফল ও রিপোর্ট", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+            Text("Results & Submissions", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
           }
         }
       }
@@ -1472,7 +1472,7 @@ fun CreateEventDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Create Team Event / নতুন ইভেন্ট", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+    title = { Text("Create Team Event", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
     text = {
       Column(
         modifier = Modifier
@@ -1483,8 +1483,8 @@ fun CreateEventDialog(
         OutlinedTextField(
           value = title,
           onValueChange = { title = it },
-          label = { Text("Event Name / বিষয়ের নাম *") },
-          placeholder = { Text("যেমন: Customer Audit / কার্ড বিতরণ / Urgent Notice") },
+          label = { Text("Event Title *") },
+          placeholder = { Text("e.g. Customer Audit / Card Delivery / Urgent Notice") },
           modifier = Modifier.fillMaxWidth().testTag("input_event_title")
         )
         OutlinedTextField(
@@ -1497,9 +1497,9 @@ fun CreateEventDialog(
         OutlinedTextField(
           value = closeTime,
           onValueChange = { closeTime = it },
-          label = { Text("Event Close Time / সমাপ্তির সময়") },
-          placeholder = { Text("যেমন: 17/10/2026 06:00 PM বা 17/10/2026") },
-          supportingText = { Text("এই সময় পার হলে আর কেউ নতুন তথ্য এন্ট্রি দিতে পারবে না।", fontSize = 10.sp, color = Color(0xFFDC2626)) },
+          label = { Text("Event Close Time") },
+          placeholder = { Text("e.g. 17/10/2026 06:00 PM") },
+          supportingText = { Text("After this deadline, no further entries can be submitted.", fontSize = 10.sp, color = Color(0xFFDC2626)) },
           modifier = Modifier.fillMaxWidth().testTag("input_event_close_time")
         )
         Row(
@@ -1516,7 +1516,7 @@ fun CreateEventDialog(
             }
           ) {
             Text(
-              text = "আজ ৬টা",
+              text = "Today 6 PM",
               fontSize = 10.5.sp,
               fontWeight = FontWeight.Medium,
               color = EblNavyPrimary,
@@ -1533,7 +1533,7 @@ fun CreateEventDialog(
             }
           ) {
             Text(
-              text = "আজ রাত ১২টা",
+              text = "Tonight 12 AM",
               fontSize = 10.5.sp,
               fontWeight = FontWeight.Medium,
               color = EblNavyPrimary,
@@ -1550,7 +1550,7 @@ fun CreateEventDialog(
             }
           ) {
             Text(
-              text = "কাল ৬টা",
+              text = "Tomorrow 6 PM",
               fontSize = 10.5.sp,
               fontWeight = FontWeight.Medium,
               color = EblNavyPrimary,
@@ -1561,15 +1561,15 @@ fun CreateEventDialog(
         OutlinedTextField(
           value = description,
           onValueChange = { description = it },
-          label = { Text("Instructions / বিবরণ") },
-          placeholder = { Text("ইভেন্টের নিয়মাবলী ও আরএমদের জন্য নির্দেশনা") },
+          label = { Text("Instructions / Guidelines") },
+          placeholder = { Text("Event guidelines and instructions for RMs") },
           maxLines = 3,
           modifier = Modifier.fillMaxWidth().testTag("input_event_desc")
         )
 
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-          text = "RM-রা কি কি তথ্য এন্ট্রি দিতে পারবে তা নির্বাচন করুন:",
+          text = "Select what information RMs can submit:",
           fontWeight = FontWeight.Bold,
           fontSize = 11.sp,
           color = EblNavyDark
@@ -1578,27 +1578,27 @@ fun CreateEventDialog(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Checkbox(checked = allowCustomers, onCheckedChange = { allowCustomers = it })
           Spacer(modifier = Modifier.width(4.dp))
-          Text("একাধিক কাস্টমার নাম ও মোবাইল নম্বর", fontSize = 11.sp)
+          Text("Multiple Customer Names & Phone Numbers", fontSize = 11.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
           Checkbox(checked = allowCount, onCheckedChange = { allowCount = it })
           Spacer(modifier = Modifier.width(4.dp))
-          Text("ফাইলের / কার্ডের সংখ্যা", fontSize = 11.sp)
+          Text("Number of Files / Cards", fontSize = 11.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
           Checkbox(checked = allowDate, onCheckedChange = { allowDate = it })
           Spacer(modifier = Modifier.width(4.dp))
-          Text("তারিখ নির্বাচন (Target Date)", fontSize = 11.sp)
+          Text("Target Date", fontSize = 11.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
           Checkbox(checked = allowLocation, onCheckedChange = { allowLocation = it })
           Spacer(modifier = Modifier.width(4.dp))
-          Text("লোকেশন / ব্রাঞ্চের নাম", fontSize = 11.sp)
+          Text("Location / Branch Name", fontSize = 11.sp)
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
           Checkbox(checked = allowRemarks, onCheckedChange = { allowRemarks = it })
           Spacer(modifier = Modifier.width(4.dp))
-          Text("নোট / বিশেষ মন্তব্য", fontSize = 11.sp)
+          Text("Notes / Remarks", fontSize = 11.sp)
         }
       }
     },
@@ -1619,11 +1619,11 @@ fun CreateEventDialog(
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_confirm_create_event")
       ) {
-        Text("ইভেন্ট পোস্ট করুন")
+        Text("Post Event")
       }
     },
     dismissButton = {
-      TextButton(onClick = onDismiss) { Text("বাতিল") }
+      TextButton(onClick = onDismiss) { Text("Cancel") }
     }
   )
 }
@@ -1661,7 +1661,7 @@ fun SubmitDeliveryResponseDialog(
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("ইভেন্ট তথ্য এন্ট্রি দিন: ${event.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+    title = { Text("Submit Event Entry: ${event.title}", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
     text = {
       Column(
         modifier = Modifier
@@ -1681,7 +1681,7 @@ fun SubmitDeliveryResponseDialog(
             ) {
               Icon(Icons.Default.Lock, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(18.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("এই ইভেন্টের সময়সীমা শেষ হয়েছে। আর কোনো এন্ট্রি দেওয়া সম্ভব নয়।", color = Color(0xFFDC2626), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("This event has expired. No further entries can be accepted.", color = Color(0xFFDC2626), fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
         }
@@ -1692,7 +1692,7 @@ fun SubmitDeliveryResponseDialog(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "কাস্টমার তালিকা (Customer List):",
+              text = "Customer List:",
               fontWeight = FontWeight.Bold,
               fontSize = 12.sp,
               color = EblNavyDark
@@ -1704,7 +1704,7 @@ fun SubmitDeliveryResponseDialog(
             ) {
               Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(2.dp))
-              Text("+ কাস্টমার যোগ করুন", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("+ Add Customer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
 
@@ -1721,7 +1721,7 @@ fun SubmitDeliveryResponseDialog(
                   horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Text("গ্রাহক #${idx + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                  Text("Customer #${idx + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
                   if (customerList.size > 1) {
                     IconButton(
                       onClick = { customerList.removeAt(idx) },
@@ -1735,7 +1735,7 @@ fun SubmitDeliveryResponseDialog(
                   value = item.name,
                   onValueChange = { customerList[idx] = item.copy(name = it) },
                   label = { Text("Customer Name") },
-                  placeholder = { Text("কাস্টমার নাম") },
+                  placeholder = { Text("Enter customer name") },
                   singleLine = true,
                   modifier = Modifier.fillMaxWidth()
                 )
@@ -1759,7 +1759,7 @@ fun SubmitDeliveryResponseDialog(
           OutlinedTextField(
             value = filesCountText,
             onValueChange = { filesCountText = it },
-            label = { Text("কয়টি ফাইল / কার্ড লাগবে?") },
+            label = { Text("Number of Files / Cards") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier.fillMaxWidth()
           )
@@ -1769,7 +1769,7 @@ fun SubmitDeliveryResponseDialog(
           OutlinedTextField(
             value = requestedDate,
             onValueChange = { requestedDate = it },
-            label = { Text("প্রয়োজনীয় তারিখ (Target Date)") },
+            label = { Text("Target Date") },
             placeholder = { Text("DD/MM/YYYY") },
             modifier = Modifier.fillMaxWidth()
           )
@@ -1779,7 +1779,7 @@ fun SubmitDeliveryResponseDialog(
           OutlinedTextField(
             value = location,
             onValueChange = { location = it },
-            label = { Text("ডেলিভারি লোকেশন / ব্রাঞ্চ") },
+            label = { Text("Delivery Location / Branch") },
             placeholder = { Text("e.g. Gulshan Branch / Customer Office") },
             modifier = Modifier.fillMaxWidth()
           )
@@ -1789,9 +1789,9 @@ fun SubmitDeliveryResponseDialog(
           OutlinedTextField(
             value = remarks,
             onValueChange = { remarks = it },
-            label = { Text("বিশেষ নোট / মন্তব্য") },
+            label = { Text("Notes / Remarks") },
             maxLines = 3,
-            placeholder = { Text("ফাইল নম্বর ও অতিরিক্ত তথ্য") },
+            placeholder = { Text("File number and additional details") },
             modifier = Modifier.fillMaxWidth()
           )
         }
@@ -1822,11 +1822,11 @@ fun SubmitDeliveryResponseDialog(
         enabled = !isExpired,
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
       ) {
-        Text(if (isExpired) "সময়সীমা শেষ (এন্ট্রি বন্ধ)" else "সাবমিট করুন")
+        Text(if (isExpired) "Expired (Submissions Closed)" else "Submit Entry")
       }
     },
     dismissButton = {
-      TextButton(onClick = onDismiss) { Text("বাতিল") }
+      TextButton(onClick = onDismiss) { Text("Cancel") }
     }
   )
 }
@@ -1974,7 +1974,7 @@ fun ViewSubmissionsDialog(
           FilterChip(
             selected = viewMode == 0,
             onClick = { viewMode = 0 },
-            label = { Text("কাস্টমার তালিকা (১ রো ১ জন)", fontSize = 11.sp, fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text("Customer Table View", fontSize = 11.sp, fontWeight = if (viewMode == 0) FontWeight.Bold else FontWeight.Normal) },
             leadingIcon = {
               Icon(Icons.Default.FormatListNumbered, contentDescription = null, modifier = Modifier.size(14.dp))
             },
@@ -1988,7 +1988,7 @@ fun ViewSubmissionsDialog(
           FilterChip(
             selected = viewMode == 1,
             onClick = { viewMode = 1 },
-            label = { Text("RM কার্ড ভিউ", fontSize = 11.sp, fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal) },
+            label = { Text("RM Card View", fontSize = 11.sp, fontWeight = if (viewMode == 1) FontWeight.Bold else FontWeight.Normal) },
             leadingIcon = {
               Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp))
             },
@@ -2012,7 +2012,7 @@ fun ViewSubmissionsDialog(
             contentAlignment = Alignment.Center
           ) {
             Text(
-              text = if (responses.isEmpty()) "এখনও কোনো RM রেসপন্স সাবমিট করেনি।" else "কোনো রেসপন্স ফিল্টারে মিল পাওয়া যায়নি।",
+              text = if (responses.isEmpty()) "No RM responses submitted yet." else "No matching responses found.",
               color = Color.Gray,
               fontSize = 12.sp
             )
@@ -2224,10 +2224,10 @@ fun ViewSubmissionsDialog(
                       horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                       if (r.requestedDate.isNotBlank()) {
-                        Text("📅 তারিখ: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
+                        Text("📅 Date: ${r.requestedDate}", fontSize = 11.sp, color = Color.DarkGray)
                       }
                       if (r.location.isNotBlank()) {
-                        Text("📍 লোকেশন: ${r.location}", fontSize = 11.sp, color = Color.DarkGray)
+                        Text("📍 Location: ${r.location}", fontSize = 11.sp, color = Color.DarkGray)
                       }
                     }
                   }
@@ -2241,7 +2241,7 @@ fun ViewSubmissionsDialog(
                       modifier = Modifier.fillMaxWidth()
                     ) {
                       Column(modifier = Modifier.padding(8.dp)) {
-                        Text("👥 কাস্টমার তালিকা (${customers.size} জন):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                        Text("👥 Customer List (${customers.size}):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
                         Spacer(modifier = Modifier.height(4.dp))
                         customers.forEachIndexed { cIdx, cust ->
                           Row(
@@ -2281,7 +2281,7 @@ fun ViewSubmissionsDialog(
 
                   if (r.remarks.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text("নোট: ${r.remarks}", fontSize = 11.sp, color = Color(0xFF0369A1))
+                    Text("Note: ${r.remarks}", fontSize = 11.sp, color = Color(0xFF0369A1))
                   }
                 }
               }
@@ -2299,11 +2299,11 @@ fun ViewSubmissionsDialog(
       ) {
         Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(15.dp))
         Spacer(modifier = Modifier.width(4.dp))
-        Text("PDF রিপোর্ট ডাউনলোড", fontSize = 12.sp)
+        Text("Download PDF Report", fontSize = 12.sp)
       }
     },
     dismissButton = {
-      TextButton(onClick = onDismiss) { Text("বন্ধ করুন") }
+      TextButton(onClick = onDismiss) { Text("Close") }
     }
   )
 }

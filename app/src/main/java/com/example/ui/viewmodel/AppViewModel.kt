@@ -732,7 +732,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val lastPwId = authPrefs.getString("last_password_logged_id", "")?.trim()?.uppercase() ?: ""
     val isVerified = (clean == lastPwId && lastPwId.isNotBlank()) || isPasswordLoginVerified(clean)
     if (!isVerified) {
-      onResult(false, "এই আইডির জন্য একবার পাসওয়ার্ড দিয়ে লগইন বাধ্যতামূলক। একবার পাসওয়ার্ড দিয়ে ঢুকলে পরবর্তীতে ফিঙ্গারপ্রিন্ট স্বয়ংক্রিয়ভাবে সক্রিয় হবে।")
+      onResult(false, "Password login is required once for this ID. Fingerprint login will be activated automatically afterwards.")
       return
     }
 
@@ -1001,7 +1001,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         docDate = docDate
       )
       res.onSuccess {
-        _uiMessage.emit("ডকুমেন্ট '${it.title}' সফলভাবে সেভ করা হয়েছে।")
+        _uiMessage.emit("Document '${it.title}' saved successfully.")
         onResult(true, null)
       }.onFailure {
         onResult(false, it.message ?: "Failed to save document.")
@@ -1013,7 +1013,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = eblRepository.deleteImportantDocument(docId)
       res.onSuccess {
-        _uiMessage.emit("ডকুমেন্ট সফলভাবে মুছে ফেলা হয়েছে।")
+        _uiMessage.emit("Document deleted successfully.")
         onResult(true, null)
       }.onFailure {
         onResult(false, it.message ?: "Failed to delete document.")
@@ -1160,6 +1160,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       b2bTarget = b2bTarget,
       onResult = onResult
     )
+  }
+
+  fun setRmAllQuarterTargets(
+    rmCode: String,
+    year: Int = 2026,
+    q1Cc: Int, q1Corp: Int, q1B2b: Int,
+    q2Cc: Int, q2Corp: Int, q2B2b: Int,
+    q3Cc: Int, q3Corp: Int, q3B2b: Int,
+    q4Cc: Int, q4Corp: Int, q4B2b: Int,
+    onResult: (Boolean, String?) -> Unit = { _, _ -> }
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.setRmAllQuarterTargets(
+        rmCode = rmCode,
+        year = year,
+        q1Cc = q1Cc, q1Corp = q1Corp, q1B2b = q1B2b,
+        q2Cc = q2Cc, q2Corp = q2Corp, q2B2b = q2B2b,
+        q3Cc = q3Cc, q3Corp = q3Corp, q3B2b = q3B2b,
+        q4Cc = q4Cc, q4Corp = q4Corp, q4B2b = q4B2b
+      )
+      res.onSuccess {
+        _uiMessage.emit("All quarter targets (Q1..Q4 & Annual) updated for RM $rmCode ($year).")
+        onResult(true, null)
+      }.onFailure { err ->
+        _uiMessage.emit("Failed to set targets: ${err.message}")
+        onResult(false, err.message)
+      }
+    }
   }
 
   fun setRmQuarterTargets(
@@ -1450,9 +1478,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       val res = eblRepository.addAttachment(fileId, category, fileName, fileType, fileSizeBytes, fileUri, localFile)
       res.onSuccess { att ->
         if (att.fileUri.startsWith("http")) {
-          _uiMessage.emit("Attachment '$fileName' Google Drive-এ সফলভাবে সেভ হয়েছে।")
+          _uiMessage.emit("Attachment '$fileName' saved to Google Drive.")
         } else {
-          _uiMessage.emit("Attachment '$fileName' লোকাল ডিভাইসে সেভ হয়েছে (ড্রাইভে আপলোড হয়নি: Apps Script-এ Drive পারমিশন অ্যালাউ করুন)।")
+          _uiMessage.emit("Attachment '$fileName' saved locally.")
         }
       }.onFailure { err ->
         _uiMessage.emit("Failed to add attachment: ${err.message}")
@@ -1661,7 +1689,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = eblRepository.closeTeamEvent(eventId)
       res.onSuccess {
-        _uiMessage.emit("✓ ইভেন্টটি সমাপ্ত ও ডাটা এন্ট্রি বন্ধ করা হয়েছে।")
+        _uiMessage.emit("✓ Event closed and submissions concluded.")
         onResult?.invoke(true, null)
       }.onFailure { err ->
         _uiMessage.emit(err.message ?: "Failed to close event.")
@@ -1702,7 +1730,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       activeRouteCustomerIds.value = updatedActive
       completedRouteCustomerIds.value = (completedRouteCustomerIds.value + fileId).distinct()
       authPrefs.edit().putString("active_field_route_ids", updatedActive.joinToString(",")).apply()
-      _uiMessage.emit("✓ ফাইল কালেকশন সম্পন্ন! রুট থেকে বাদ দেওয়া হয়েছে।")
+      _uiMessage.emit("✓ File collection completed.")
       onDone()
     }
   }
@@ -1763,14 +1791,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
           }
         }
         if (parsed.sheets.isEmpty() || parsed.totalRows == 0) {
-          onComplete(false, "ফাইলটিতে কোনো ডাটা বা শিট পাওয়া যায়নি!")
+          onComplete(false, "No sheets or data found in file.")
           return@launch
         }
         // Save to internal storage file and sync to Google Sheets & Drive as universal master
         eblRepository.saveCompanyWorkbook(parsed, rawFileBytes = rawBytes)
-        onComplete(true, "সফলভাবে ${parsed.sheets.size} টি শিট এবং মোট ${parsed.totalRows} টি রেকর্ড আপলোড ও ক্লাউডে সিঙ্ক হয়েছে! সকল RM এবং ব্যবহারকারী এই আপডেট দেখতে পাবেন।")
+        onComplete(true, "Successfully uploaded ${parsed.sheets.size} sheets (${parsed.totalRows} records). All users can now view the update.")
       } catch (e: Exception) {
-        onComplete(false, "ফাইল আপলোড ব্যর্থ হয়েছে: ${e.localizedMessage}")
+        onComplete(false, "File upload failed: ${e.localizedMessage}")
       }
     }
   }
@@ -1780,9 +1808,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       try {
         eblRepository.syncCompanyWorkbookFromCloud()
         val current = eblRepository.getCompanyWorkbook()
-        onComplete(true, "ক্লাউড থেকে সফলভাবে কোম্পানির তথ্য সিঙ্ক করা হয়েছে (${current.totalRows} টি রেকর্ড)!")
+        onComplete(true, "Successfully synced company profiles from cloud (${current.totalRows} records).")
       } catch (e: Exception) {
-        onComplete(false, "সিঙ্ক ব্যর্থ হয়েছে: ${e.localizedMessage}")
+        onComplete(false, "Sync failed: ${e.localizedMessage}")
       }
     }
   }

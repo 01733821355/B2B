@@ -786,7 +786,7 @@ fun CustomerDetailDialog(
           Spacer(modifier = Modifier.height(10.dp))
 
           // 1. Application Status Section
-          Text("1. Application Status (ফাইল স্ট্যাটাস):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Text("1. Application Status:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
           Spacer(modifier = Modifier.height(6.dp))
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -810,7 +810,7 @@ fun CustomerDetailDialog(
           Spacer(modifier = Modifier.height(12.dp))
 
           // 2. CPV Status Section
-          Text("2. CPV Status (ভেরিফিকেশন স্ট্যাটাস):", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
+          Text("2. CPV Status:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
           Spacer(modifier = Modifier.height(6.dp))
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -864,7 +864,7 @@ fun CustomerDetailDialog(
             ) {
               Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(3.dp))
-              Text("ক্যামেরা", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
+              Text("Camera", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
             }
 
             // Photo Button
@@ -879,7 +879,7 @@ fun CustomerDetailDialog(
             ) {
               Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(3.dp))
-              Text("ছবি", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+              Text("Photo", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
             }
 
             // Document Button
@@ -894,7 +894,7 @@ fun CustomerDetailDialog(
             ) {
               Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(3.dp))
-              Text("ডকুমেন্ট", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+              Text("Document", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
             }
           }
 
@@ -1062,7 +1062,7 @@ fun CustomerDetailDialog(
           ) {
             Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("📷 Take Photo with Camera", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -1088,7 +1088,7 @@ fun CustomerDetailDialog(
             ) {
               Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("গ্যালারি (Gallery)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("Gallery", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -1105,7 +1105,7 @@ fun CustomerDetailDialog(
             ) {
               Icon(Icons.Default.Description, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("ফাইল (Doc/PDF)", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              Text("Document / PDF", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
           }
         }

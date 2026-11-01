@@ -69,8 +69,14 @@ fun QuarterTargetSettingDialog(
   onDeleteCriteria: ((String) -> Unit)? = null,
   initialCustomTargets: Map<String, Int> = emptyMap(),
   allQuarterCustomTargets: Map<String, Map<String, Int>> = emptyMap(),
-  onDismiss: () -> Unit,
   onSave: (quarter: String, year: Int, cc: Int, corp: Int, b2b: Int) -> Unit,
+  onSaveAllQuarters: ((
+    year: Int,
+    q1Cc: Int, q1Corp: Int, q1B2b: Int,
+    q2Cc: Int, q2Corp: Int, q2B2b: Int,
+    q3Cc: Int, q3Corp: Int, q3B2b: Int,
+    q4Cc: Int, q4Corp: Int, q4B2b: Int
+  ) -> Unit)? = null,
   onSaveCustomTargets: ((quarter: String, targets: Map<String, Int>) -> Unit)? = null,
   onSaveAllQuarterCustomTargets: ((targets: Map<String, Map<String, Int>>) -> Unit)? = null,
   onSaveAssignedCriteria: ((List<String>) -> Unit)? = null
@@ -78,7 +84,7 @@ fun QuarterTargetSettingDialog(
   val selectedYear = 2026
 
   // Which criteria are currently checked/assigned to this RM
-  var selectedAssignedCriteria by remember(assignedCriteria, allCriteria) {
+  var selectedAssignedCriteria by remember(rmCode) {
     val initialSet = if (assignedCriteria.isNotEmpty()) {
       assignedCriteria.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }.toSet()
     } else {
@@ -88,7 +94,7 @@ fun QuarterTargetSettingDialog(
   }
 
   // Quarterly isolated inputs state: Quarter -> (Criterion -> TargetNumberString)
-  val targetsByQuarterState = remember(allQuarterCustomTargets, currentTarget, initialCustomTargets, allCriteria) {
+  val targetsByQuarterState = remember(rmCode) {
     val qMap = mutableMapOf<String, MutableMap<String, String>>()
     listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
       val inner = mutableMapOf<String, String>()
@@ -119,6 +125,16 @@ fun QuarterTargetSettingDialog(
       qMap[q] = inner
     }
     mutableStateOf(qMap)
+  }
+
+  // Ensure any newly added criteria dynamically populate into state without wiping user-entered numbers
+  allCriteria.forEach { crit ->
+    listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+      val inner = targetsByQuarterState.value[q]
+      if (inner != null && !inner.containsKey(crit)) {
+        inner[crit] = "0"
+      }
+    }
   }
 
   var showAddCriteriaRow by remember { mutableStateOf(false) }
@@ -170,13 +186,13 @@ fun QuarterTargetSettingDialog(
             Spacer(modifier = Modifier.width(8.dp))
             Column {
               Text(
-                text = "প্রতিটি ক্রাইটেরিয়ার জন্য Q1, Q2, Q3, Q4 ও বার্ষিক টার্গেট কলাম:",
+                text = "Target columns for each criterion (Q1, Q2, Q3, Q4 & Annual):",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1E3A8A)
               )
               Text(
-                text = "যেকোনো ক্রাইটেরিয়াতে টার্গেট 0 হলে ওই RM-এর অ্যাপে সেই ক্রাইটেরিয়া প্রদর্শিত হবে না।",
+                text = "If target is 0 for any criterion, it will not be displayed in that RM's app.",
                 fontSize = 10.sp,
                 color = Color(0xFF2563EB)
               )
@@ -254,7 +270,7 @@ fun QuarterTargetSettingDialog(
                     )
                     if (isAssigned && isAllZero) {
                       Text(
-                        text = "টার্গেট 0 (এই RM-এর অ্যাপে এটি প্রদর্শিত হবে না)",
+                        text = "Target 0 (Will not be displayed in RM's app)",
                         fontSize = 10.sp,
                         color = Color(0xFFDC2626)
                       )
@@ -273,7 +289,7 @@ fun QuarterTargetSettingDialog(
                   ) {
                     Icon(
                       Icons.Default.Delete,
-                      contentDescription = "সার্বজনীনভাবে মুছুন",
+                      contentDescription = "Delete Criterion",
                       tint = Color(0xFFDC2626),
                       modifier = Modifier.size(16.dp)
                     )
@@ -369,21 +385,14 @@ fun QuarterTargetSettingDialog(
                     )
                   }
 
-                  // Annual (Total) Input Column
+                  // Annual (Total) Input Column - auto-calculated sum
                   Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Annual", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
                     OutlinedTextField(
-                      value = if (allVal != "0" && allVal.isNotBlank()) allVal else autoAnnual.toString(),
-                      onValueChange = { newVal ->
-                        val digits = newVal.filter { ch -> ch.isDigit() }
-                        val qMap = targetsByQuarterState.value.toMutableMap()
-                        val innerAll = (qMap["ALL"] ?: mutableMapOf()).toMutableMap()
-                        innerAll[crit] = digits
-                        qMap["ALL"] = innerAll
-                        targetsByQuarterState.value = qMap
-                      },
+                      value = autoAnnual.toString(),
+                      onValueChange = {},
+                      readOnly = true,
                       textStyle = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = Color(0xFF15803D)),
-                      keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                       singleLine = true,
                       modifier = Modifier
                         .fillMaxWidth()
@@ -393,7 +402,7 @@ fun QuarterTargetSettingDialog(
                 }
               } else {
                 Text(
-                  text = "❌ কোনো টার্গেট বরাদ্দ করা হয়নি (টার্গেট 0, এই RM-এর অ্যাপে এটি প্রদর্শিত হবে না)",
+                  text = "❌ Not assigned (Target 0, will not be displayed in RM's app)",
                   fontSize = 10.sp,
                   color = Color.Gray,
                   modifier = Modifier.padding(start = 36.dp, top = 2.dp)
@@ -413,8 +422,8 @@ fun QuarterTargetSettingDialog(
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              Text("নতুন সার্বজনীন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Universal Criteria):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
-              Text("নতুন ক্রাইটেরিয়া যুক্ত করলে স্বয়ংক্রিয়ভাবে Q1, Q2, Q3, Q4 ও Annual কলাম যুক্ত হবে।", fontSize = 10.sp, color = Color(0xFF15803D))
+              Text("Add Universal Target Criteria:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
+              Text("Adding criteria automatically creates Q1, Q2, Q3, Q4 & Annual columns.", fontSize = 10.sp, color = Color(0xFF15803D))
               Spacer(modifier = Modifier.height(6.dp))
               Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -472,13 +481,13 @@ fun QuarterTargetSettingDialog(
           ) {
             Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = EblNavyPrimary)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("+ নতুন টার্গেট ক্রাইটেরিয়া যোগ করুন (Add Universal Criteria)", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
+            Text("+ Add Universal Criteria", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
           }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
         Text(
-          text = "Note: ৪টি কোয়ার্টার (Q1, Q2, Q3, Q4) এবং বার্ষিক টার্গেটের ডেটা Google Sheets-এ লাইভ সিঙ্ক হবে।",
+          text = "Note: 4 Quarters (Q1, Q2, Q3, Q4) and Annual targets sync live with Google Sheets.",
           fontSize = 10.sp,
           color = Color.Gray
         )
@@ -488,7 +497,7 @@ fun QuarterTargetSettingDialog(
       Button(
         onClick = {
           val allQuartersResult = mutableMapOf<String, MutableMap<String, Int>>()
-          listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
+          listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
             val innerMap = mutableMapOf<String, Int>()
             val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
             allCriteria.forEach { crit ->
@@ -500,13 +509,44 @@ fun QuarterTargetSettingDialog(
             allQuartersResult[q] = innerMap
           }
 
+          // Calculate ALL as exact mathematical sum of Q1 + Q2 + Q3 + Q4
+          val annualMap = mutableMapOf<String, Int>()
+          allCriteria.forEach { crit ->
+            val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
+            if (isAssigned) {
+              val sumAnnual = (allQuartersResult["Q1"]?.get(crit) ?: 0) +
+                (allQuartersResult["Q2"]?.get(crit) ?: 0) +
+                (allQuartersResult["Q3"]?.get(crit) ?: 0) +
+                (allQuartersResult["Q4"]?.get(crit) ?: 0)
+              annualMap[crit] = sumAnnual
+            } else {
+              annualMap[crit] = 0
+            }
+          }
+          allQuartersResult["ALL"] = annualMap
+
           val curQ = DateUtils.getCurrentQuarter()
           val curMap = allQuartersResult[curQ] ?: allQuartersResult["Q1"] ?: emptyMap()
           val cc = curMap["Credit Card"] ?: 0
           val corp = curMap["Corporate Card"] ?: 0
           val b2b = curMap["B2B"] ?: 0
 
-          onSave(curQ, selectedYear, cc, corp, b2b)
+          val q1Map = allQuartersResult["Q1"] ?: emptyMap()
+          val q2Map = allQuartersResult["Q2"] ?: emptyMap()
+          val q3Map = allQuartersResult["Q3"] ?: emptyMap()
+          val q4Map = allQuartersResult["Q4"] ?: emptyMap()
+
+          if (onSaveAllQuarters != null) {
+            onSaveAllQuarters.invoke(
+              selectedYear,
+              q1Map["Credit Card"] ?: 0, q1Map["Corporate Card"] ?: 0, q1Map["B2B"] ?: 0,
+              q2Map["Credit Card"] ?: 0, q2Map["Corporate Card"] ?: 0, q2Map["B2B"] ?: 0,
+              q3Map["Credit Card"] ?: 0, q3Map["Corporate Card"] ?: 0, q3Map["B2B"] ?: 0,
+              q4Map["Credit Card"] ?: 0, q4Map["Corporate Card"] ?: 0, q4Map["B2B"] ?: 0
+            )
+          } else {
+            onSave(curQ, selectedYear, cc, corp, b2b)
+          }
 
           if (onSaveAllQuarterCustomTargets != null) {
             onSaveAllQuarterCustomTargets.invoke(allQuartersResult)
@@ -516,14 +556,16 @@ fun QuarterTargetSettingDialog(
 
           // Save assigned criteria list (only checked criteria with target > 0)
           val assignedList = allCriteria.filter { crit ->
-            selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
+            val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
+            val hasTarget = (annualMap[crit] ?: 0) > 0
+            isAssigned && hasTarget
           }
           onSaveAssignedCriteria?.invoke(assignedList)
         },
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
       ) {
-        Text("Save All Quarter Targets (সংরক্ষণ করুন)", fontWeight = FontWeight.Bold)
+        Text("Save All Quarter Targets", fontWeight = FontWeight.Bold)
       }
     },
     dismissButton = {
@@ -538,9 +580,9 @@ fun QuarterTargetSettingDialog(
     val critName = criteriaToDelete!!
     AlertDialog(
       onDismissRequest = { criteriaToDelete = null },
-      title = { Text("সার্বজনীনভাবে ক্রাইটেরিয়া মুছে ফেলতে চান?", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+      title = { Text("Delete Universal Criterion?", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
       text = {
-        Text("'$critName' ক্রাইটেরিয়া মুছে ফেললে এটি সার্বজনীনভাবে (Universal) সমস্ত RM ও অ্যাডমিনের তালিকা থেকে সম্পূর্ণভাবে মুছে যাবে। আপনি কি নিশ্চিত?")
+        Text("Deleting '$critName' will permanently remove it universally for all RMs and Admin. Are you sure?")
       },
       confirmButton = {
         Button(
@@ -553,12 +595,12 @@ fun QuarterTargetSettingDialog(
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626))
         ) {
-          Text("মুছে ফেলুন (Delete)", fontWeight = FontWeight.Bold, color = Color.White)
+          Text("Delete", fontWeight = FontWeight.Bold, color = Color.White)
         }
       },
       dismissButton = {
         TextButton(onClick = { criteriaToDelete = null }) {
-          Text("বাতিল")
+          Text("Cancel")
         }
       }
     )

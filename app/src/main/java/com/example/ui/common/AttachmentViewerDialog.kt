@@ -509,8 +509,8 @@ fun AttachmentViewerDialog(
   if (showDeleteConfirm && onDelete != null) {
     AlertDialog(
       onDismissRequest = { showDeleteConfirm = false },
-      title = { Text("ডকুমেন্ট মুছে ফেলবেন?", fontWeight = FontWeight.Bold) },
-      text = { Text("'${attachment.fileName}' ফাইলটি মুছে ফেলতে চান?") },
+      title = { Text("Delete Document?", fontWeight = FontWeight.Bold) },
+      text = { Text("Are you sure you want to delete '${attachment.fileName}'?") },
       confirmButton = {
         Button(
           onClick = {
@@ -520,12 +520,12 @@ fun AttachmentViewerDialog(
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
         ) {
-          Text("হ্যাঁ, মুছুন")
+          Text("Yes, Delete")
         }
       },
       dismissButton = {
         TextButton(onClick = { showDeleteConfirm = false }) {
-          Text("বাতিল")
+          Text("Cancel")
         }
       }
     )

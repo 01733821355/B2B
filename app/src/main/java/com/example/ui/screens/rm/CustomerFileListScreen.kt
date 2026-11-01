@@ -608,7 +608,7 @@ fun CustomerFileListScreen(
         ) {
           Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-              text = "${selectedFileIdsForRoute.size} জন কাস্টমার নির্বাচিত",
+              text = "${selectedFileIdsForRoute.size} Customers Selected",
               fontWeight = FontWeight.Bold,
               fontSize = 13.sp,
               color = EblNavyDark
@@ -806,9 +806,9 @@ fun CustomerFileListScreen(
             onClick = {
               val savedUri = PdfReportGenerator.savePdfToDownloads(context, generatedPdfFile!!, generatedPdfFile!!.name)
               if (savedUri != null) {
-                Toast.makeText(context, "PDF Report ডাউনলোড হয়েছে!\nপাথ: Downloads/${generatedPdfFile!!.name}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "PDF Report saved!\nPath: Downloads/${generatedPdfFile!!.name}", Toast.LENGTH_LONG).show()
               } else {
-                Toast.makeText(context, "ডাউনলোড সম্পন্ন হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Download complete!", Toast.LENGTH_SHORT).show()
               }
             }
           ) {
@@ -854,9 +854,9 @@ fun CustomerFileListScreen(
             onClick = {
               val savedUri = ExcelReportGenerator.saveExcelToDownloads(context, generatedExcelFile!!, generatedExcelFile!!.name)
               if (savedUri != null) {
-                Toast.makeText(context, "Excel Report ডাউনলোড হয়েছে!\nপাথ: Downloads/${generatedExcelFile!!.name}", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "Excel Report saved!\nPath: Downloads/${generatedExcelFile!!.name}", Toast.LENGTH_LONG).show()
               } else {
-                Toast.makeText(context, "ডাউনলোড সম্পন্ন হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Download complete!", Toast.LENGTH_SHORT).show()
               }
             },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF15803D))

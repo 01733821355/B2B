@@ -13,6 +13,7 @@ class BootReceiver : BroadcastReceiver() {
         action == "com.htc.intent.action.QUICKBOOT_POWERON") {
       NotificationHelper.createNotificationChannels(context)
       BackgroundSyncWorker.schedulePeriodicSync(context.applicationContext)
+      SyncAlarmReceiver.scheduleNextAlarm(context.applicationContext, 10_000L)
     }
   }
 }

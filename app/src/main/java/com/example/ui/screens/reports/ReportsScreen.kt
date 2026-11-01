@@ -295,7 +295,7 @@ fun ReportsScreen(
                 FilterChip(
                   selected = isDateToDateMode,
                   onClick = { isDateToDateMode = true },
-                  label = { Text("Date to Date (তারিখ হতে)", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
+                  label = { Text("Date Range", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                   colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = Color(0xFF0F766E),
                     selectedLabelColor = Color.White
@@ -330,7 +330,7 @@ fun ReportsScreen(
                   OutlinedTextField(
                     value = fromDateStr,
                     onValueChange = { fromDateStr = it },
-                    label = { Text("From Date (শুরুর তারিখ)", fontSize = 11.sp) },
+                    label = { Text("From Date", fontSize = 11.sp) },
                     readOnly = true,
                     leadingIcon = {
                       Icon(
@@ -350,7 +350,7 @@ fun ReportsScreen(
                   OutlinedTextField(
                     value = toDateStr,
                     onValueChange = { toDateStr = it },
-                    label = { Text("To Date (শেষ তারিখ)", fontSize = 11.sp) },
+                    label = { Text("To Date", fontSize = 11.sp) },
                     readOnly = true,
                     leadingIcon = {
                       Icon(
@@ -370,7 +370,7 @@ fun ReportsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Fast Quarter & Range Preset Buttons
-                Text("Quick Quarter Presets (কোয়ার্টার নির্বাচন):", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF115E59))
+                Text("Quick Quarter Presets:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF115E59))
                 Spacer(modifier = Modifier.height(4.dp))
                 val presetScrollState = rememberScrollState()
                 Row(

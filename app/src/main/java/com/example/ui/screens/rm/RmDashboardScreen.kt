@@ -469,7 +469,7 @@ fun RmDashboardScreen(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Text(
-                  text = "সার্চ করুন",
+                  text = "Search",
                   color = Color.White,
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold
@@ -508,13 +508,13 @@ fun RmDashboardScreen(
               Spacer(modifier = Modifier.width(8.dp))
               Column {
                 Text(
-                  text = "Fingerprint Login (ফিঙ্গারপ্রিন্ট লগইন)",
+                  text = "Fingerprint Login",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
                   color = Color.White
                 )
                 Text(
-                  text = if (isBiometricEnabled) "Enabled (লগইনে ফিঙ্গারপ্রিন্ট সক্রিয়)" else "Disabled (পাসওয়ার্ড লগইন প্রয়োজন)",
+                  text = if (isBiometricEnabled) "Enabled (Biometric Active)" else "Disabled (Password Required)",
                   fontSize = 9.sp,
                   color = if (isBiometricEnabled) Color(0xFF34D399) else Color.LightGray
                 )
@@ -564,7 +564,7 @@ fun RmDashboardScreen(
                 }
                 Column {
                   Text(
-                    text = "Important Documents (জরুরি ডকুমেন্টস)",
+                    text = "Important Documents",
                     color = Color.White,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold
@@ -697,7 +697,7 @@ fun RmDashboardScreen(
               border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
             ) {
               Text(
-                text = if (isAnnual) "2026 বার্ষিক লক্ষ্যমাত্রা (Annual)" else "$selectedKpiQuarter 2026 Target",
+                text = if (isAnnual) "2026 Annual Target" else "$selectedKpiQuarter 2026 Target",
                 fontSize = 11.sp,
                 color = Color(0xFF1D4ED8),
                 fontWeight = FontWeight.Bold,
@@ -711,18 +711,18 @@ fun RmDashboardScreen(
           Spacer(modifier = Modifier.height(10.dp))
 
           // Annual Target Summary Banner
-          val annualCc = target?.annualCreditCardTarget ?: (20 * 4)
-          val annualCorp = target?.annualCorporateCardTarget ?: (10 * 4)
-          val annualB2b = target?.annualB2bTarget ?: (15 * 4)
+          val annualCc = target?.annualCreditCardTarget ?: 0
+          val annualCorp = target?.annualCorporateCardTarget ?: 0
+          val annualB2b = target?.annualB2bTarget ?: 0
 
           val annualSummaryParts = mutableListOf<String>()
-          if (activeRmCriteria.any { it.equals("Credit Card", ignoreCase = true) }) {
+          if (annualCc > 0 && activeRmCriteria.any { it.equals("Credit Card", ignoreCase = true) }) {
             annualSummaryParts.add("CC $annualCc")
           }
-          if (activeRmCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) {
+          if (annualCorp > 0 && activeRmCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) {
             annualSummaryParts.add("Corp $annualCorp")
           }
-          if (activeRmCriteria.any { it.equals("B2B", ignoreCase = true) }) {
+          if (annualB2b > 0 && activeRmCriteria.any { it.equals("B2B", ignoreCase = true) }) {
             annualSummaryParts.add("B2B $annualB2b")
           }
           val standardCritSet = setOf("Credit Card", "Corporate Card", "B2B")
@@ -737,9 +737,9 @@ fun RmDashboardScreen(
             annualSummaryParts.add("$crit $annualCustom")
           }
           val annualSummaryText = if (annualSummaryParts.isNotEmpty()) {
-            "মোট: " + annualSummaryParts.joinToString(" • ")
+            "Total: " + annualSummaryParts.joinToString(" • ")
           } else {
-            "কোনো নির্ধারিত লক্ষ্যমাত্রা নেই"
+            "No target assigned"
           }
 
           Surface(
@@ -757,7 +757,7 @@ fun RmDashboardScreen(
             ) {
               Column {
                 Text(
-                  text = "📅 2026 বার্ষিক লক্ষ্যমাত্রা (Annual Goal):",
+                  text = "📅 2026 Annual Goal:",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
                   color = EblNavyDark
@@ -799,7 +799,7 @@ fun RmDashboardScreen(
                 onClick = { selectedKpiQuarter = q },
                 label = {
                   Text(
-                    text = if (q == "Annual") "বার্ষিক (Yr)" else q,
+                    text = if (q == "Annual") "Annual (Yr)" else q,
                     fontSize = 10.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                   )
@@ -824,7 +824,7 @@ fun RmDashboardScreen(
               modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
               Text(
-                text = "এই কোয়ার্টারের জন্য কোনো লক্ষ্যমাত্রা সক্রিয় নেই।",
+                text = "No active target assigned for this period.",
                 fontSize = 11.sp,
                 color = Color.Gray,
                 modifier = Modifier.padding(14.dp),

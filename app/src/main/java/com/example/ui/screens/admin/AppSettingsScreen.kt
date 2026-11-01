@@ -1440,14 +1440,14 @@ fun AppSettingsScreen(
               fontColorHex = selectedFontColorHex.trim(),
               textScale = selectedTextScale
             )
-            Toast.makeText(context, "সর্বজনীন ফন্ট স্টাইল ও রং সংরক্ষিত হয়েছে এবং সিঙ্ক হচ্ছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Universal font style and color saved and syncing!", Toast.LENGTH_SHORT).show()
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           modifier = Modifier.fillMaxWidth()
         ) {
           Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("Save Universal Font & Color (সর্বজনীন ফন্ট সংরক্ষণ)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          Text("Save Universal Font & Color", fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
       }
     }

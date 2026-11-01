@@ -137,7 +137,7 @@ fun ImportantDocumentsScreen(
 
   val categories = listOf(
     "All",
-    "Company Profile (কোম্পানি প্রোফাইল)",
+    "Company Profile",
     "Policies & Circulars",
     "Forms & Formats",
     "Product Guidelines",
@@ -224,7 +224,7 @@ fun ImportantDocumentsScreen(
               isSyncing = true
               viewModel.pullDataFromGoogleSheets()
               isSyncing = false
-              Toast.makeText(context, "গুগল শিট থেকে ডকুমেন্টস সিঙ্ক হয়েছে!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Documents synced from Google Sheets!", Toast.LENGTH_SHORT).show()
             }
           },
           modifier = Modifier.size(32.dp).testTag("btn_sync_important_docs")
@@ -445,9 +445,9 @@ fun ImportantDocumentsScreen(
           if (success) {
             showUploadDialog = false
             documentToEdit = null
-            Toast.makeText(context, "ডকুমেন্ট সার্বজনীনভাবে সেভ হয়েছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Document saved universally!", Toast.LENGTH_SHORT).show()
           } else {
-            Toast.makeText(context, err ?: "ডকুমেন্ট সেভ করতে সমস্যা হয়েছে।", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, err ?: "Failed to save document.", Toast.LENGTH_LONG).show()
           }
         }
       }
@@ -469,9 +469,9 @@ fun ImportantDocumentsScreen(
             viewModel.deleteImportantDocument(targetId) { success, err ->
               documentToDelete = null
               if (success) {
-                Toast.makeText(context, "ডকুমেন্ট মুছে ফেলা হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Document deleted universally!", Toast.LENGTH_SHORT).show()
               } else {
-                Toast.makeText(context, err ?: "ডিলিট করতে সমস্যা হয়েছে।", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, err ?: "Failed to delete document.", Toast.LENGTH_SHORT).show()
               }
             }
           },
@@ -706,7 +706,7 @@ fun UploadOrEditDocDialog(
   var categoryExpanded by remember { mutableStateOf(false) }
 
   val categories = listOf(
-    "Company Profile (কোম্পানি প্রোফাইল)",
+    "Company Profile",
     "Policies & Circulars",
     "Forms & Formats",
     "Product Guidelines",
@@ -960,7 +960,7 @@ fun UploadOrEditDocDialog(
         ) {
           Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(16.dp))
           Spacer(modifier = Modifier.width(6.dp))
-          Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          Text("📷 Take Photo with Camera", fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(modifier = Modifier.height(8.dp))

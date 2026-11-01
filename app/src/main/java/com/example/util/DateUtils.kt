@@ -314,10 +314,10 @@ object DateUtils {
   }
 
   enum class TimeOfDayPeriod(val label: String, val banglaLabel: String, val greeting: String, val emoji: String) {
-    MORNING("Morning", "সকাল", "Good Morning (শুভ সকাল)", "🌅"),
-    AFTERNOON("Afternoon", "দুপুর", "Good Afternoon (শুভ দুপুর)", "☀️"),
-    EVENING("Evening", "সন্ধ্যা", "Good Evening (শুভ সন্ধ্যা)", "🌇"),
-    NIGHT("Night", "রাত", "Good Night (শুভ রাত্রি)", "🌙")
+    MORNING("Morning", "Morning", "Good Morning", "🌅"),
+    AFTERNOON("Afternoon", "Afternoon", "Good Afternoon", "☀️"),
+    EVENING("Evening", "Evening", "Good Evening", "🌇"),
+    NIGHT("Night", "Night", "Good Night", "🌙")
   }
 
   fun getCurrentTimeOfDayPeriod(): TimeOfDayPeriod {

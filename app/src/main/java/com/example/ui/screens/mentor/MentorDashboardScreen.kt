@@ -131,7 +131,7 @@ fun MentorDashboardScreen(
         if (saved != null) {
           viewModel.setAppCustomIcon(saved.storagePath) { success, _ ->
             if (success) {
-              Toast.makeText(context, "Universal App Icon সফলভাবে আপডেট হয়েছে!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Universal App Icon updated successfully!", Toast.LENGTH_SHORT).show()
             }
           }
         }
@@ -376,13 +376,13 @@ fun MentorDashboardScreen(
               Spacer(modifier = Modifier.width(8.dp))
               Column {
                 Text(
-                  text = "Fingerprint Login (ফিঙ্গারপ্রিন্ট লগইন)",
+                  text = "Fingerprint Login",
                   fontSize = 11.sp,
                   fontWeight = FontWeight.Bold,
                   color = Color.White
                 )
                 Text(
-                  text = if (isBioMentor) "Enabled (লগইনে ফিঙ্গারপ্রিন্ট সক্রিয়)" else "Disabled (পাসওয়ার্ড লগইন প্রয়োজন)",
+                  text = if (isBioMentor) "Enabled (Biometric Active)" else "Disabled (Password Required)",
                   fontSize = 9.sp,
                   color = if (isBioMentor) Color(0xFF34D399) else Color.LightGray
                 )
@@ -709,7 +709,7 @@ fun MentorDashboardScreen(
                 color = EblNavyDark
               )
               Text(
-                text = "সবার অ্যাপে নতুন আইকন সিঙ্ক হবে • Configured by Mentor",
+                text = "Syncs universally to all users' devices • Configured by Mentor",
                 fontSize = 10.sp,
                 color = Color(0xFF059669)
               )
@@ -1052,11 +1052,11 @@ fun MentorDashboardScreen(
   if (showEditAppIconDialog) {
     AlertDialog(
       onDismissRequest = { showEditAppIconDialog = false },
-      title = { Text("Universal App Icon / Logo পরিবর্তন", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+      title = { Text("Universal App Icon / Logo Setup", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
       text = {
         Column {
           Text(
-            "একটি ইমেজ URL বা Google Drive Image Link দিন, অথবা সরাসরি ডিভাইস থেকে ছবি আপলোড করুন:",
+            "Enter an image URL or Google Drive link, or upload an image directly from device:",
             fontSize = 12.sp,
             color = Color.Gray
           )
@@ -1064,7 +1064,7 @@ fun MentorDashboardScreen(
           OutlinedTextField(
             value = newAppIconUrlInput,
             onValueChange = { newAppIconUrlInput = it },
-            placeholder = { Text("https://example.com/logo.png বা ড্রাইভ লিঙ্ক", fontSize = 12.sp) },
+            placeholder = { Text("https://example.com/logo.png or drive link", fontSize = 12.sp) },
             modifier = Modifier.fillMaxWidth().testTag("input_new_app_icon_url"),
             singleLine = true
           )
@@ -1079,7 +1079,7 @@ fun MentorDashboardScreen(
           ) {
             Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("গ্যালারি থেকে ছবি নির্বাচন করুন (Pick from Device)", fontSize = 11.sp)
+            Text("Pick from Device Gallery", fontSize = 11.sp)
           }
         }
       },
@@ -1090,18 +1090,18 @@ fun MentorDashboardScreen(
             viewModel.setAppCustomIcon(clean) { success, _ ->
               if (success) {
                 showEditAppIconDialog = false
-                Toast.makeText(context, "Universal App Icon সফলভাবে আপডেট হয়েছে!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Universal App Icon updated successfully!", Toast.LENGTH_SHORT).show()
               }
             }
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
         ) {
-          Text("সংরক্ষণ করুন (Save Icon)")
+          Text("Save Icon")
         }
       },
       dismissButton = {
         OutlinedButton(onClick = { showEditAppIconDialog = false }) {
-          Text("বাতিল")
+          Text("Cancel")
         }
       }
     )
@@ -1170,7 +1170,7 @@ fun MentorDashboardScreen(
                   color = EblNavyDark
                 )
                 Text(
-                  text = "ডিলিট করা এন্ট্রি পুনরুদ্ধার ও শিটে রিলোড (${deletedFiles.size} records)",
+                  text = "Recover deleted records & reload to sheet (${deletedFiles.size} records)",
                   fontSize = 11.sp,
                   color = Color.Gray
                 )
@@ -1183,7 +1183,7 @@ fun MentorDashboardScreen(
                   deletedFiles.forEach { file ->
                     viewModel.restoreFile(file.fileId)
                   }
-                  Toast.makeText(context, "✓ ${deletedFiles.size} টি এন্ট্রি সফলভাবে পুনরুদ্ধার হয়েছে!", Toast.LENGTH_SHORT).show()
+                  Toast.makeText(context, "✓ ${deletedFiles.size} records recovered successfully!", Toast.LENGTH_SHORT).show()
                 },
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                 modifier = Modifier.testTag("btn_recover_all_entries")
@@ -1231,13 +1231,13 @@ fun MentorDashboardScreen(
                 )
                 Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                  text = if (deletedFiles.isEmpty()) "কোনো ডিলিট করা এন্ট্রি নেই" else "কোনো মিল খুঁজে পাওয়া যায়নি",
+                  text = if (deletedFiles.isEmpty()) "No deleted records found" else "No matching records found",
                   fontWeight = FontWeight.Bold,
                   fontSize = 14.sp,
                   color = EblNavyDark
                 )
                 Text(
-                  text = if (deletedFiles.isEmpty()) "সব ফাইল বর্তমানে সক্রিয় রয়েছে।" else "ভিন্ন কোনো নাম বা ফোন নম্বর দিয়ে চেষ্টা করুন।",
+                  text = if (deletedFiles.isEmpty()) "All files are currently active." else "Try searching with a different name or phone.",
                   fontSize = 11.sp,
                   color = Color.Gray
                 )
@@ -1326,7 +1326,7 @@ fun MentorDashboardScreen(
                         viewModel.restoreFile(file.fileId)
                         Toast.makeText(
                           context,
-                          "✓ '${file.customerName}' পুনরুদ্ধার হয়েছে ও শিটে লোড হয়েছে!",
+                          "✓ '${file.customerName}' recovered & synced to sheet!",
                           Toast.LENGTH_SHORT
                         ).show()
                       },
@@ -1370,7 +1370,7 @@ fun MentorDashboardScreen(
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.testTag("btn_close_deleted_dialog")
             ) {
-              Text("Close (বন্ধ করুন)")
+              Text("Close")
             }
           }
         }
@@ -1399,6 +1399,18 @@ fun MentorDashboardScreen(
       onDismiss = { mentorTargetSettingRow = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
+          if (success) mentorTargetSettingRow = null
+        }
+      },
+      onSaveAllQuarters = { year, q1Cc, q1Corp, q1B2b, q2Cc, q2Corp, q2B2b, q3Cc, q3Corp, q3B2b, q4Cc, q4Corp, q4B2b ->
+        viewModel.setRmAllQuarterTargets(
+          rmCode = row.rmCode,
+          year = year,
+          q1Cc = q1Cc, q1Corp = q1Corp, q1B2b = q1B2b,
+          q2Cc = q2Cc, q2Corp = q2Corp, q2B2b = q2B2b,
+          q3Cc = q3Cc, q3Corp = q3Corp, q3B2b = q3B2b,
+          q4Cc = q4Cc, q4Corp = q4Corp, q4B2b = q4B2b
+        ) { success, _ ->
           if (success) mentorTargetSettingRow = null
         }
       },

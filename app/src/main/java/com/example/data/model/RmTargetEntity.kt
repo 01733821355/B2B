@@ -6,39 +6,33 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "rm_targets")
 data class RmTargetEntity(
   @PrimaryKey val rmCode: String,
-  val creditCardTarget: Int = 20,
-  val corporateCardTarget: Int = 10,
-  val b2bTarget: Int = 15,
+  val creditCardTarget: Int = 0,
+  val corporateCardTarget: Int = 0,
+  val b2bTarget: Int = 0,
   val updatedAt: Long = System.currentTimeMillis(),
   val targetYear: Int = 2026,
-  val activeQuarter: String = "Q4",
-  val q1CreditCardTarget: Int = 20,
-  val q1CorporateCardTarget: Int = 10,
-  val q1B2bTarget: Int = 15,
-  val q2CreditCardTarget: Int = 20,
-  val q2CorporateCardTarget: Int = 10,
-  val q2B2bTarget: Int = 15,
-  val q3CreditCardTarget: Int = 20,
-  val q3CorporateCardTarget: Int = 10,
-  val q3B2bTarget: Int = 15,
-  val q4CreditCardTarget: Int = 20,
-  val q4CorporateCardTarget: Int = 10,
-  val q4B2bTarget: Int = 15
+  val activeQuarter: String = "Q1",
+  val q1CreditCardTarget: Int = 0,
+  val q1CorporateCardTarget: Int = 0,
+  val q1B2bTarget: Int = 0,
+  val q2CreditCardTarget: Int = 0,
+  val q2CorporateCardTarget: Int = 0,
+  val q2B2bTarget: Int = 0,
+  val q3CreditCardTarget: Int = 0,
+  val q3CorporateCardTarget: Int = 0,
+  val q3B2bTarget: Int = 0,
+  val q4CreditCardTarget: Int = 0,
+  val q4CorporateCardTarget: Int = 0,
+  val q4B2bTarget: Int = 0
 ) {
   val annualCreditCardTarget: Int
-    get() = (q1CreditCardTarget + q2CreditCardTarget + q3CreditCardTarget + q4CreditCardTarget).let {
-      if (it > 0) it else creditCardTarget * 4
-    }
+    get() = (q1CreditCardTarget + q2CreditCardTarget + q3CreditCardTarget + q4CreditCardTarget)
 
   val annualCorporateCardTarget: Int
-    get() = (q1CorporateCardTarget + q2CorporateCardTarget + q3CorporateCardTarget + q4CorporateCardTarget).let {
-      if (it > 0) it else corporateCardTarget * 4
-    }
+    get() = (q1CorporateCardTarget + q2CorporateCardTarget + q3CorporateCardTarget + q4CorporateCardTarget)
 
   val annualB2bTarget: Int
-    get() = (q1B2bTarget + q2B2bTarget + q3B2bTarget + q4B2bTarget).let {
-      if (it > 0) it else b2bTarget * 4
-    }
+    get() = (q1B2bTarget + q2B2bTarget + q3B2bTarget + q4B2bTarget)
 
   fun getTargetForQuarter(quarter: String): Triple<Int, Int, Int> {
     val qUpper = quarter.trim().uppercase()

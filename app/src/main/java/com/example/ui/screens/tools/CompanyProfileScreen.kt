@@ -216,13 +216,13 @@ fun CompanyProfileScreen(
           Spacer(modifier = Modifier.width(4.dp))
           Column {
             Text(
-              text = "Company Profile (কোম্পানি প্রোফাইল)",
+              text = "Company Profile",
               fontSize = 15.sp,
               fontWeight = FontWeight.Bold,
               color = Color.White
             )
             Text(
-              text = "সার্বজনীন ডিরেক্টরি • ${workbook.sheets.size} টি শিট • ${workbook.totalRows} টি কোম্পানি",
+              text = "Directory • ${workbook.sheets.size} Sheets • ${workbook.totalRows} Companies",
               fontSize = 10.5.sp,
               color = Color(0xFFCBD5E1)
             )
@@ -254,7 +254,7 @@ fun CompanyProfileScreen(
               Icon(Icons.Default.Refresh, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
             }
             Spacer(modifier = Modifier.width(4.dp))
-            Text("সিঙ্ক", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Sync", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
           }
 
           if (canManageExcel) {
@@ -267,7 +267,7 @@ fun CompanyProfileScreen(
             ) {
               Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("আপলোড", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+              Text("Upload", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
             }
           }
         }
@@ -290,7 +290,7 @@ fun CompanyProfileScreen(
           onValueChange = { searchQuery = it },
           placeholder = {
             Text(
-              text = "কোম্পানির নাম, ইন্ডাস্ট্রি, এড্রেস বা ফোন লিখুন...",
+              text = "Enter company name, industry, address, or phone...",
               fontSize = 13.sp,
               color = Color.Gray
             )
@@ -326,7 +326,7 @@ fun CompanyProfileScreen(
             selected = selectedTabFilter == "ALL",
             onClick = { selectedTabFilter = "ALL" },
             label = {
-              Text("সকল শিট (${workbook.totalRows})", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+              Text("All Sheets (${workbook.totalRows})", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
             },
             colors = FilterChipDefaults.filterChipColors(
               selectedContainerColor = EblNavyPrimary,
@@ -371,9 +371,9 @@ fun CompanyProfileScreen(
       ) {
         Text(
           text = if (searchQuery.isNotBlank()) {
-            "🔍 '${searchQuery}' এর জন্য ${searchResults.size} টি ফলাফল পাওয়া গেছে"
+            "🔍 Found ${searchResults.size} results for '${searchQuery}'"
           } else {
-            "মোট ${searchResults.size} টি কোম্পানির প্রোফাইল প্রদর্শিত হচ্ছে"
+            "Showing ${searchResults.size} company profiles"
           },
           fontSize = 11.5.sp,
           fontWeight = FontWeight.SemiBold,
@@ -387,7 +387,7 @@ fun CompanyProfileScreen(
             border = BorderStroke(0.5.dp, Color(0xFF86EFAC))
           ) {
             Text(
-              text = "☁️ সার্বজনীন ক্লাউড সক্রিয়",
+              text = "☁️ Cloud Synced",
               fontSize = 9.5.sp,
               color = Color(0xFF15803D),
               fontWeight = FontWeight.Bold,
@@ -396,7 +396,7 @@ fun CompanyProfileScreen(
           }
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = "শিট: ${workbook.fileName.take(18)}",
+            text = "Sheet: ${workbook.fileName.take(18)}",
             fontSize = 10.sp,
             color = Color.Gray,
             maxLines = 1,
@@ -423,14 +423,14 @@ fun CompanyProfileScreen(
           )
           Spacer(modifier = Modifier.height(12.dp))
           Text(
-            text = "কোনো কোম্পানি পাওয়া যায়নি",
+            text = "No companies found",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
             color = Color(0xFF475569)
           )
           Spacer(modifier = Modifier.height(4.dp))
           Text(
-            text = if (searchQuery.isNotBlank()) "বানান পরীক্ষা করুন অথবা অন্য কোনো কীওয়ার্ড দিয়ে খুঁজুন।" else "এই শিটে কোনো ডাটা নেই।",
+            text = if (searchQuery.isNotBlank()) "Check your spelling or try different keywords." else "No data in this sheet.",
             fontSize = 12.sp,
             color = Color.Gray
           )
@@ -452,7 +452,7 @@ fun CompanyProfileScreen(
               val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
               val text = result.headers.zip(result.rowData).joinToString("\n") { "${it.first}: ${it.second}" }
               cm.setPrimaryClip(ClipData.newPlainText("Company Info", text))
-              Toast.makeText(context, "কোম্পানির তথ্য কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "Company information copied!", Toast.LENGTH_SHORT).show()
             },
             onCall = { phone ->
               try {
@@ -480,13 +480,13 @@ fun CompanyProfileScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.CloudUpload, contentDescription = null, tint = EblNavyPrimary)
           Spacer(modifier = Modifier.width(8.dp))
-          Text("কোম্পানি প্রোফাইল শিট ম্যানেজমেন্ট", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+          Text("Company Profile Management", fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
       },
       text = {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
           Text(
-            text = "এডমিন বা মেন্টর হিসেবে আপনি নতুন মাল্টি-ট্যাব এক্সেল ফাইল (.xlsx বা .csv) আপলোড করতে পারেন।",
+            text = "As Admin or Mentor, you can upload new multi-tab Excel files (.xlsx or .csv).",
             fontSize = 12.sp,
             color = Color(0xFF475569)
           )
@@ -503,7 +503,7 @@ fun CompanyProfileScreen(
               Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
               Text(
-                text = "⚠️ নতুন এক্সেল শিট আপলোড করলে পূর্বের ফাইলটি স্বয়ংক্রিয়ভাবে মুছে যাবে এবং নতুন ডাটাবেজ কার্যকর হবে।",
+                text = "⚠️ Uploading a new Excel sheet replaces the previous dataset across the app.",
                 fontSize = 11.5.sp,
                 color = Color(0xFF92400E),
                 fontWeight = FontWeight.SemiBold
@@ -519,12 +519,12 @@ fun CompanyProfileScreen(
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              Text("বর্তমান সক্রিয় ফাইল:", fontSize = 11.sp, color = Color.Gray)
+              Text("Current Active File:", fontSize = 11.sp, color = Color.Gray)
               Text(workbook.fileName, fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
               Spacer(modifier = Modifier.height(4.dp))
-              Text("ট্যাব সংখ্যা: ${workbook.sheets.size} টি • মোট রেকর্ড: ${workbook.totalRows} টি", fontSize = 11.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.SemiBold)
-              Text("আপলোডকারী: ${workbook.uploadedBy}", fontSize = 10.5.sp, color = Color.Gray)
-              Text("আপলোড সময়: ${DateUtils.formatDateTime(workbook.uploadedAt)}", fontSize = 10.sp, color = Color.Gray)
+              Text("Sheets: ${workbook.sheets.size} • Total Records: ${workbook.totalRows}", fontSize = 11.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.SemiBold)
+              Text("Uploaded by: ${workbook.uploadedBy}", fontSize = 10.5.sp, color = Color.Gray)
+              Text("Uploaded at: ${DateUtils.formatDateTime(workbook.uploadedAt)}", fontSize = 10.sp, color = Color.Gray)
             }
           }
 
@@ -538,7 +538,7 @@ fun CompanyProfileScreen(
             ) {
               CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp, color = EblNavyPrimary)
               Spacer(modifier = Modifier.width(10.dp))
-              Text("ফাইল পার্সিং ও সেভ হচ্ছে...", fontSize = 12.sp, color = EblNavyPrimary)
+              Text("Parsing and saving file...", fontSize = 12.sp, color = EblNavyPrimary)
             }
           } else {
             // Upload Button
@@ -552,7 +552,7 @@ fun CompanyProfileScreen(
             ) {
               Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
-              Text("নতুন ফাইল নির্বাচন করুন (.xlsx / .csv)", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+              Text("Select New File (.xlsx / .csv)", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
             }
 
             // Reset to default sample
@@ -562,7 +562,7 @@ fun CompanyProfileScreen(
                   uploadedBy = "${currentUser.name} (${currentUser.role})"
                 ) { success ->
                   if (success) {
-                    Toast.makeText(context, "ডিফল্ট কর্পোরেট ডাটাবেজ রিলোড করা হয়েছে!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Default database reloaded!", Toast.LENGTH_SHORT).show()
                     showAdminUploadDialog = false
                   }
                 }
@@ -572,7 +572,7 @@ fun CompanyProfileScreen(
             ) {
               Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
               Spacer(modifier = Modifier.width(4.dp))
-              Text("ডিফল্ট ডাটাবেজ রিলোড করুন", fontSize = 11.5.sp)
+              Text("Reload Default Database", fontSize = 11.5.sp)
             }
           }
         }
@@ -582,7 +582,7 @@ fun CompanyProfileScreen(
           onClick = { showAdminUploadDialog = false },
           enabled = !isUploading
         ) {
-          Text("বন্ধ করুন")
+          Text("Close")
         }
       }
     )
@@ -645,14 +645,14 @@ fun CompanyProfileScreen(
             val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             val text = res.headers.zip(res.rowData).joinToString("\n") { "${it.first}: ${it.second}" }
             cm.setPrimaryClip(ClipData.newPlainText("Company Details", text))
-            Toast.makeText(context, "তথ্য কপি হয়েছে!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Information copied!", Toast.LENGTH_SHORT).show()
           },
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp)
         ) {
           Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("সব কপি করুন", fontSize = 11.5.sp)
+          Text("Copy All", fontSize = 11.5.sp)
         }
       },
       dismissButton = {
@@ -660,7 +660,7 @@ fun CompanyProfileScreen(
           onClick = { selectedResultForDetails = null },
           shape = RoundedCornerShape(8.dp)
         ) {
-          Text("বন্ধ করুন")
+          Text("Close")
         }
       }
     )
@@ -685,7 +685,7 @@ private fun CompanyResultCard(
   val isSme = sheetUpper.contains("SME")
   val isMnc = sheetUpper.contains("MNC") || sheetUpper.contains("MULTINATIONAL")
 
-  val title = result.rowData.firstOrNull()?.trim()?.ifBlank { "অজ্ঞাত কোম্পানি" } ?: "অজ্ঞাত কোম্পানি"
+  val title = result.rowData.firstOrNull()?.trim()?.ifBlank { "Unknown Company" } ?: "Unknown Company"
   val phone = result.rowData.firstOrNull { it.contains("+880") || (it.startsWith("01") && it.length >= 11) }
   val email = result.rowData.firstOrNull { it.contains("@") && it.contains(".") }
   val address = result.rowData.firstOrNull {
@@ -762,7 +762,7 @@ private fun CompanyResultCard(
               border = BorderStroke(1.dp, Color(0xFF93C5FD))
             ) {
               Text(
-                text = "📈 তালিকাভুক্ত কোম্পানি (Listed)",
+                text = "📈 Listed Company",
                 fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color(0xFF1D4ED8),
@@ -861,11 +861,11 @@ private fun CompanyResultCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.DateRange, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text(agreementEntry?.first ?: "চুক্তি তারিখ", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                  Text(agreementEntry?.first ?: "Agreement Date", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                  text = agreementEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  text = agreementEntry?.second?.ifBlank { "N/A" } ?: "Not specified",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = Color(0xFF065F46)
@@ -877,11 +877,11 @@ private fun CompanyResultCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(12.dp))
                   Spacer(modifier = Modifier.width(4.dp))
-                  Text(headcountEntry?.first ?: "কর্মী সংখ্যা", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                  Text(headcountEntry?.first ?: "Headcount", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
                 }
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                  text = headcountEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  text = headcountEntry?.second?.ifBlank { "N/A" } ?: "Not specified",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = Color(0xFF065F46)
@@ -897,10 +897,10 @@ private fun CompanyResultCard(
             ) {
               // Branch
               Column(modifier = Modifier.weight(1f)) {
-                Text(branchEntry?.first ?: "শাখা / Branch", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                Text(branchEntry?.first ?: "Branch", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                  text = branchEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  text = branchEntry?.second?.ifBlank { "N/A" } ?: "Not specified",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = Color(0xFF065F46)
@@ -909,10 +909,10 @@ private fun CompanyResultCard(
 
               // Assigned RM
               Column(modifier = Modifier.weight(1f)) {
-                Text(rmEntry?.first ?: "দায়িত্বপ্রাপ্ত RM", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
+                Text(rmEntry?.first ?: "Assigned RM", fontSize = 10.sp, color = Color(0xFF047857), fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                  text = rmEntry?.second?.ifBlank { "N/A" } ?: "উল্লেখ নেই",
+                  text = rmEntry?.second?.ifBlank { "N/A" } ?: "Not specified",
                   fontSize = 11.5.sp,
                   fontWeight = FontWeight.SemiBold,
                   color = Color(0xFF065F46)
@@ -1049,7 +1049,7 @@ private fun CompanyResultCard(
 
           if (phone.isNullOrBlank() && email.isNullOrBlank()) {
             Text(
-              text = "${result.rowData.size} টি কলাম তথ্য",
+              text = "${result.rowData.size} Columns",
               fontSize = 10.5.sp,
               color = Color.Gray
             )
@@ -1057,7 +1057,7 @@ private fun CompanyResultCard(
         }
 
         Text(
-          text = "বিস্তারিত দেখুন →",
+          text = "View Details →",
           fontSize = 11.sp,
           color = EblNavyPrimary,
           fontWeight = FontWeight.Bold

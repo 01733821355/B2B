@@ -16,16 +16,16 @@ enum class AppThemeId(
   val motif: String,
   val accentColor: Color
 ) {
-  AUTO("AUTO", "Auto (Seasonal & Day/Night)", "স্বয়ংক্রিয় (ঋতু ও দিন/রাত)", "🌟", "স্মার্ট সিজন ও দিন-রাত্রির মেলবন্ধন", Color(0xFFF59E0B)),
-  DAY("DAY", "Day / Light Mode", "দিন / হালকা মোড", "☀️", "সতেজ কর্পোরেট নেভি ব্লু ও গোল্ড", Color(0xFF0F2C59)),
-  NIGHT("NIGHT", "Night / Dark Mode", "রাত / ডার্ক মোড", "🌙", "চোখের শান্তির জন্য গভীর নীল ও সাইবার গোল্ড", Color(0xFF1E3A8A)),
-  SUMMER("SUMMER", "Summer (Boishakh & Jaishtha)", "গ্রীষ্মকাল (বৈশাখ ও জ্যৈষ্ঠ)", "🌾", "উষ্ণ আমেজ, বৈশাখী মেলা ও সোনালী রোদ", Color(0xFFEA580C)),
-  RAINY("RAINY", "Rainy (Asharh & Shrabon)", "বর্ষাকাল (আষাঢ় ও শ্রাবণ)", "🌧️", "সতেজ বর্ষাধারা, কদম ফুল ও জলনীল আভা", Color(0xFF0891B2)),
-  WINTER("WINTER", "Winter (Mist & Dew)", "শীতকাল (কুয়াশা ও শিশির)", "❄️", "কুয়াশাচ্ছন্ন সকাল, শিশিরবিন্দু ও বরফ নীল", Color(0xFF38BDF8)),
-  PUJA("PUJA", "Sharadiya Durga Puja", "শারদীয় দুর্গোৎসব", "🪔", "কাশফুল, শিউলি ও সিঁদুর রাঙা উৎসবের আমেজ", Color(0xFFB91C1C)),
-  EID("EID", "Eid Celebration", "পবিত্র ঈদ আনন্দ", "✨", "বাঁকা চাঁদ, স্নিগ্ধ পান্না সবুজ ও খুশির ঈদ", Color(0xFF047857)),
-  LANGUAGE_DAY("LANGUAGE_DAY", "International Mother Language Day", "আন্তর্জাতিক মাতৃভাষা দিবস (২১শে ফেব্রুয়ারি)", "🏛️", "রক্তস্নাত একুশে ফেব্রুয়ারি ও শহিদ মিনার স্মারক", Color(0xFFDC2626)),
-  INDEPENDENCE_DAY("INDEPENDENCE_DAY", "Independence & National Day", "মহান স্বাধীনতা ও জাতীয় দিবস (২৬শে মার্চ)", "🇧🇩", "লাল-সবুজের গৌরবময় বাংলাদেশ", Color(0xFF006A4E))
+  AUTO("AUTO", "Auto (Seasonal & Day/Night)", "Auto Mode", "🌟", "Smart Seasonal & Day/Night sync", Color(0xFFF59E0B)),
+  DAY("DAY", "Day / Light Mode", "Day / Light Mode", "☀️", "Corporate Navy Blue & Gold", Color(0xFF0F2C59)),
+  NIGHT("NIGHT", "Night / Dark Mode", "Night / Dark Mode", "🌙", "Deep Navy & Cyber Gold", Color(0xFF1E3A8A)),
+  SUMMER("SUMMER", "Summer (Boishakh & Jaishtha)", "Summer Season", "🌾", "Warm Amber & Golden Sunshine", Color(0xFFEA580C)),
+  RAINY("RAINY", "Rainy (Asharh & Shrabon)", "Monsoon Season", "🌧️", "Fresh Rain & Aqua Cyan", Color(0xFF0891B2)),
+  WINTER("WINTER", "Winter (Mist & Dew)", "Winter Season", "❄️", "Mist, Dew & Frost Blue", Color(0xFF38BDF8)),
+  PUJA("PUJA", "Sharadiya Durga Puja", "Durga Puja Festival", "🪔", "Autumn Festivities & Vermilion", Color(0xFFB91C1C)),
+  EID("EID", "Eid Celebration", "Eid Celebration", "✨", "Emerald Green & Festive Gold", Color(0xFF047857)),
+  LANGUAGE_DAY("LANGUAGE_DAY", "International Mother Language Day", "Language Day", "🏛️", "Memorial Crimson & Black", Color(0xFFDC2626)),
+  INDEPENDENCE_DAY("INDEPENDENCE_DAY", "Independence & National Day", "Independence Day", "🇧🇩", "National Forest Green & Red", Color(0xFF006A4E))
 }
 
 data class AppThemeConfig(
@@ -134,7 +134,7 @@ object ThemeManager {
   val DefaultDayTheme = AppThemeConfig(
     id = AppThemeId.DAY,
     name = "Day / Light Mode",
-    banglaName = "দিন / হালকা মোড",
+    banglaName = "Day / Light Mode",
     primary = Color(0xFF0A192F),
     secondary = Color(0xFF0F2C59),
     tertiary = Color(0xFFC99700),
@@ -147,7 +147,7 @@ object ThemeManager {
   val DefaultNightTheme = AppThemeConfig(
     id = AppThemeId.NIGHT,
     name = "Night / Dark Mode",
-    banglaName = "রাত / ডার্ক মোড",
+    banglaName = "Night / Dark Mode",
     primary = Color(0xFF8AB4F8),
     secondary = Color(0xFF1E3A8A),
     tertiary = Color(0xFFFDE047),
@@ -157,11 +157,11 @@ object ThemeManager {
     isDark = true
   )
 
-  // 3. Summer Theme (গ্রীষ্মকালীন রোদ্দুর ও সোনালী বৈশাখী আভা)
+  // 3. Summer Theme
   val DefaultSummerTheme = AppThemeConfig(
     id = AppThemeId.SUMMER,
     name = "Summer / Boishakh",
-    banglaName = "গ্রীষ্মকাল (বৈশাখ ও জ্যৈষ্ঠ)",
+    banglaName = "Summer Season",
     primary = Color(0xFFC2410C), // Warm Sunset Amber
     secondary = Color(0xFFEA580C),
     tertiary = Color(0xFFB45309), // High-contrast warm amber
@@ -172,11 +172,11 @@ object ThemeManager {
     isDark = false
   )
 
-  // 4. Rainy Theme (বর্ষাকালীন সতেজ মেঘ ও নীলচে জল)
+  // 4. Rainy Theme
   val DefaultRainyTheme = AppThemeConfig(
     id = AppThemeId.RAINY,
     name = "Rainy / Monsoon",
-    banglaName = "বর্ষাকাল (আষাঢ় ও শ্রাবণ)",
+    banglaName = "Monsoon Season",
     primary = Color(0xFF0E7490), // Monsoon Deep Aqua Cyan
     secondary = Color(0xFF155E75),
     tertiary = Color(0xFF0369A1), // Sky rain blue
@@ -187,11 +187,11 @@ object ThemeManager {
     isDark = false
   )
 
-  // 5. Winter Theme (শীতকালীন কুয়াশা ও শিশির ভেজা বরফ নীল)
+  // 5. Winter Theme
   val DefaultWinterTheme = AppThemeConfig(
     id = AppThemeId.WINTER,
     name = "Winter / Fog & Frost",
-    banglaName = "শীতকাল (কুয়াশা ও শিশির)",
+    banglaName = "Winter Season",
     primary = Color(0xFF1E293B), // Slate mist deep
     secondary = Color(0xFF334155),
     tertiary = Color(0xFF0284C7), // Crisp frost blue
@@ -202,14 +202,14 @@ object ThemeManager {
     isDark = false
   )
 
-  // 6. Sharadiya Durga Puja Theme (কাশফুল, শিউলি ও সিঁদুর রাঙা উৎসব)
+  // 6. Sharadiya Durga Puja Theme
   val DefaultPujaTheme = AppThemeConfig(
     id = AppThemeId.PUJA,
     name = "Sharadiya Durga Puja",
-    banglaName = "শারদীয় দুর্গোৎসব",
+    banglaName = "Durga Puja Festival",
     primary = Color(0xFF991B1B), // Festive Vermilion Red
     secondary = Color(0xFF7F1D1D),
-    tertiary = Color(0xFFB45309), // Marigold Gold (deep enough to be crisp)
+    tertiary = Color(0xFFB45309), // Marigold Gold
     background = Color(0xFFFFFBEB), // Festive warm cream
     surface = Color(0xFFFFFFFF),
     onBackground = Color(0xFF450A0A),
@@ -217,11 +217,11 @@ object ThemeManager {
     isDark = false
   )
 
-  // 7. Eid Celebration Theme (স্নিগ্ধ চাঁদের সবুজ ও উৎসবের সোনালী)
+  // 7. Eid Celebration Theme
   val DefaultEidTheme = AppThemeConfig(
     id = AppThemeId.EID,
     name = "Eid Celebration",
-    banglaName = "পবিত্র ঈদ আনন্দ",
+    banglaName = "Eid Celebration",
     primary = Color(0xFF065F46), // Crescent Emerald Green
     secondary = Color(0xFF064E3B),
     tertiary = Color(0xFFB45309), // Royal festive gold
@@ -232,11 +232,11 @@ object ThemeManager {
     isDark = false
   )
 
-  // 8. International Mother Language Day Theme (২১শে ফেব্রুয়ারি রক্তস্নাত শহিদ মিনার স্মারক)
+  // 8. International Mother Language Day Theme
   val DefaultLanguageDayTheme = AppThemeConfig(
     id = AppThemeId.LANGUAGE_DAY,
     name = "Language Day (21st Feb)",
-    banglaName = "আন্তর্জাতিক মাতৃভাষা দিবস",
+    banglaName = "Language Day",
     primary = Color(0xFF18181B), // Memorial deep charcoal black
     secondary = Color(0xFF27272A),
     tertiary = Color(0xFFB91C1C), // Shahid Minar Crimson Red
@@ -247,11 +247,11 @@ object ThemeManager {
     isDark = false
   )
 
-  // 9. Independence & National Day Theme (মহান স্বাধীনতা ও জাতীয় দিবস - লাল সবুজের বাংলাদেশ)
+  // 9. Independence & National Day Theme
   val DefaultIndependenceDayTheme = AppThemeConfig(
     id = AppThemeId.INDEPENDENCE_DAY,
     name = "Independence Day (26th Mar)",
-    banglaName = "মহান স্বাধীনতা ও জাতীয় দিবস",
+    banglaName = "Independence Day",
     primary = Color(0xFF006A4E), // Bangladesh Flag National Forest Green
     secondary = Color(0xFF04523B),
     tertiary = Color(0xFFB91C1C), // High-contrast deep flag red

@@ -1043,7 +1043,7 @@ fun CustomerFileFormScreen(
               ) {
                 Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("ক্যামেরা", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
+                Text("Camera", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7))
               }
 
               OutlinedButton(
@@ -1058,7 +1058,7 @@ fun CustomerFileFormScreen(
               ) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("ছবি", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                Text("Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
               }
 
               OutlinedButton(
@@ -1072,7 +1072,7 @@ fun CustomerFileFormScreen(
               ) {
                 Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("ডকুমেন্ট", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+                Text("Document", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
               }
             }
 
@@ -1324,7 +1324,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("PDF / ফাইল", fontSize = 11.sp)
+            Text("PDF / File", fontSize = 11.sp)
           }
 
           Button(
@@ -1336,7 +1336,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(14.dp))
             Spacer(modifier = Modifier.width(4.dp))
-            Text("ছবি / ফটো", fontSize = 11.sp)
+            Text("Photo / Image", fontSize = 11.sp)
           }
         }
 
@@ -1521,7 +1521,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.PhotoCamera, contentDescription = null, tint = Color(0xFF9333EA), modifier = Modifier.size(15.dp))
             Spacer(modifier = Modifier.width(3.dp))
-            Text("ক্যামেরা", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9333EA))
+            Text("Camera", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9333EA))
           }
 
           OutlinedButton(
@@ -1536,7 +1536,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(15.dp))
             Spacer(modifier = Modifier.width(3.dp))
-            Text("CPV ছবি", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
+            Text("CPV Photo", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7E22CE))
           }
 
           OutlinedButton(
@@ -1550,7 +1550,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.Description, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
             Spacer(modifier = Modifier.width(3.dp))
-            Text("CPV ফাইল", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+            Text("CPV Doc", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
           }
         }
 
@@ -1773,7 +1773,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("📷 ক্যামেরা দিয়ে ছবি তুলুন (Take Photo)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Text("📷 Take Photo with Camera", fontSize = 12.sp, fontWeight = FontWeight.Bold)
           }
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -1790,7 +1790,7 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("গ্যালারি থেকে ছবি নির্বাচন করুন (Gallery)", fontSize = 12.sp)
+            Text("Pick from Gallery", fontSize = 12.sp)
           }
 
           Spacer(modifier = Modifier.height(8.dp))
@@ -1807,11 +1807,11 @@ fun CustomerFileFormScreen(
           ) {
             Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("PDF / Word / ফাইল নির্বাচন করুন (Files)", fontSize = 12.sp)
+            Text("Select Document / PDF File", fontSize = 12.sp)
           }
 
           Spacer(modifier = Modifier.height(14.dp))
-          Text("বা ম্যানুয়ালি নাম লিখুন:", fontSize = 11.sp, color = Color.Gray)
+          Text("Or enter document name manually:", fontSize = 11.sp, color = Color.Gray)
           Spacer(modifier = Modifier.height(4.dp))
           VoiceInputField(
             value = fileNameInput,
@@ -1840,7 +1840,7 @@ fun CustomerFileFormScreen(
           },
           colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669))
         ) {
-          Text("সংরক্ষণ করুন")
+          Text("Save")
         }
       },
       dismissButton = {

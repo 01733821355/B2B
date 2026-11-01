@@ -274,6 +274,62 @@ class EblRepository(
     return setRmQuarterTargets(rmCode, q, 2026, creditCardTarget, corporateCardTarget, b2bTarget)
   }
 
+  suspend fun setRmAllQuarterTargets(
+    rmCode: String,
+    year: Int = 2026,
+    q1Cc: Int, q1Corp: Int, q1B2b: Int,
+    q2Cc: Int, q2Corp: Int, q2B2b: Int,
+    q3Cc: Int, q3Corp: Int, q3B2b: Int,
+    q4Cc: Int, q4Corp: Int, q4B2b: Int
+  ): Result<Unit> = withContext(Dispatchers.IO) {
+    val now = DateUtils.currentDhakaMillis()
+    val cleanRm = rmCode.trim().uppercase()
+    val curQ = DateUtils.getCurrentQuarter()
+    val (curCc, curCorp, curB2b) = when (curQ) {
+      "Q1" -> Triple(q1Cc, q1Corp, q1B2b)
+      "Q2" -> Triple(q2Cc, q2Corp, q2B2b)
+      "Q3" -> Triple(q3Cc, q3Corp, q3B2b)
+      else -> Triple(q4Cc, q4Corp, q4B2b)
+    }
+    val updated = RmTargetEntity(
+      rmCode = cleanRm,
+      creditCardTarget = curCc,
+      corporateCardTarget = curCorp,
+      b2bTarget = curB2b,
+      targetYear = year,
+      activeQuarter = curQ,
+      q1CreditCardTarget = q1Cc,
+      q1CorporateCardTarget = q1Corp,
+      q1B2bTarget = q1B2b,
+      q2CreditCardTarget = q2Cc,
+      q2CorporateCardTarget = q2Corp,
+      q2B2bTarget = q2B2b,
+      q3CreditCardTarget = q3Cc,
+      q3CorporateCardTarget = q3Corp,
+      q3B2bTarget = q3B2b,
+      q4CreditCardTarget = q4Cc,
+      q4CorporateCardTarget = q4Corp,
+      q4B2bTarget = q4B2b,
+      updatedAt = now
+    )
+    database.rmTargetDao().insertTarget(updated)
+    try {
+      database.appSettingDao().insertSetting(
+        com.example.data.model.AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString())
+      )
+    } catch (_: Exception) {}
+
+    // Live sync to Google Sheets for each quarter
+    try {
+      syncTargetUpsertToGoogleSheets(cleanRm, "Q1", year, q1Cc, q1Corp, q1B2b)
+      syncTargetUpsertToGoogleSheets(cleanRm, "Q2", year, q2Cc, q2Corp, q2B2b)
+      syncTargetUpsertToGoogleSheets(cleanRm, "Q3", year, q3Cc, q3Corp, q3B2b)
+      syncTargetUpsertToGoogleSheets(cleanRm, "Q4", year, q4Cc, q4Corp, q4B2b)
+    } catch (_: Exception) {}
+
+    Result.success(Unit)
+  }
+
   suspend fun setRmQuarterTargets(
     rmCode: String,
     quarter: String,
@@ -3128,6 +3184,9 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString(), "APP", now)
     )
+    applicationScope.launch {
+      syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b)
+    }
   }
 
   fun getRmAssignedCriteriaFlow(rmCode: String): Flow<List<String>> {
@@ -4792,6 +4851,10 @@ class EblRepository(
     val delChatsSetting = database.appSettingDao().getSetting("deleted_chat_ids")?.settingValue ?: ""
     val deletedChatIds = delChatsSetting.split(",").map { it.trim().uppercase() }.filter { it.isNotBlank() }.toSet()
 
+    val currentUser = authRepository.currentUser.value
+    val dbLastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue?.trim()?.uppercase() ?: ""
+    val userRmCode = (currentUser?.rmCode?.trim()?.uppercase() ?: "").ifBlank { dbLastRm }
+
     for (i in 0 until sheetChatJson.length()) {
       val obj = sheetChatJson.optJSONObject(i) ?: continue
       val id = obj.optString("id").trim()
@@ -4813,6 +4876,7 @@ class EblRepository(
 
       if (messageType == "EVENT" && deletedEventIds.any { dEvt -> messageText.contains(dEvt, ignoreCase = true) }) continue
 
+      val isExisting = database.communicationDao().getMessageById(id) != null
       val entity = com.example.data.model.ChatMessageEntity(
         id = id,
         senderRmCode = senderRmCode,
@@ -4830,6 +4894,32 @@ class EblRepository(
       )
       database.communicationDao().insertMessage(entity)
       count++
+
+      // High-priority device notification for incoming chat messages & photos
+      val isInitialSyncDone = database.appSettingDao().getSetting("is_initial_sync_done")?.settingValue == "true"
+      val isRecent = (now - timestamp) < 24 * 60 * 60 * 1000L
+      val notifKey = "chat_msg_$id"
+      val isForMe = recipientRmCode.isNullOrBlank() || recipientRmCode.equals(userRmCode, ignoreCase = true)
+      if (!isExisting && isRecent && senderRmCode != userRmCode && isForMe) {
+        context?.let { ctx ->
+          if (!isInitialSyncDone) {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+          } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+            val title = if (recipientRmCode.isNullOrBlank()) "Team Hub: $senderName ($senderRole)" else "$senderName ($senderRole)"
+            val body = when {
+              messageType == "PHOTO" -> "📷 [Photo] ${messageText.ifBlank { "Sent a photo" }}"
+              messageType == "EVENT" -> "📅 [Event Alert] $messageText"
+              else -> messageText
+            }
+            NotificationHelper.sendIncomingSmsNotification(
+              context = ctx,
+              senderTitle = title,
+              messageText = body
+            )
+          }
+        }
+      }
     }
     return count
   }

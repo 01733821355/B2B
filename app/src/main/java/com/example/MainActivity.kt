@@ -98,6 +98,7 @@ class MainActivity : FragmentActivity() {
     enableEdgeToEdge()
     NotificationHelper.createNotificationChannels(applicationContext)
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
+    com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 20_000L)
     setContent {
       val activeThemeConfig by viewModel.activeThemeConfig.collectAsState()
       val universalFontStyle by viewModel.universalFontStyle.collectAsState()
@@ -117,6 +118,7 @@ class MainActivity : FragmentActivity() {
     try {
       com.example.util.BackgroundSyncWorker.triggerImmediateSync(applicationContext)
       com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
+      com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 15_000L)
     } catch (_: Exception) {}
   }
 }

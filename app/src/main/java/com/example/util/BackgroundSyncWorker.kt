@@ -100,9 +100,10 @@ class BackgroundSyncWorker(
 
         WorkManager.getInstance(context).enqueueUniqueWork(
           FAST_WORK_NAME,
-          ExistingWorkPolicy.REPLACE,
+          ExistingWorkPolicy.KEEP,
           fastWork
         )
+        SyncAlarmReceiver.scheduleNextAlarm(context, 60_000L)
       } catch (_: Exception) {}
     }
 
