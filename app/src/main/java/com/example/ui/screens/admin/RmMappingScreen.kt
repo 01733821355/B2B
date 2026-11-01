@@ -81,6 +81,7 @@ fun RmMappingScreen(
   val allMentors by viewModel.allMentors.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
   val allTargets by viewModel.allTargets.collectAsState()
+  val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
   var searchRmQuery by remember { mutableStateOf("") }
   var selectedRoleTab by remember { mutableStateOf("ALL") } // ALL, RM, MENTOR
 
@@ -419,6 +420,7 @@ fun RmMappingScreen(
 
             // Targets summary for this RM
             val thisTarget = allTargets.find { it.rmCode == rm.rmCode }
+            val perfRow = rmPerformanceList.find { it.rmCode == rm.rmCode }
             Surface(
               shape = RoundedCornerShape(6.dp),
               color = Color(0xFFF1F5F9),
@@ -431,8 +433,26 @@ fun RmMappingScreen(
                 verticalAlignment = Alignment.CenterVertically
               ) {
                 Column {
+                  val curQ = DateUtils.getCurrentQuarter()
+                  val customQuarter = perfRow?.allQuarterCustomTargets?.get(curQ) ?: emptyMap()
+                  val customAnnual = perfRow?.allQuarterCustomTargets?.get("ALL") ?: emptyMap()
+                  val standardSet = setOf("Credit Card", "Corporate Card", "B2B")
+                  val customSuffix = (customQuarter.keys + customAnnual.keys + (perfRow?.assignedCriteria ?: emptyList()))
+                    .distinct()
+                    .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
+                    .mapNotNull { critName ->
+                      val qVal = customQuarter[critName] ?: 0
+                      val yrVal = customAnnual[critName] ?: (
+                        (perfRow?.allQuarterCustomTargets?.get("Q1")?.get(critName) ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q2")?.get(critName) ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q3")?.get(critName) ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q4")?.get(critName) ?: 0)
+                      )
+                      if (qVal > 0 || yrVal > 0) "$critName: Qtr $qVal • Yr $yrVal" else null
+                    }.joinToString(" • ")
+
                   Text(
-                    text = "Qtr Target: CC ${thisTarget?.creditCardTarget ?: 20} • Corp ${thisTarget?.corporateCardTarget ?: 10} • B2B ${thisTarget?.b2bTarget ?: 15}",
+                    text = "Qtr Target: CC ${thisTarget?.creditCardTarget ?: 20} • Corp ${thisTarget?.corporateCardTarget ?: 10} • B2B ${thisTarget?.b2bTarget ?: 15}" + (if (customSuffix.isNotBlank()) " • $customSuffix" else ""),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                     color = EblNavyDark
@@ -781,21 +801,22 @@ fun RmMappingScreen(
     var corpTargetInput by remember { mutableStateOf((existingTarget?.corporateCardTarget ?: 10).toString()) }
     var b2bTargetInput by remember { mutableStateOf((existingTarget?.b2bTarget ?: 15).toString()) }
 
+    val dialogRmPerf = rmPerformanceList.find { it.rmCode == settingTargetsRm!!.rmCode }
     val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
-    val customTargets by viewModel.getRmCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyMap())
-    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyMap())
-    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(settingTargetsRm!!.rmCode).collectAsState(initial = emptyList())
+    val customTargets by viewModel.getRmCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets?.get("ALL") ?: emptyMap())
+    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets ?: emptyMap())
+    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.assignedCriteria ?: emptyList())
 
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = settingTargetsRm!!.rmCode,
       rmName = settingTargetsRm!!.name,
       currentTarget = existingTarget,
       allCriteria = targetCriteria,
-      assignedCriteria = assignedCriteria,
+      assignedCriteria = if (assignedCriteria.isNotEmpty()) assignedCriteria else (dialogRmPerf?.assignedCriteria ?: emptyList()),
       onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
       onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
-      initialCustomTargets = customTargets,
-      allQuarterCustomTargets = allQuarterCustomTargets,
+      initialCustomTargets = if (customTargets.isNotEmpty()) customTargets else (dialogRmPerf?.allQuarterCustomTargets?.get("ALL") ?: emptyMap()),
+      allQuarterCustomTargets = if (allQuarterCustomTargets.isNotEmpty()) allQuarterCustomTargets else (dialogRmPerf?.allQuarterCustomTargets ?: emptyMap()),
       onDismiss = { settingTargetsRm = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(settingTargetsRm!!.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
@@ -822,6 +843,11 @@ fun RmMappingScreen(
       },
       onSaveAssignedCriteria = { assignedList ->
         viewModel.saveRmAssignedCriteria(settingTargetsRm!!.rmCode, assignedList)
+      },
+      onSaveAllTargetsUnified = { year, quarterlyMap, assignedList ->
+        viewModel.saveAllQuarterTargetsUnified(settingTargetsRm!!.rmCode, year, quarterlyMap, assignedList) { success ->
+          if (success) settingTargetsRm = null
+        }
       }
     )
   }

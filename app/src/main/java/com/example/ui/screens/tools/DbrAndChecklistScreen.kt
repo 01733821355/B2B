@@ -3724,9 +3724,9 @@ fun DocumentChecklistSenderTab(
             border = BorderStroke(1.dp, Color(0xFFBFDBFE))
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              Text("২. লাইভ Google Gemini AI অনুবাদ (ঐচ্ছিক):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E40AF))
+              Text("2. Live Google Gemini AI Translation (Optional):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF1E40AF))
               Spacer(modifier = Modifier.height(2.dp))
-              Text("আপনি যদি ক্লাউড থেকে লাইভ AI জেনারেশন চান, তবে Google AI Studio (aistudio.google.com) থেকে একটি ফ্রি API Key এনে প্রজেক্ট সিক্রেটে দিতে পারেন। তবে কোনো কী না থাকলেও অফলাইন ডিকশনারি প্রতিটি ব্যাংকিং শব্দ শতভাগ নির্ভুলভাবে বাংলায় রূপান্তর করে দেয়।", fontSize = 11.sp, color = Color(0xFF1D4ED8))
+              Text("If you want live AI translation from the cloud, you can add a free API Key from Google AI Studio (aistudio.google.com) to project secrets. Even without a key, the offline dictionary provides 100% accurate banking terminology.", fontSize = 11.sp, color = Color(0xFF1D4ED8))
             }
           }
         }
@@ -3737,7 +3737,7 @@ fun DocumentChecklistSenderTab(
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
           shape = RoundedCornerShape(8.dp)
         ) {
-          Text("বুঝেছি")
+          Text("Got It")
         }
       }
     )
@@ -3849,7 +3849,7 @@ fun AgeCalculatorTab(
               color = Color(0xFF1E3A8A)
             )
             Text(
-              text = "যেকোনো ফরম্যাটে জন্মতারিখ লিখুন: 25 10 1997 বা 25 10 97 -> স্বয়ংক্রিয়ভাবে রূপান্তর ও ব্যাংকিং যোগ্যতা হিসাব হবে।",
+              text = "Enter birth date in any format (e.g., 25 10 1997 or 25 10 97) to automatically calculate age and banking eligibility.",
               fontSize = 11.sp,
               color = Color(0xFF2563EB)
             )
@@ -3872,7 +3872,7 @@ fun AgeCalculatorTab(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "১. জন্মতারিখ প্রদান (Enter Birth Date)",
+              text = "1. Enter Birth Date",
               fontSize = 13.5.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
@@ -3893,7 +3893,7 @@ fun AgeCalculatorTab(
           OutlinedTextField(
             value = dateInput,
             onValueChange = { dateInput = it },
-            placeholder = { Text("যেমন: 25 10 1997 বা 25 10 97 বা 25/10/1997", fontSize = 12.sp) },
+            placeholder = { Text("e.g. 25 10 1997 or 25 10 97 or 25/10/1997", fontSize = 12.sp) },
             leadingIcon = {
               Icon(Icons.Default.CalendarToday, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
             },
@@ -3937,7 +3937,7 @@ fun AgeCalculatorTab(
                   Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF059669), modifier = Modifier.size(16.dp))
                   Spacer(modifier = Modifier.width(6.dp))
                   Text(
-                    text = "গৃহীত জন্মতারিখ: ${parsedBirth.formattedSlash}",
+                    text = "Parsed Birth Date: ${parsedBirth.formattedSlash}",
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.5.sp,
                     color = Color(0xFF065F46)
@@ -3952,7 +3952,7 @@ fun AgeCalculatorTab(
                 // If user entered a 2-digit year (e.g. 97 -> 1997)
                 if (dateInput.contains("97") || dateInput.split(Regex("[^0-9]+")).any { it.length == 2 && (it.toIntOrNull() ?: 0) > 31 }) {
                   Text(
-                    text = "💡 ২ সংখ্যার বছর স্বয়ংক্রিয়ভাবে ${parsedBirth.year} হিসেবে ধরা হয়েছে।",
+                    text = "💡 2-digit year automatically interpreted as ${parsedBirth.year}.",
                     fontSize = 10.sp,
                     color = Color(0xFF0F766E),
                     fontWeight = FontWeight.Medium,
@@ -3975,7 +3975,7 @@ fun AgeCalculatorTab(
                 Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                  text = "সঠিক ফরম্যাটে জন্মতারিখ লিখুন (যেমন: 25 10 1997 বা 25 10 97)",
+                  text = "Please enter date in a valid format (e.g., 25 10 1997 or 25 10 97)",
                   fontSize = 11.5.sp,
                   color = Color(0xFFB91C1C)
                 )
@@ -3987,7 +3987,7 @@ fun AgeCalculatorTab(
 
           // Quick Preset Chips (1-tap input)
           Text(
-            text = "নমুনা ফরম্যাটে ১ ট্যাপে পরীক্ষা করুন (Tap to try):",
+            text = "Tap sample to test:",
             fontSize = 10.5.sp,
             color = Color.Gray,
             fontWeight = FontWeight.Medium
@@ -4057,7 +4057,7 @@ fun AgeCalculatorTab(
                 onCheckedChange = { useCustomAsOn = it },
                 colors = CheckboxDefaults.colors(checkedColor = EblNavyPrimary)
               )
-              Text("হিসাবের নির্দিষ্ট তারিখ দিন (Default: Today)", fontSize = 11.5.sp, color = Color(0xFF334155))
+              Text("Specify Calculation Date (Default: Today)", fontSize = 11.5.sp, color = Color(0xFF334155))
             }
           }
 
@@ -4065,8 +4065,8 @@ fun AgeCalculatorTab(
             OutlinedTextField(
               value = asOnDateInput,
               onValueChange = { asOnDateInput = it },
-              placeholder = { Text("যেমন: 31 12 2026", fontSize = 11.5.sp) },
-              label = { Text("হিসাবের রেফারেন্স তারিখ", fontSize = 11.sp) },
+              placeholder = { Text("e.g. 31 12 2026", fontSize = 11.5.sp) },
+              label = { Text("Calculation Reference Date", fontSize = 11.sp) },
               modifier = Modifier.fillMaxWidth(),
               singleLine = true
             )
@@ -4092,7 +4092,7 @@ fun AgeCalculatorTab(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = if (customerNameInput.isNotBlank()) "গ্রাহক: $customerNameInput" else "গ্রাহকের নাম যুক্ত করতে পারেন:",
+                text = if (customerNameInput.isNotBlank()) "Customer: $customerNameInput" else "Optional: Link a customer:",
                 fontSize = 11.sp,
                 color = if (customerNameInput.isNotBlank()) Color(0xFF047857) else Color.Gray,
                 fontWeight = FontWeight.SemiBold
@@ -4155,7 +4155,7 @@ fun AgeCalculatorTab(
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "বর্তমান সঠিক বয়স (Exact Age)",
+                text = "Exact Current Age",
                 color = EblGold,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
@@ -4177,16 +4177,10 @@ fun AgeCalculatorTab(
 
             // Main Age Display
             Text(
-              text = "${ageResult.years} বছর, ${ageResult.months} মাস, ${ageResult.days} দিন",
-              color = Color.White,
-              fontSize = 21.sp,
-              fontWeight = FontWeight.ExtraBold
-            )
-            Text(
               text = "${ageResult.years} Years, ${ageResult.months} Months, ${ageResult.days} Days",
-              color = Color(0xFFCBD5E1),
-              fontSize = 12.sp,
-              fontWeight = FontWeight.Medium
+              color = Color.White,
+              fontSize = 20.sp,
+              fontWeight = FontWeight.ExtraBold
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -4206,13 +4200,13 @@ fun AgeCalculatorTab(
                 Spacer(modifier = Modifier.width(8.dp))
                 Column {
                   Text(
-                    text = "পরবর্তী জন্মদিন: আর ${ageResult.nextBirthdayMonths} মাস ${ageResult.nextBirthdayDays} দিন পর",
+                    text = "Next Birthday: in ${ageResult.nextBirthdayMonths} months ${ageResult.nextBirthdayDays} days",
                     color = Color.White,
                     fontSize = 11.5.sp,
                     fontWeight = FontWeight.Bold
                   )
                   Text(
-                    text = "দিনটি হবে: ${ageResult.nextBirthdayDayOfWeek}",
+                    text = "Day: ${ageResult.nextBirthdayDayOfWeek}",
                     color = EblGold,
                     fontSize = 10.5.sp
                   )
@@ -4232,7 +4226,7 @@ fun AgeCalculatorTab(
         ) {
           Column(modifier = Modifier.padding(14.dp)) {
             Text(
-              text = "🏦 ইবিএল ক্রেডিট ও লোন যোগ্যতা যাচাই (Credit Eligibility)",
+              text = "🏦 Banking Credit & Loan Eligibility",
               fontSize = 13.5.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
@@ -4264,7 +4258,7 @@ fun AgeCalculatorTab(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                      text = "Credit Card (ক্রেডিট কার্ড)",
+                      text = "Credit Card",
                       fontSize = 12.5.sp,
                       fontWeight = FontWeight.Bold,
                       color = if (ageResult.isEligibleCreditCard) Color(0xFF065F46) else Color(0xFF991B1B)
@@ -4290,7 +4284,7 @@ fun AgeCalculatorTab(
                   color = if (ageResult.isEligibleCreditCard) Color(0xFF047857) else Color(0xFFB91C1C)
                 )
                 Text(
-                  text = "• স্ট্যান্ডার্ড বয়স নীতি: ২১ থেকে ৬০ বছর (স্যালারীড) / ৬৫ বছর (বিজনেস)",
+                  text = "• Standard age policy: 21 to 60 years (Salaried) / 65 years (Business)",
                   fontSize = 9.5.sp,
                   color = Color.Gray,
                   modifier = Modifier.padding(top = 2.dp)
@@ -4325,7 +4319,7 @@ fun AgeCalculatorTab(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                      text = "Retail Loan (ব্যক্তিগত, অটো ও হোম লোন)",
+                      text = "Retail Loan (Personal, Auto & Home Loan)",
                       fontSize = 12.5.sp,
                       fontWeight = FontWeight.Bold,
                       color = if (ageResult.isEligibleLoan) Color(0xFF1E3A8A) else Color(0xFF991B1B)
@@ -4351,7 +4345,7 @@ fun AgeCalculatorTab(
                   color = if (ageResult.isEligibleLoan) Color(0xFF1D4ED8) else Color(0xFFB91C1C)
                 )
                 Text(
-                  text = "• বয়স সীমা: Personal Loan (২১-৬০), Auto Loan (২১-৬৫), Home Loan (২১-৭০)",
+                  text = "• Age limits: Personal Loan (21-60), Auto Loan (21-65), Home Loan (21-70)",
                   fontSize = 9.5.sp,
                   color = Color.Gray,
                   modifier = Modifier.padding(top = 2.dp)
@@ -4371,7 +4365,7 @@ fun AgeCalculatorTab(
         ) {
           Column(modifier = Modifier.padding(14.dp)) {
             Text(
-              text = "📊 মোট অতিক্রান্ত জীবনকাল (Life Duration Stats)",
+              text = "📊 Life Duration Statistics",
               fontSize = 13.sp,
               fontWeight = FontWeight.Bold,
               color = EblNavyDark
@@ -4391,7 +4385,7 @@ fun AgeCalculatorTab(
                   modifier = Modifier.padding(10.dp),
                   horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                  Text(text = "মোট দিন", fontSize = 10.sp, color = Color.Gray)
+                  Text(text = "Total Days", fontSize = 10.sp, color = Color.Gray)
                   Text(
                     text = "${ageResult.totalDays}",
                     fontSize = 14.sp,
@@ -4411,7 +4405,7 @@ fun AgeCalculatorTab(
                   modifier = Modifier.padding(10.dp),
                   horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                  Text(text = "মোট সপ্তাহ", fontSize = 10.sp, color = Color.Gray)
+                  Text(text = "Total Weeks", fontSize = 10.sp, color = Color.Gray)
                   Text(
                     text = "${ageResult.totalWeeks}",
                     fontSize = 14.sp,
@@ -4431,7 +4425,7 @@ fun AgeCalculatorTab(
                   modifier = Modifier.padding(10.dp),
                   horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                  Text(text = "মোট মাস", fontSize = 10.sp, color = Color.Gray)
+                  Text(text = "Total Months", fontSize = 10.sp, color = Color.Gray)
                   Text(
                     text = "${ageResult.totalMonths}",
                     fontSize = 14.sp,
@@ -4447,7 +4441,7 @@ fun AgeCalculatorTab(
 
       // Actions: Copy & Share Assessment
       item {
-        val custPrefix = if (customerNameInput.isNotBlank()) "গ্রাহক: $customerNameInput\n" else ""
+        val custPrefix = if (customerNameInput.isNotBlank()) "Customer: $customerNameInput\n" else ""
         val fullReportText = "$custPrefix${ageResult.fullSummaryText}\n\nAssessed by: ${currentUser.name} (${currentUser.rmCode})"
 
         Row(
@@ -4459,14 +4453,14 @@ fun AgeCalculatorTab(
               val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
               val clip = ClipData.newPlainText("Age Assessment", fullReportText)
               clipboard?.setPrimaryClip(clip)
-              Toast.makeText(context, "✓ বয়স ও যোগ্যতার রিপোর্ট কপি করা হয়েছে!", Toast.LENGTH_SHORT).show()
+              Toast.makeText(context, "✓ Age & Eligibility report copied!", Toast.LENGTH_SHORT).show()
             },
             shape = RoundedCornerShape(8.dp),
             modifier = Modifier.weight(1f).height(46.dp)
           ) {
             Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("কপি করুন", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
+            Text("Copy Report", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
           }
 
           Button(
@@ -4479,7 +4473,7 @@ fun AgeCalculatorTab(
                 }
                 context.startActivity(Intent.createChooser(sendIntent, "Share Age Assessment"))
               } catch (e: Exception) {
-                Toast.makeText(context, "শেয়ার করতে সমস্যা: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Share failed: ${e.message}", Toast.LENGTH_SHORT).show()
               }
             },
             shape = RoundedCornerShape(8.dp),
@@ -4488,7 +4482,7 @@ fun AgeCalculatorTab(
           ) {
             Icon(Icons.Default.Share, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("শেয়ার করুন", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("Share Report", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = Color.White)
           }
         }
         Spacer(modifier = Modifier.height(20.dp))

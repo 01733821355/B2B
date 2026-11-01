@@ -3103,7 +3103,8 @@ class EblRepository(
 
   suspend fun saveRmCustomTargetsAllQuarters(
     rmCode: String,
-    quarterlyTargets: Map<String, Map<String, Int>>
+    quarterlyTargets: Map<String, Map<String, Int>>,
+    assignedCriteria: List<String>? = null
   ) = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
     val cleanRm = rmCode.trim().uppercase()
@@ -3137,6 +3138,20 @@ class EblRepository(
       )
     )
     applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson) }
+
+    if (assignedCriteria != null) {
+      val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
+      val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+      database.appSettingDao().insertOrUpdateSetting(
+        AppSettingEntity(
+          settingKey = assignedKey,
+          settingValue = joined,
+          updatedBy = currentUser?.rmCode ?: "ADMIN",
+          updatedAt = now
+        )
+      )
+      applicationScope.launch { syncSettingUpsertToGoogleSheets(assignedKey, joined) }
+    }
 
     // Also update RmTargetEntity with all 4 quarters targets
     val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)

@@ -86,7 +86,9 @@ data class RmPerformanceRow(
   val rmCode: String,
   val rmName: String,
   val stats: KpiStats,
-  val target: com.example.data.model.RmTargetEntity? = null
+  val target: com.example.data.model.RmTargetEntity? = null,
+  val allQuarterCustomTargets: Map<String, Map<String, Int>> = emptyMap(),
+  val assignedCriteria: List<String> = emptyList()
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -380,17 +382,49 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     authorizedFilesFlow,
     allRms,
     selectedTimeFilter,
-    allTargets
-  ) { files, rms, timeFilter, targets ->
+    allTargets,
+    database.appSettingDao().getAllSettingsFlow()
+  ) { files, rms, timeFilter, targets, allSettings ->
     val activeFiles = files.filter { !it.isDeleted && DateUtils.matchesTimeFilter(it.updatedAt, timeFilter) }
     rms.map { rm ->
+      val cleanRm = rm.rmCode.trim().uppercase()
       val rmFiles = activeFiles.filter { it.assignedRmCode == rm.rmCode }
       val target = targets.find { it.rmCode == rm.rmCode }
+
+      // Parse custom targets for this RM
+      val customAllJson = allSettings.find { it.settingKey == "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm" }?.settingValue
+      val customQuarterMap = mutableMapOf<String, MutableMap<String, Int>>()
+      listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q -> customQuarterMap[q] = mutableMapOf() }
+      if (!customAllJson.isNullOrBlank()) {
+        try {
+          val obj = org.json.JSONObject(customAllJson)
+          val keys = obj.keys()
+          while (keys.hasNext()) {
+            val qk = keys.next().uppercase()
+            val inner = obj.optJSONObject(qk)
+            if (inner != null) {
+              val map = mutableMapOf<String, Int>()
+              val ik = inner.keys()
+              while (ik.hasNext()) {
+                val k = ik.next()
+                map[k] = inner.optInt(k, 0)
+              }
+              customQuarterMap[qk] = map
+            }
+          }
+        } catch (_: Exception) {}
+      }
+
+      val assignedStr = allSettings.find { it.settingKey == "RM_ASSIGNED_CRITERIA_$cleanRm" }?.settingValue ?: ""
+      val assignedList = if (assignedStr.isNotBlank()) assignedStr.split(",").map { it.trim() } else emptyList()
+
       RmPerformanceRow(
         rmCode = rm.rmCode,
         rmName = rm.name,
         stats = computeStats(rmFiles),
-        target = target
+        target = target,
+        allQuarterCustomTargets = customQuarterMap,
+        assignedCriteria = assignedList
       )
     }
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -1268,6 +1302,37 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
   fun saveRmAssignedCriteria(rmCode: String, criteria: List<String>) {
     viewModelScope.launch {
       eblRepository.saveRmAssignedCriteria(rmCode, criteria)
+    }
+  }
+
+  fun saveAllQuarterTargetsUnified(
+    rmCode: String,
+    year: Int = 2026,
+    quarterlyMap: Map<String, Map<String, Int>>,
+    assignedCriteria: List<String>,
+    onComplete: (Boolean) -> Unit = {}
+  ) {
+    viewModelScope.launch {
+      val res = runCatching {
+        eblRepository.saveRmCustomTargetsAllQuarters(rmCode, quarterlyMap, assignedCriteria)
+        val q1Map = quarterlyMap["Q1"] ?: emptyMap()
+        val q2Map = quarterlyMap["Q2"] ?: emptyMap()
+        val q3Map = quarterlyMap["Q3"] ?: emptyMap()
+        val q4Map = quarterlyMap["Q4"] ?: emptyMap()
+        eblRepository.setRmAllQuarterTargets(
+          rmCode = rmCode,
+          year = year,
+          q1Cc = q1Map["Credit Card"] ?: 0, q1Corp = q1Map["Corporate Card"] ?: 0, q1B2b = q1Map["B2B"] ?: 0,
+          q2Cc = q2Map["Credit Card"] ?: 0, q2Corp = q2Map["Corporate Card"] ?: 0, q2B2b = q2Map["B2B"] ?: 0,
+          q3Cc = q3Map["Credit Card"] ?: 0, q3Corp = q3Map["Corporate Card"] ?: 0, q3B2b = q3Map["B2B"] ?: 0,
+          q4Cc = q4Map["Credit Card"] ?: 0, q4Corp = q4Map["Corporate Card"] ?: 0, q4B2b = q4Map["B2B"] ?: 0
+        )
+      }
+      val ok = res.isSuccess
+      if (ok) {
+        _uiMessage.emit("Targets for RM $rmCode saved successfully across all quarters!")
+      }
+      onComplete(ok)
     }
   }
 

@@ -399,12 +399,35 @@ fun AdminDashboardScreen(
                 val annualCorp = row.target?.annualCorporateCardTarget ?: (corpTarget * 4)
                 val annualB2b = row.target?.annualB2bTarget ?: (b2bTarget * 4)
 
+                val curQ = DateUtils.getCurrentQuarter()
+                val customQuarter = row.allQuarterCustomTargets[curQ] ?: emptyMap()
+                val customAnnual = row.allQuarterCustomTargets["ALL"] ?: emptyMap()
+                val standardSet = setOf("Credit Card", "Corporate Card", "B2B")
+                val customCriteriaEntries = (customQuarter.keys + customAnnual.keys + row.assignedCriteria)
+                  .distinct()
+                  .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
+                  .mapNotNull { critName ->
+                    val qVal = customQuarter[critName] ?: 0
+                    val yrVal = customAnnual[critName] ?: (
+                      (row.allQuarterCustomTargets["Q1"]?.get(critName) ?: 0) +
+                      (row.allQuarterCustomTargets["Q2"]?.get(critName) ?: 0) +
+                      (row.allQuarterCustomTargets["Q3"]?.get(critName) ?: 0) +
+                      (row.allQuarterCustomTargets["Q4"]?.get(critName) ?: 0)
+                    )
+                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.equals(critName, ignoreCase = true) }) {
+                      critName to (qVal to yrVal)
+                    } else null
+                  }
+
                 Row(
                   modifier = Modifier.fillMaxWidth(),
                   horizontalArrangement = Arrangement.SpaceBetween,
                   verticalAlignment = Alignment.CenterVertically
                 ) {
-                  Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Row(
+                    modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  ) {
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
                       Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget (Yr:$annualCc)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
                     }
@@ -413,6 +436,11 @@ fun AdminDashboardScreen(
                     }
                     Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
                       Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget (Yr:$annualB2b)", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    }
+                    customCriteriaEntries.forEach { (critName, pair) ->
+                      Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFFFBEB), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))) {
+                        Text("$critName: 0/${pair.first} (Yr:${pair.second})", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFB45309), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                      }
                     }
                   }
 
@@ -442,20 +470,20 @@ fun AdminDashboardScreen(
   if (targetSettingRow != null) {
     val row = targetSettingRow!!
     val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
-    val customTargets by viewModel.getRmCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
-    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(row.rmCode).collectAsState(initial = emptyMap())
-    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(row.rmCode).collectAsState(initial = emptyList())
+    val customTargets by viewModel.getRmCustomTargetsFlow(row.rmCode).collectAsState(initial = row.allQuarterCustomTargets["ALL"] ?: emptyMap())
+    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(row.rmCode).collectAsState(initial = row.allQuarterCustomTargets)
+    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(row.rmCode).collectAsState(initial = row.assignedCriteria)
 
     com.example.ui.common.QuarterTargetSettingDialog(
       rmCode = row.rmCode,
       rmName = row.rmName,
       currentTarget = row.target,
       allCriteria = targetCriteria,
-      assignedCriteria = assignedCriteria,
+      assignedCriteria = if (assignedCriteria.isNotEmpty()) assignedCriteria else row.assignedCriteria,
       onAddCriteria = { newCrit -> viewModel.addTargetCriterion(newCrit) },
       onDeleteCriteria = { crit -> viewModel.deleteTargetCriterion(crit) },
-      initialCustomTargets = customTargets,
-      allQuarterCustomTargets = allQuarterCustomTargets,
+      initialCustomTargets = if (customTargets.isNotEmpty()) customTargets else (row.allQuarterCustomTargets["ALL"] ?: emptyMap()),
+      allQuarterCustomTargets = if (allQuarterCustomTargets.isNotEmpty()) allQuarterCustomTargets else row.allQuarterCustomTargets,
       onDismiss = { targetSettingRow = null },
       onSave = { quarter, year, cc, corp, b2b ->
         viewModel.setRmQuarterTargets(row.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
@@ -482,6 +510,11 @@ fun AdminDashboardScreen(
       },
       onSaveAssignedCriteria = { assignedList ->
         viewModel.saveRmAssignedCriteria(row.rmCode, assignedList)
+      },
+      onSaveAllTargetsUnified = { year, quarterlyMap, assignedList ->
+        viewModel.saveAllQuarterTargetsUnified(row.rmCode, year, quarterlyMap, assignedList) { success ->
+          if (success) targetSettingRow = null
+        }
       }
     )
   }
