@@ -88,6 +88,7 @@ fun SmsNotificationsDialog(
   var selectedCategoryFilter by remember { mutableStateOf("All") }
   var showConfirmClearDialog by remember { mutableStateOf(false) }
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   val unreadCount = smsList.count { !it.isRead }
 
@@ -161,7 +162,7 @@ fun SmsNotificationsDialog(
                 text = if (isRmView) "RM SMS Notification Center" else "Dispatched RM SMS Logs",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Text(
                 text = if (isRmView) "Real-time alerts from Admin & Mentor" else "Audit trail of SMS dispatched across teams",

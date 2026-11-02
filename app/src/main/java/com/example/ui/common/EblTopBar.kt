@@ -98,6 +98,7 @@ fun EblTopBar(
   var showSmsDialog by remember { mutableStateOf(false) }
   var showNotificationSettingsDialog by remember { mutableStateOf(false) }
   var dhakaTimeText by remember { mutableStateOf("") }
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   LaunchedEffect(Unit) {
     val formatter = DateTimeFormatter.ofPattern("hh:mm a")
@@ -257,7 +258,7 @@ fun EblTopBar(
             DropdownMenuItem(
               text = {
                 Column {
-                  Text(user.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+                  Text(user.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
                   Text("Code: ${user.rmCode} (${user.role})", fontSize = 11.sp, color = Color.Gray)
                   if (user.officeAddress.isNotBlank()) {
                     Text(user.officeAddress, fontSize = 10.sp, color = Color(0xFF64748B))
@@ -448,7 +449,7 @@ fun EblTopBar(
           horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
           Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = EblNavyPrimary)
-          Text("Notification & SMS Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = EblNavyDark)
+          Text("Notification & SMS Settings", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
         }
       },
       text = {

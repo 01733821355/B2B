@@ -761,11 +761,12 @@ private fun RouteStopCard(
   onWhatsApp: () -> Unit,
   onEdit: () -> Unit
 ) {
-  val targetAddress = customer.officeAddress.ifBlank { customer.cpvAddress }.ifBlank { "ঠিকানা উল্লেখ নেই" }
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+  val targetAddress = customer.officeAddress.ifBlank { customer.cpvAddress }.ifBlank { "Address not specified" }
 
   Card(
     shape = RoundedCornerShape(12.dp),
-    colors = CardDefaults.cardColors(containerColor = Color.White),
+    colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White),
     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     modifier = Modifier.testTag("route_stop_$stopNumber")
   ) {
@@ -792,14 +793,14 @@ private fun RouteStopCard(
               text = customer.customerName,
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
             Text(
               text = customer.companyName.ifBlank { customer.productType },
               fontSize = 11.5.sp,
-              color = Color(0xFF64748B)
+              color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
             )
           }
         }
@@ -807,7 +808,7 @@ private fun RouteStopCard(
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
           ApplicationStatusBadge(customer.applicationStatus)
           IconButton(onClick = onRemove, modifier = Modifier.size(26.dp)) {
-            Icon(Icons.Default.Close, contentDescription = "রুট থেকে সরান", tint = Color.LightGray, modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.Close, contentDescription = "Remove from route", tint = Color.LightGray, modifier = Modifier.size(16.dp))
           }
         }
       }
@@ -817,8 +818,8 @@ private fun RouteStopCard(
       // Location / Address Row
       Surface(
         shape = RoundedCornerShape(6.dp),
-        color = Color(0xFFF8FAFC),
-        border = BorderStroke(0.6.dp, Color(0xFFE2E8F0)),
+        color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+        border = BorderStroke(0.6.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
         modifier = Modifier.fillMaxWidth()
       ) {
         Row(
@@ -830,7 +831,7 @@ private fun RouteStopCard(
           Text(
             text = targetAddress,
             fontSize = 11.5.sp,
-            color = Color(0xFF334155),
+            color = if (isDark) Color(0xFFCBD5E1) else Color(0xFF334155),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
@@ -843,8 +844,8 @@ private fun RouteStopCard(
         Spacer(modifier = Modifier.height(6.dp))
         Surface(
           shape = RoundedCornerShape(6.dp),
-          color = Color(0xFFFEF2F2),
-          border = BorderStroke(0.6.dp, Color(0xFFFECACA)),
+          color = if (isDark) Color(0xFF450A0A) else Color(0xFFFEF2F2),
+          border = BorderStroke(0.6.dp, if (isDark) Color(0xFF991B1B) else Color(0xFFFECACA)),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
@@ -854,9 +855,9 @@ private fun RouteStopCard(
             Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFDC2626), modifier = Modifier.size(13.dp))
             Spacer(modifier = Modifier.width(4.dp))
             Text(
-              text = "পেন্ডিং ডকুমেন্টস: ${customer.pendingDocuments}",
+              text = "Pending Documents: ${customer.pendingDocuments}",
               fontSize = 10.5.sp,
-              color = Color(0xFF991B1B),
+              color = if (isDark) Color(0xFFFCA5A5) else Color(0xFF991B1B),
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
@@ -882,7 +883,7 @@ private fun RouteStopCard(
         ) {
           Icon(Icons.Default.Navigation, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(4.dp))
-          Text("ম্যাপ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+          Text("Map", fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
         // Call Button
@@ -896,7 +897,7 @@ private fun RouteStopCard(
         ) {
           Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
-          Text("কল", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+          Text("Call", fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
         // WhatsApp Button
@@ -918,12 +919,12 @@ private fun RouteStopCard(
           onClick = onEdit,
           modifier = Modifier.size(34.dp)
         ) {
-          Icon(Icons.Default.Edit, contentDescription = "Edit File", tint = Color.Gray, modifier = Modifier.size(16.dp))
+          Icon(Icons.Default.Edit, contentDescription = "Edit File", tint = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.size(16.dp))
         }
       }
 
       Spacer(modifier = Modifier.height(10.dp))
-      HorizontalDivider(color = Color(0xFFF1F5F9))
+      HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9))
       Spacer(modifier = Modifier.height(8.dp))
 
       // MASTER ACTION: Mark as Collected and Remove from Route
@@ -939,7 +940,7 @@ private fun RouteStopCard(
         Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-          text = "✓ কালেকশন সম্পন্ন (রুট আপডেট করুন)",
+          text = "✓ Collection Completed (Update Route)",
           fontSize = 12.sp,
           fontWeight = FontWeight.Bold,
           color = Color.White

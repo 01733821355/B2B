@@ -150,7 +150,7 @@ fun QuarterTargetSettingDialog(
           qSpecificCustom.forEach { (crit, v) ->
             inner[crit] = v.toString()
           }
-        } else {
+        } else if (q == "ALL") {
           val fallbackCustom = allQuarterCustomTargets["ALL"] ?: initialCustomTargets
           fallbackCustom.forEach { (crit, v) ->
             inner[crit] = v.toString()
@@ -159,7 +159,15 @@ fun QuarterTargetSettingDialog(
 
         effectiveAllCriteria.forEach { crit ->
           if (!inner.containsKey(crit)) {
-            inner[crit] = "0"
+            val qVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+            val vToUse = if (qVal != null) {
+              qVal
+            } else if (q == "ALL") {
+              allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+                ?: initialCustomTargets.entries.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+                ?: 0
+            } else 0
+            inner[crit] = vToUse.toString()
           }
         }
         newMap[q] = inner
@@ -172,8 +180,8 @@ fun QuarterTargetSettingDialog(
         listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
           val inner = (currentMap[q] ?: mutableMapOf()).toMutableMap()
           if (!inner.containsKey(crit)) {
-            val loadedVal = allQuarterCustomTargets[q]?.get(crit)
-              ?: allQuarterCustomTargets["ALL"]?.get(crit)
+            val loadedVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+              ?: (if (q == "ALL") (allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value ?: initialCustomTargets[crit]) else 0)
               ?: 0
             inner[crit] = loadedVal.toString()
             currentMap[q] = inner
@@ -659,9 +667,12 @@ fun QuarterTargetSettingDialog(
             val innerMap = mutableMapOf<String, Int>()
             val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
             effectiveAllCriteria.forEach { crit ->
-              val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
-              val rawVal = qInputs[crit]?.trim() ?: "0"
-              val num = if (isAssigned) (rawVal.toIntOrNull() ?: 0) else 0
+              val rawVal = qInputs[crit]?.trim()
+                ?: qInputs.entries.firstOrNull { it.key.trim().equals(crit.trim(), ignoreCase = true) }?.value?.trim()
+                ?: "0"
+              val inputNum = rawVal.toIntOrNull() ?: 0
+              val isAssigned = selectedAssignedCriteria.any { it.trim().equals(crit.trim(), ignoreCase = true) } || inputNum > 0
+              val num = if (isAssigned) inputNum else 0
               innerMap[crit] = num
             }
             allQuartersResult[q] = innerMap
@@ -670,16 +681,11 @@ fun QuarterTargetSettingDialog(
           // Calculate ALL as exact mathematical sum of Q1 + Q2 + Q3 + Q4
           val annualMap = mutableMapOf<String, Int>()
           effectiveAllCriteria.forEach { crit ->
-            val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
-            if (isAssigned) {
-              val sumAnnual = (allQuartersResult["Q1"]?.get(crit) ?: 0) +
-                (allQuartersResult["Q2"]?.get(crit) ?: 0) +
-                (allQuartersResult["Q3"]?.get(crit) ?: 0) +
-                (allQuartersResult["Q4"]?.get(crit) ?: 0)
-              annualMap[crit] = sumAnnual
-            } else {
-              annualMap[crit] = 0
-            }
+            val sumAnnual = (allQuartersResult["Q1"]?.get(crit) ?: 0) +
+              (allQuartersResult["Q2"]?.get(crit) ?: 0) +
+              (allQuartersResult["Q3"]?.get(crit) ?: 0) +
+              (allQuartersResult["Q4"]?.get(crit) ?: 0)
+            annualMap[crit] = sumAnnual
           }
           allQuartersResult["ALL"] = annualMap
 
@@ -696,8 +702,9 @@ fun QuarterTargetSettingDialog(
 
           // Save assigned criteria list (criteria checked or target > 0)
           val assignedList = effectiveAllCriteria.filter { crit ->
-            val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
-            val hasTarget = (annualMap[crit] ?: 0) > 0
+            val isAssigned = selectedAssignedCriteria.any { it.trim().equals(crit.trim(), ignoreCase = true) }
+            val hasTarget = (annualMap[crit] ?: 0) > 0 ||
+              listOf("Q1", "Q2", "Q3", "Q4").any { q -> (allQuartersResult[q]?.get(crit) ?: 0) > 0 }
             isAssigned || hasTarget
           }
 

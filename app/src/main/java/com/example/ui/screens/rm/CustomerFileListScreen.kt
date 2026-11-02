@@ -126,7 +126,7 @@ fun CustomerFileListScreen(
   var showExcelSuccessDialog by remember { mutableStateOf(false) }
 
   val isPrivileged = currentUser.role == "ADMIN" || currentUser.role == "MENTOR"
-
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   val isRefreshing by viewModel.isRefreshing.collectAsState()
 
   Box(
@@ -421,7 +421,7 @@ fun CustomerFileListScreen(
                         text = file.customerName,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EblNavyDark
+                        color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                       )
                     }
                     Text(
@@ -611,7 +611,7 @@ fun CustomerFileListScreen(
               text = "${selectedFileIdsForRoute.size} Customers Selected",
               fontWeight = FontWeight.Bold,
               fontSize = 13.sp,
-              color = EblNavyDark
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
             )
             Spacer(modifier = Modifier.width(8.dp))
             TextButton(

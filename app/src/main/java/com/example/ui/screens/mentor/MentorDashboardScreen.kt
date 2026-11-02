@@ -555,7 +555,7 @@ fun MentorDashboardScreen(
                   text = "User & RM Live Location Monitor",
                   fontSize = 14.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Surface(
@@ -626,7 +626,7 @@ fun MentorDashboardScreen(
                 text = appCustomName,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Text(
                 text = "Universal across whole app • Configurable by Mentor",
@@ -708,7 +708,7 @@ fun MentorDashboardScreen(
                 text = if (appCustomIconUrl.isNotBlank()) "Custom Icon Active" else "Default Icon",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Text(
                 text = "Syncs universally to all users' devices • Configured by Mentor",
@@ -785,7 +785,7 @@ fun MentorDashboardScreen(
                 text = "RM-Wise Performance & Target Achievement",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Text(
                 text = "STC, Approvals, Declines, Query/RTS and category quotas",
@@ -856,14 +856,13 @@ fun MentorDashboardScreen(
                   .distinct()
                   .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
                   .mapNotNull { critName ->
-                    val qVal = customQuarter[critName] ?: 0
-                    val yrVal = customAnnual[critName] ?: (
-                      (row.allQuarterCustomTargets["Q1"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q2"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q3"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q4"]?.get(critName) ?: 0)
-                    )
-                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.equals(critName, ignoreCase = true) }) {
+                    val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)
+                    val sumQ = (row.allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0)
+                    val yrVal = if (sumQ > 0) sumQ else (customAnnual.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customAnnual[critName] ?: 0))
+                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.trim().equals(critName.trim(), ignoreCase = true) }) {
                       critName to (qVal to yrVal)
                     } else null
                   }
@@ -924,7 +923,7 @@ fun MentorDashboardScreen(
             text = "Mentor Data Integrity & Recovery Controls",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark
+            color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
           )
           Spacer(modifier = Modifier.height(4.dp))
           Text(
@@ -1012,7 +1011,7 @@ fun MentorDashboardScreen(
                 text = log.action,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Spacer(modifier = Modifier.width(6.dp))
               Text("• ${log.userId} (${log.role})", fontSize = 11.sp, color = Color.Gray)
@@ -1197,7 +1196,7 @@ fun MentorDashboardScreen(
                   text = "Deleted Records Recovery",
                   fontSize = 16.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Text(
                   text = "Recover deleted records & reload to sheet (${deletedFiles.size} records)",
@@ -1241,7 +1240,7 @@ fun MentorDashboardScreen(
           )
 
           Spacer(modifier = Modifier.height(10.dp))
-          HorizontalDivider(color = Color(0xFFE2E8F0))
+          HorizontalDivider(color = if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
           Spacer(modifier = Modifier.height(8.dp))
 
           // List of Deleted Entries
@@ -1264,7 +1263,7 @@ fun MentorDashboardScreen(
                   text = if (deletedFiles.isEmpty()) "No deleted records found" else "No matching records found",
                   fontWeight = FontWeight.Bold,
                   fontSize = 14.sp,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Text(
                   text = if (deletedFiles.isEmpty()) "All files are currently active." else "Try searching with a different name or phone.",
@@ -1283,8 +1282,8 @@ fun MentorDashboardScreen(
               items(filteredDeleted, key = { it.fileId }) { file ->
                 Card(
                   shape = RoundedCornerShape(10.dp),
-                  colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+                  colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color(0xFFF8FAFC)),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
                   modifier = Modifier
                     .fillMaxWidth()
                     .testTag("deleted_file_item_${file.fileId}")
@@ -1302,7 +1301,7 @@ fun MentorDashboardScreen(
                           text = file.customerName,
                           fontWeight = FontWeight.Bold,
                           fontSize = 14.sp,
-                          color = EblNavyDark
+                          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Surface(

@@ -52,6 +52,7 @@ fun AuditLogsScreen(
 ) {
   val auditLogs by viewModel.auditLogs.collectAsState()
   var searchQuery by remember { mutableStateOf("") }
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   val filteredLogs = auditLogs.filter { log ->
     if (searchQuery.isBlank()) true
@@ -84,7 +85,7 @@ fun AuditLogsScreen(
           text = "Security Audit Trail",
           fontSize = 18.sp,
           fontWeight = FontWeight.Bold,
-          color = EblNavyDark
+          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
         )
         Text(
           text = "Immutable chronological activity logging",
@@ -147,16 +148,16 @@ fun AuditLogsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                   Box(
                     modifier = Modifier
-                      .background(Color(0xFFE8EEF5), RoundedCornerShape(4.dp))
+                      .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE8EEF5), RoundedCornerShape(4.dp))
                       .padding(horizontal = 6.dp, vertical = 2.dp)
                   ) {
-                    Text(log.action, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                    Text(log.action, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
                   }
                   Spacer(modifier = Modifier.width(8.dp))
                   Text(
                     text = "User: ${log.userId} (${log.role})",
                     fontSize = 11.sp,
-                    color = Color.DarkGray
+                    color = if (isDark) Color(0xFFCBD5E1) else Color.DarkGray
                   )
                 }
 

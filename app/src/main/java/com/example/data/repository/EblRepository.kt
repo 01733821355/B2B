@@ -3036,10 +3036,20 @@ class EblRepository(
             "Q4" -> q4Setting?.settingValue
             else -> baseSetting?.settingValue
           }
-          val map = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else baseMap
+          val map = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else if (q == "ALL") baseMap else emptyMap()
           res[q] = map.toMutableMap()
         }
       }
+      // Calculate ALL as exact sum of Q1 + Q2 + Q3 + Q4 for each criterion
+      val allMap = (res["ALL"] ?: mutableMapOf()).toMutableMap()
+      val allKeys = res.values.flatMap { it.keys }.distinct()
+      allKeys.forEach { crit ->
+        val sumQ = (res["Q1"]?.get(crit) ?: 0) + (res["Q2"]?.get(crit) ?: 0) + (res["Q3"]?.get(crit) ?: 0) + (res["Q4"]?.get(crit) ?: 0)
+        if (sumQ > 0 || !allMap.containsKey(crit)) {
+          allMap[crit] = sumQ
+        }
+      }
+      res["ALL"] = allMap
       res.mapValues { it.value.toMap() }
     }
   }
@@ -3125,7 +3135,6 @@ class EblRepository(
           updatedAt = now
         )
       )
-      applicationScope.launch { syncSettingUpsertToGoogleSheets(qKey, qJson) }
     }
 
     val fullJson = rootObj.toString()
@@ -3137,7 +3146,6 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson) }
 
     if (assignedCriteria != null) {
       val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
@@ -3150,7 +3158,22 @@ class EblRepository(
           updatedAt = now
         )
       )
-      applicationScope.launch { syncSettingUpsertToGoogleSheets(assignedKey, joined) }
+    }
+
+    // Live sync to Google Sheets sequentially to avoid Apps Script spreadsheet lock contention
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson)
+      syncSettingUpsertToGoogleSheets(baseKey, org.json.JSONObject(quarterlyTargets["ALL"] ?: emptyMap<String, Int>()).toString())
+      listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+        val qKey = "${baseKey}_$q"
+        val qJson = org.json.JSONObject(quarterlyTargets[q] ?: emptyMap<String, Int>()).toString()
+        syncSettingUpsertToGoogleSheets(qKey, qJson)
+      }
+      if (assignedCriteria != null) {
+        val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
+        val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+        syncSettingUpsertToGoogleSheets(assignedKey, joined)
+      }
     }
 
     // Also update RmTargetEntity with all 4 quarters targets
@@ -4240,10 +4263,21 @@ class EblRepository(
       if (key.isBlank()) continue
 
       val existing = database.appSettingDao().getSetting(key)
-      // If local setting was edited within last 30s by a user, protect it from stale sheet overwrites
-      val wasRecentlyEditedLocally = existing != null && (now - existing.updatedAt < 30_000L) && (existing.updatedBy != "GoogleSheets_Universal")
-      if (wasRecentlyEditedLocally && !key.startsWith("deleted_")) {
-        continue
+      // Protect target settings and recently edited settings from stale sheet overwrites
+      val isTargetKey = key.startsWith("RM_CUSTOM_TARGETS") || key.startsWith("RM_ASSIGNED_CRITERIA") || key == "TARGET_CRITERIA_LIST"
+      if (isTargetKey) {
+        val wasRecentlyEdited = existing != null && (now - existing.updatedAt < 300_000L) && (existing.updatedBy != "GoogleSheets_Universal")
+        if (wasRecentlyEdited) continue
+        if (value.isBlank() || value == "{}" || value == "[]" || value == "0") {
+          if (existing != null && existing.settingValue.isNotBlank() && existing.settingValue != "{}" && existing.settingValue != "[]") {
+            continue
+          }
+        }
+      } else {
+        val wasRecentlyEditedLocally = existing != null && (now - existing.updatedAt < 60_000L) && (existing.updatedBy != "GoogleSheets_Universal")
+        if (wasRecentlyEditedLocally && !key.startsWith("deleted_")) {
+          continue
+        }
       }
 
       if (key.equals("deleted_file_ids", true)) {

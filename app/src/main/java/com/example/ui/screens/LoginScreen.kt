@@ -97,6 +97,7 @@ fun LoginScreen(
   val coroutineScope = rememberCoroutineScope()
   val focusManager = LocalFocusManager.current
   val scrollState = rememberScrollState()
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   var usernameInput by remember { mutableStateOf(lastLoggedRmCode) }
   var passwordInput by remember { mutableStateOf("") }
@@ -397,7 +398,7 @@ fun LoginScreen(
             text = "Sign In to Portal",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark
+            color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
           )
           Text(
             text = "Enter your assigned RM Code or Admin username",
@@ -550,8 +551,8 @@ fun LoginScreen(
               shape = RoundedCornerShape(10.dp),
               border = BorderStroke(1.5.dp, EblGold),
               colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = Color(0xFFFFFBEB),
-                contentColor = EblNavyDark
+                containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFBEB),
+                contentColor = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               ),
               modifier = Modifier
                 .fillMaxWidth()
@@ -570,7 +571,7 @@ fun LoginScreen(
                   text = "Fingerprint Sign In",
                   fontSize = 14.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 val currentTyped = usernameInput.trim().uppercase()
                 val lastVerified = lastLoggedRmCode.trim().uppercase()

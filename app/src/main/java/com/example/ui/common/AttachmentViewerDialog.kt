@@ -75,6 +75,7 @@ fun AttachmentViewerDialog(
   onDelete: (() -> Unit)? = null
 ) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   val scrollState = rememberScrollState()
 
   var downloadedFile by remember { mutableStateOf<File?>(null) }
@@ -201,7 +202,7 @@ fun AttachmentViewerDialog(
           text = attachment.fileName,
           fontSize = 15.sp,
           fontWeight = FontWeight.Bold,
-          color = EblNavyDark,
+          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
           maxLines = 2,
           overflow = TextOverflow.Ellipsis
         )
@@ -239,14 +240,14 @@ fun AttachmentViewerDialog(
                 .fillMaxWidth()
                 .height(200.dp)
                 .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFFF8FAFC))
-                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(12.dp)),
+                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC))
+                .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(12.dp)),
               contentAlignment = Alignment.Center
             ) {
               Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(modifier = Modifier.size(36.dp), color = EblNavyPrimary)
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Downloading file...", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                Text("Downloading file...", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
               }
             }
           } else if (isImage) {
@@ -397,7 +398,7 @@ fun AttachmentViewerDialog(
                   text = "Document File",
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Text(
                   text = "Format: ${attachment.fileType.ifBlank { "Binary File" }}",

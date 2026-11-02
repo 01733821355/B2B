@@ -126,6 +126,7 @@ fun CustomerFileFormScreen(
   var isLoaded by remember { mutableStateOf(editFileId == null) }
 
   // Form Fields
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   var errorMessage by remember { mutableStateOf<String?>(null) }
   var fileId by remember { mutableStateOf(editFileId ?: SecurityUtils.generateFileId(currentUser.rmCode)) }
 
@@ -662,7 +663,7 @@ fun CustomerFileFormScreen(
           text = "A. Customer & Account Details",
           fontSize = 15.sp,
           fontWeight = FontWeight.Bold,
-          color = EblNavyDark
+          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -777,7 +778,7 @@ fun CustomerFileFormScreen(
               text = "Office Address",
               fontSize = 13.sp,
               fontWeight = FontWeight.SemiBold,
-              color = EblNavyDark
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
             )
 
             // Track My Location button requested by user
@@ -926,7 +927,7 @@ fun CustomerFileFormScreen(
           text = "B, C, D. Product & Status Classification",
           fontSize = 15.sp,
           fontWeight = FontWeight.Bold,
-          color = EblNavyDark
+          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
         )
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -1182,7 +1183,7 @@ fun CustomerFileFormScreen(
             text = "E. Pending Documents Checklist",
             fontSize = 15.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark
+            color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
           )
           Text(
             text = "${selectedPendingDocs.size} Pending",
@@ -1240,7 +1241,7 @@ fun CustomerFileFormScreen(
           text = "F. Remarks / Requirements",
           fontSize = 15.sp,
           fontWeight = FontWeight.Bold,
-          color = EblNavyDark
+          color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
         )
         Spacer(modifier = Modifier.height(10.dp))
         VoiceInputField(
@@ -1262,7 +1263,7 @@ fun CustomerFileFormScreen(
       text = "Additional Supporting Documents",
       fontSize = 15.sp,
       fontWeight = FontWeight.Bold,
-      color = EblNavyDark
+      color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
     )
     Text(
       text = "Attach client KYC papers, trade licenses, salary slips, or other relevant files.",
@@ -1408,7 +1409,7 @@ fun CustomerFileFormScreen(
               text = "H. CPV (CONTACT POINT VERIFICATION) STATUS",
               fontSize = 13.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
             )
           }
         }
@@ -1615,15 +1616,15 @@ fun CustomerFileFormScreen(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(16.dp)) {
-          Text("Attached Files (${attachments.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Text("Attached Files (${attachments.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(8.dp))
           attachments.forEach { att ->
             Row(
               modifier = Modifier
                 .fillMaxWidth()
                 .padding(vertical = 4.dp)
-                .background(Color(0xFFF8FAFC), RoundedCornerShape(8.dp))
-                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
+                .background(if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC), RoundedCornerShape(8.dp))
+                .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
                 .clickable { previewAttachment = att }
                 .padding(10.dp),
               verticalAlignment = Alignment.CenterVertically
@@ -1758,7 +1759,7 @@ fun CustomerFileFormScreen(
           }
 
           Spacer(modifier = Modifier.height(14.dp))
-          Text("Choose File Source from Device:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Text("Choose File Source from Device:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(8.dp))
 
           // 1. Camera Capture Button

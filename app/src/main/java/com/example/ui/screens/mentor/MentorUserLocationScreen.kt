@@ -87,6 +87,7 @@ fun MentorUserLocationScreen(
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   // Strictly enforce mentor authorization
   if (currentUser.role != "MENTOR") {
@@ -351,7 +352,7 @@ fun MentorUserLocationScreen(
                 text = "Dhaka City Field Tracking Radar",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
             }
             Text(
@@ -538,7 +539,7 @@ fun MentorUserLocationScreen(
                   text = user.name,
                   fontSize = 15.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Text(
                   text = "RM Code: ${user.rmCode} • ${user.officeAddress}",
@@ -604,7 +605,7 @@ fun MentorUserLocationScreen(
                     text = effectiveAddress,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
-                    color = EblNavyDark
+                    color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                   )
                   if (effectiveLat != null && effectiveLng != null) {
                     Spacer(modifier = Modifier.height(2.dp))
@@ -738,7 +739,7 @@ fun MentorUserLocationScreen(
                       )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = log.address, fontSize = 12.sp, color = EblNavyDark)
+                    Text(text = log.address, fontSize = 12.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                       text = "Coords: %.5f, %.5f".format(log.latitude, log.longitude),

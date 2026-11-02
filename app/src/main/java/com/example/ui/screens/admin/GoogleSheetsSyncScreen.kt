@@ -2727,22 +2727,22 @@ function onEdit(e) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Bengali & English Setup Instructions
+        // Google Sheet & Drive Setup Instructions
         Surface(
-          color = Color(0xFFF8FAFC),
+          color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
           shape = RoundedCornerShape(8.dp),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
         ) {
           Column(modifier = Modifier.padding(12.dp)) {
-            Text("কীভাবে গুগল শিট ও গুগল ড্রাইভ সেটআপ করবেন (Drive & Sheet Setup):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
+            Text("Google Sheet & Google Drive Setup Instructions:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
             Spacer(modifier = Modifier.height(4.dp))
-            Text("১. আপনার গুগল শিটে যান এবং Extensions > Apps Script-এ ক্লিক করুন।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("২. ওপরের 'Copy Script Code' বাটনে চাপ দিয়ে কোডটি কপি করে Apps Script-এ পেস্ট করুন।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৩. [জরুরী] ওপরে ফাংশন ড্রপডাউন থেকে 'authorizeDrivePermissions' সিলেক্ট করে 'Run' (▶️) বাটনে চাপ দিন এবং Google Permissions 'Allow' করুন। এতে ড্রাইভে ফটো/ডকুমেন্ট সেভ করার পারমিশন চালু হবে।", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
-            Text("৪. Deploy > Manage deployments > Edit > New version নির্বাচন করে 'Deploy' চাপুন ('Who has access' = 'Anyone')।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF047857))
-            Text("৫. আপনার Web App URL-টি স্বয়ংক্রিয়ভাবে ডিফল্ট কনফিগার করা আছে।", fontSize = 11.sp, color = Color.DarkGray)
-            Text("৬. শিটে ম্যানুয়ালি এডিট করা যাবে (onEdit স্বয়ংক্রিয়ভাবে সেভ রাখবে, কোনো ডাটা মুছে যাবে না)।", fontSize = 11.sp, color = Color(0xFF0369A1))
-            Text("৭. স্বয়ংক্রিয়ভাবে তৈরি হবে ৭টি ট্যাব: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs।", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
+            Text("1. Open your Google Sheet and click Extensions > Apps Script.", fontSize = 11.sp, color = if (isDark) Color(0xFFCBD5E1) else Color.DarkGray)
+            Text("2. Click 'Copy Script Code' above and paste the code into Apps Script.", fontSize = 11.sp, color = if (isDark) Color(0xFFCBD5E1) else Color.DarkGray)
+            Text("3. [Important] Select 'authorizeDrivePermissions' from the function dropdown, click 'Run' (▶️) and allow Google Permissions.", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFDC2626))
+            Text("4. Deploy > Manage deployments > Edit > New version and click 'Deploy' ('Who has access' = 'Anyone').", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF047857))
+            Text("5. Your Web App URL is automatically connected and ready.", fontSize = 11.sp, color = if (isDark) Color(0xFFCBD5E1) else Color.DarkGray)
+            Text("6. Real-time automatic bi-directional sync keeps all data safe and current.", fontSize = 11.sp, color = Color(0xFF0369A1))
+            Text("7. Automatically manages tabs: Customer_Files, RM_Details, Universal_Settings, Audit_Trail, Attachments, SMS_Notifications, RM_Location_Logs.", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF059669))
           }
         }
       }

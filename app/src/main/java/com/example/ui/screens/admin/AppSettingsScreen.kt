@@ -569,9 +569,9 @@ fun AppSettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Checklist Sender & Pending Docs Items (চেকলিস্ট সেন্ডার ও পেন্ডিং ডক্স)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Text("Checklist Sender & Pending Docs Items", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
         }
-        Text("পেন্ডিং ডক্স এবং চেকলিস্ট সেন্ডারের প্রতিটি অপশনের আইটেম অ্যাড বা এডিট করুন। সেভ করলে গুগল শিটের Universal_Settings ট্যাবে নতুন রো হিসেবে স্বয়ংক্রিয়ভাবে লোড হবে।", fontSize = 11.sp, color = Color.Gray)
+        Text("Add or edit items for Pending Documents and Checklist Sender. Saves automatically to Google Sheets Universal_Settings.", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray)
         Spacer(modifier = Modifier.height(10.dp))
 
         // Preset selector chips
@@ -863,15 +863,15 @@ fun AppSettingsScreen(
           Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Visibility, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(22.dp))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("প্রিসেট দৃশ্যমানতা পারমিশন (Preset Visibility)", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = EblNavyDark)
+            Text("Preset Visibility Permissions", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           }
         },
         text = {
           Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
             Text(
-              "এখানে প্রতিটি প্রিসেটের পাশে সুইচ অন/অফ করে ঠিক করুন কোন কোন প্রিসেট সাধারণ RM-রা চেকলিস্ট সেন্ডারে দেখতে পাবে আর কোনটি শুধুমাত্র অ্যাডমিন ও মেন্টরদের তালিকায় থাকবে।",
+              "Toggle visibility for each preset to control whether RMs can see it in Checklist Sender or if it remains exclusive to Admin and Mentor.",
               fontSize = 12.sp,
-              color = Color.Gray
+              color = if (isDark) Color(0xFF94A3B8) else Color.Gray
             )
             Spacer(modifier = Modifier.height(12.dp))
             checklistPresets.forEach { preset ->
@@ -982,14 +982,14 @@ fun AppSettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
           Icon(Icons.Default.Settings, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(20.dp))
           Spacer(modifier = Modifier.width(8.dp))
-          Text("Seasonal & Festival Themes (ঋতু ও উৎসবভিত্তিক থিম)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
+          Text("Seasonal & Festival Themes", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
         }
-        Text("Day/Night, Summer, Rainy, Winter, Puja, Eid, Language Day, and Independence Day with automatic seasonal switching", fontSize = 11.sp, color = Color.Gray)
+        Text("Day/Night, Summer, Rainy, Winter, Puja, Eid, Language Day, and Independence Day with automatic seasonal switching", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray)
 
         Spacer(modifier = Modifier.height(12.dp))
 
         // Active Theme Mode Selector Cards with Avatars & Motifs
-        Text("Active App Theme Mode (থিম সিলেক্ট করুন):", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = EblNavyDark)
+        Text("Active App Theme Mode:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
         Spacer(modifier = Modifier.height(8.dp))
 
         Column(
@@ -1161,7 +1161,7 @@ fun AppSettingsScreen(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Theme Customizer & Color Editor
-        Text("Customize Theme Colors (যেকোনো থিমের নিজস্ব রং নির্ধারণ করুন):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = EblNavyDark)
+        Text("Customize Theme Colors:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
         Spacer(modifier = Modifier.height(6.dp))
 
         // Selector for which theme to edit
@@ -1518,8 +1518,8 @@ fun AppSettingsScreen(
             Icon(Icons.Default.Fingerprint, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(26.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Column {
-              Text("Fingerprint Sign In (ফিঙ্গারপ্রিন্ট লগইন)", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = EblNavyDark)
-              Text("RM: ${currentUser.rmCode} (${currentUser.name})", fontSize = 11.sp, color = Color.Gray)
+              Text("Fingerprint Sign In", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
+              Text("RM: ${currentUser.rmCode} (${currentUser.name})", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray)
             }
           }
 

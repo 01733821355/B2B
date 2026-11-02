@@ -442,13 +442,12 @@ fun RmMappingScreen(
                     .distinct()
                     .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
                     .mapNotNull { critName ->
-                      val qVal = customQuarter[critName] ?: 0
-                      val yrVal = customAnnual[critName] ?: (
-                        (perfRow?.allQuarterCustomTargets?.get("Q1")?.get(critName) ?: 0) +
-                        (perfRow?.allQuarterCustomTargets?.get("Q2")?.get(critName) ?: 0) +
-                        (perfRow?.allQuarterCustomTargets?.get("Q3")?.get(critName) ?: 0) +
-                        (perfRow?.allQuarterCustomTargets?.get("Q4")?.get(critName) ?: 0)
-                      )
+                      val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)
+                      val sumQ = (perfRow?.allQuarterCustomTargets?.get("Q1")?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q2")?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q3")?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                        (perfRow?.allQuarterCustomTargets?.get("Q4")?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0)
+                      val yrVal = if (sumQ > 0) sumQ else (customAnnual.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customAnnual[critName] ?: 0))
                       if (qVal > 0 || yrVal > 0) "$critName: Qtr $qVal • Yr $yrVal" else null
                     }.joinToString(" • ")
 

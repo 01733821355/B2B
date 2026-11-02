@@ -407,14 +407,13 @@ fun AdminDashboardScreen(
                   .distinct()
                   .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
                   .mapNotNull { critName ->
-                    val qVal = customQuarter[critName] ?: 0
-                    val yrVal = customAnnual[critName] ?: (
-                      (row.allQuarterCustomTargets["Q1"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q2"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q3"]?.get(critName) ?: 0) +
-                      (row.allQuarterCustomTargets["Q4"]?.get(critName) ?: 0)
-                    )
-                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.equals(critName, ignoreCase = true) }) {
+                    val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)
+                    val sumQ = (row.allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                      (row.allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0)
+                    val yrVal = if (sumQ > 0) sumQ else (customAnnual.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customAnnual[critName] ?: 0))
+                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.trim().equals(critName.trim(), ignoreCase = true) }) {
                       critName to (qVal to yrVal)
                     } else null
                   }

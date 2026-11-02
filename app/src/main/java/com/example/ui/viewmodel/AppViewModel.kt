@@ -392,7 +392,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       val target = targets.find { it.rmCode == rm.rmCode }
 
       // Parse custom targets for this RM
-      val customAllJson = allSettings.find { it.settingKey == "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm" }?.settingValue
+      val customAllJson = allSettings.find { it.settingKey.equals("RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm", ignoreCase = true) }?.settingValue
       val customQuarterMap = mutableMapOf<String, MutableMap<String, Int>>()
       listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q -> customQuarterMap[q] = mutableMapOf() }
       if (!customAllJson.isNullOrBlank()) {
@@ -415,8 +415,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } catch (_: Exception) {}
       }
 
-      val assignedStr = allSettings.find { it.settingKey == "RM_ASSIGNED_CRITERIA_$cleanRm" }?.settingValue ?: ""
-      val assignedList = if (assignedStr.isNotBlank()) assignedStr.split(",").map { it.trim() } else emptyList()
+      val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
+      listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
+        if (customQuarterMap[q].isNullOrEmpty()) {
+          val qRaw = allSettings.find { it.settingKey.equals("${baseKey}_$q", ignoreCase = true) }?.settingValue
+          if (!qRaw.isNullOrBlank()) {
+            try {
+              val obj = org.json.JSONObject(qRaw)
+              val map = mutableMapOf<String, Int>()
+              val ik = obj.keys()
+              while (ik.hasNext()) {
+                val k = ik.next()
+                map[k] = obj.optInt(k, 0)
+              }
+              customQuarterMap[q] = map
+            } catch (_: Exception) {}
+          }
+        }
+      }
+
+      // Compute ALL as exact mathematical sum of Q1 + Q2 + Q3 + Q4 for each criterion
+      val allMap = (customQuarterMap["ALL"] ?: mutableMapOf()).toMutableMap()
+      val allKeys = customQuarterMap.values.flatMap { it.keys }.distinct()
+      allKeys.forEach { crit ->
+        val sumQ = (customQuarterMap["Q1"]?.get(crit) ?: 0) +
+          (customQuarterMap["Q2"]?.get(crit) ?: 0) +
+          (customQuarterMap["Q3"]?.get(crit) ?: 0) +
+          (customQuarterMap["Q4"]?.get(crit) ?: 0)
+        if (sumQ > 0 || !allMap.containsKey(crit)) {
+          allMap[crit] = sumQ
+        }
+      }
+      customQuarterMap["ALL"] = allMap
+
+      val assignedStr = allSettings.find { it.settingKey.equals("RM_ASSIGNED_CRITERIA_$cleanRm", ignoreCase = true) }?.settingValue ?: ""
+      val assignedList = (if (assignedStr.isNotBlank()) assignedStr.split(",").map { it.trim() } else emptyList())
+        .plus(allKeys.filter { (allMap[it] ?: 0) > 0 })
+        .distinct()
 
       RmPerformanceRow(
         rmCode = rm.rmCode,

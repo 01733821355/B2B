@@ -112,6 +112,7 @@ fun CustomerDetailDialog(
   val currentFile = liveFileState ?: file
 
   val scrollState = rememberScrollState()
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   val attachmentsFlow = viewModel.eblRepository.getAttachmentsForFileFlow(currentFile.fileId)
   val attachments by attachmentsFlow.collectAsState(initial = emptyList())
   val allRms by viewModel.allRms.collectAsState()
@@ -282,6 +283,7 @@ fun CustomerDetailDialog(
     onDismissRequest = onDismiss,
     properties = DialogProperties(usePlatformDefaultWidth = false)
   ) {
+    val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
     Surface(
       modifier = Modifier
         .fillMaxWidth(0.95f)
@@ -303,12 +305,12 @@ fun CustomerDetailDialog(
               text = currentFile.customerName,
               fontSize = 18.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
             )
             Text(
               text = "File ID: ${currentFile.fileId} • RM Code: ${currentFile.assignedRmCode}",
               fontSize = 12.sp,
-              color = Color.Gray
+              color = if (isDark) Color(0xFF94A3B8) else Color.Gray
             )
           }
           IconButton(onClick = onDismiss) {
@@ -674,10 +676,10 @@ fun CustomerDetailDialog(
           Text(
             text = "Select the new Relationship Manager (RM) for '${file.customerName}' (${file.fileId}). Once reassigned, the file will be removed from RM ${file.assignedRmCode}'s mobile app, and automatically delivered to the new RM.",
             fontSize = 12.sp,
-            color = Color.DarkGray
+            color = if (isDark) Color(0xFFCBD5E1) else Color.DarkGray
           )
           Spacer(modifier = Modifier.height(14.dp))
-          Text("Currently Assigned: RM ${file.assignedRmCode}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text("Currently Assigned: RM ${file.assignedRmCode}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(8.dp))
 
           Column(
@@ -781,12 +783,12 @@ fun CustomerDetailDialog(
             text = "Customer: ${file.customerName} (${file.fileId})",
             fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
-            color = EblNavyDark
+            color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
           )
           Spacer(modifier = Modifier.height(10.dp))
 
           // 1. Application Status Section
-          Text("1. Application Status:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Text("1. Application Status:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(6.dp))
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -846,7 +848,7 @@ fun CustomerDetailDialog(
           Spacer(modifier = Modifier.height(12.dp))
 
           // 3. Status & CPV Attachments (Camera, Photo, Document)
-          Text("3. Attach Proof / Photo / Document:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+          Text("3. Attach Proof / Photo / Document:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(6.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1007,7 +1009,7 @@ fun CustomerDetailDialog(
           )
           Spacer(modifier = Modifier.height(10.dp))
 
-          Text("Category:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text("Category:", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(4.dp))
           FlowRow(
             modifier = Modifier.fillMaxWidth(),
@@ -1125,14 +1127,15 @@ fun CustomerDetailDialog(
 
 @Composable
 private fun DetailRow(label: String, value: String) {
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   Row(
     modifier = Modifier
       .fillMaxWidth()
       .padding(vertical = 3.dp),
     horizontalArrangement = Arrangement.SpaceBetween
   ) {
-    Text(label, fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
+    Text(label, fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, fontWeight = FontWeight.Medium)
     Spacer(modifier = Modifier.width(12.dp))
-    Text(value, fontSize = 11.sp, color = EblNavyDark, fontWeight = FontWeight.SemiBold)
+    Text(value, fontSize = 11.sp, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark, fontWeight = FontWeight.SemiBold)
   }
 }
