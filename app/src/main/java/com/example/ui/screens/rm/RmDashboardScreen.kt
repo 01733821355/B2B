@@ -114,6 +114,7 @@ fun RmDashboardScreen(
   val context = LocalContext.current
   val coroutineScope = rememberCoroutineScope()
   var isRefreshing by remember { mutableStateOf(false) }
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   // Auto-detect and sync RM live location in background
   LaunchedEffect(Unit) {
@@ -173,19 +174,20 @@ fun RmDashboardScreen(
       }
       list
     }
-    // Strictly filter out any criteria where target in this selected period is <= 0
     assigned.filter { a ->
-      val inOptions = targetCriteria.any { it.equals(a, ignoreCase = true) }
+      val inOptions = targetCriteria.isEmpty() || targetCriteria.any { it.equals(a, ignoreCase = true) }
       if (!inOptions) return@filter false
       when {
-        a.equals("Credit Card", ignoreCase = true) -> ccTarget > 0
-        a.equals("Corporate Card", ignoreCase = true) -> corpTarget > 0
-        a.equals("B2B", ignoreCase = true) -> b2bTarget > 0
+        a.equals("Credit Card", ignoreCase = true) -> ccTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
+        a.equals("Corporate Card", ignoreCase = true) -> corpTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
+        a.equals("B2B", ignoreCase = true) -> b2bTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
         else -> {
           val customVal = currentQuarterCustomTargets[a]
             ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(a, true) }?.value
             ?: 0
-          customVal > 0
+          val annualCustomVal = allQuarterCustomTargets["ALL"]?.get(a)
+            ?: (allQuarterCustomTargets.values.sumOf { it[a] ?: 0 })
+          customVal > 0 || annualCustomVal > 0 || assignedCriteria.any { it.equals(a, true) }
         }
       }
     }
@@ -677,14 +679,14 @@ fun RmDashboardScreen(
                   text = "Target vs Achievement",
                   fontSize = 15.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark,
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
                   maxLines = 1,
                   softWrap = false
                 )
                 Text(
                   text = "Achievement = STC (Production Done)",
                   fontSize = 10.sp,
-                  color = Color(0xFF0F766E),
+                  color = if (isDark) Color(0xFF5EEAD4) else Color(0xFF0F766E),
                   fontWeight = FontWeight.Medium,
                   maxLines = 1,
                   softWrap = false
@@ -693,13 +695,13 @@ fun RmDashboardScreen(
             }
             Surface(
               shape = RoundedCornerShape(6.dp),
-              color = Color(0xFFEFF6FF),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))
+              color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6) else Color(0xFFBFDBFE))
             ) {
               Text(
                 text = if (isAnnual) "2026 Annual Target" else "$selectedKpiQuarter 2026 Target",
                 fontSize = 11.sp,
-                color = Color(0xFF1D4ED8),
+                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 maxLines = 1,
@@ -744,8 +746,8 @@ fun RmDashboardScreen(
 
           Surface(
             shape = RoundedCornerShape(8.dp),
-            color = Color(0xFFF1F5F9),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFCBD5E1)),
+            color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
             modifier = Modifier.fillMaxWidth()
           ) {
             Row(
@@ -760,25 +762,25 @@ fun RmDashboardScreen(
                   text = "📅 2026 Annual Goal:",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Text(
                   text = annualSummaryText,
                   fontSize = 10.sp,
-                  color = Color(0xFF475569)
+                  color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
                 )
               }
               Surface(
                 shape = RoundedCornerShape(4.dp),
-                color = if (isAnnual) EblNavyPrimary else Color.White,
-                border = androidx.compose.foundation.BorderStroke(1.dp, if (isAnnual) EblNavyPrimary else Color(0xFFCBD5E1)),
+                color = if (isAnnual) EblNavyPrimary else if (isDark) Color(0xFF0F172A) else Color.White,
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isAnnual) EblNavyPrimary else if (isDark) Color(0xFF334155) else Color(0xFFCBD5E1)),
                 modifier = Modifier.clickable { selectedKpiQuarter = "Annual" }
               ) {
                 Text(
                   text = if (isAnnual) "✓ Viewing Annual" else "View Annual",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
-                  color = if (isAnnual) Color.White else EblNavyPrimary,
+                  color = if (isAnnual) Color.White else if (isDark) Color(0xFF93C5FD) else EblNavyPrimary,
                   modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                 )
               }
@@ -819,14 +821,14 @@ fun RmDashboardScreen(
           if (activeRmCriteria.isEmpty()) {
             Surface(
               shape = RoundedCornerShape(10.dp),
-              color = Color(0xFFF8FAFC),
-              border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0)),
+              color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+              border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
               modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
             ) {
               Text(
                 text = "No active target assigned for this period.",
                 fontSize = 11.sp,
-                color = Color.Gray,
+                color = if (isDark) Color(0xFF94A3B8) else Color.Gray,
                 modifier = Modifier.padding(14.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
               )
@@ -848,34 +850,34 @@ fun RmDashboardScreen(
                         val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
                           shape = RoundedCornerShape(10.dp),
-                          color = Color(0xFFF0FDF4),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0)),
+                          color = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFF0FDF4),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF059669) else Color(0xFFBBF7D0)),
                           modifier = Modifier.fillMaxWidth()
                         ) {
                           Column(modifier = Modifier.padding(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.CreditCard, contentDescription = null, tint = Color(0xFF15803D), modifier = Modifier.size(14.dp))
+                              Icon(Icons.Default.CreditCard, contentDescription = null, tint = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D), modifier = Modifier.size(14.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534), maxLines = 1, softWrap = false)
+                              Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF86EFAC) else Color(0xFF166534), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
-                              Text(" / $ccTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                              Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D))
+                              Text(" / $ccTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             LinearProgressIndicator(
                               progress = { ccProgress },
                               modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = Color(0xFF16A34A),
-                              trackColor = Color(0xFFDCFCE7)
+                              color = if (isDark) Color(0xFF22C55E) else Color(0xFF16A34A),
+                              trackColor = if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                               text = "${(ccProgress * 100).toInt()}% Done",
                               fontSize = 10.sp,
                               fontWeight = FontWeight.SemiBold,
-                              color = Color(0xFF15803D),
+                              color = if (isDark) Color(0xFF86EFAC) else Color(0xFF15803D),
                               maxLines = 1,
                               softWrap = false
                             )
@@ -887,34 +889,34 @@ fun RmDashboardScreen(
                         val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
                           shape = RoundedCornerShape(10.dp),
-                          color = Color(0xFFEFF6FF),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                          color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF2563EB) else Color(0xFFBFDBFE)),
                           modifier = Modifier.fillMaxWidth()
                         ) {
                           Column(modifier = Modifier.padding(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Business, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
+                              Icon(Icons.Default.Business, contentDescription = null, tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E40AF), maxLines = 1, softWrap = false)
+                              Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
-                              Text(" / $corpTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                              Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8))
+                              Text(" / $corpTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             LinearProgressIndicator(
                               progress = { corpProgress },
                               modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = Color(0xFF2563EB),
-                              trackColor = Color(0xFFDBEAFE)
+                              color = if (isDark) Color(0xFF3B82F6) else Color(0xFF2563EB),
+                              trackColor = if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                               text = "${(corpProgress * 100).toInt()}% Done",
                               fontSize = 10.sp,
                               fontWeight = FontWeight.SemiBold,
-                              color = Color(0xFF1D4ED8),
+                              color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
                               maxLines = 1,
                               softWrap = false
                             )
@@ -926,34 +928,34 @@ fun RmDashboardScreen(
                         val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
                         Surface(
                           shape = RoundedCornerShape(10.dp),
-                          color = Color(0xFFFAF5FF),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF)),
+                          color = if (isDark) Color(0xFF581C87).copy(alpha = 0.35f) else Color(0xFFFAF5FF),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF9333EA) else Color(0xFFE9D5FF)),
                           modifier = Modifier.fillMaxWidth()
                         ) {
                           Column(modifier = Modifier.padding(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Handshake, contentDescription = null, tint = Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
+                              Icon(Icons.Default.Handshake, contentDescription = null, tint = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B21A8), maxLines = 1, softWrap = false)
+                              Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF6B21A8), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF7E22CE))
-                              Text(" / $b2bTarget", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
+                              Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE))
+                              Text(" / $b2bTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             LinearProgressIndicator(
                               progress = { b2bProgress },
                               modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = Color(0xFF9333EA),
-                              trackColor = Color(0xFFF3E8FF)
+                              color = if (isDark) Color(0xFFA855F7) else Color(0xFF9333EA),
+                              trackColor = if (isDark) Color(0xFF581C87) else Color(0xFFF3E8FF)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                               text = "${(b2bProgress * 100).toInt()}% Done",
                               fontSize = 10.sp,
                               fontWeight = FontWeight.SemiBold,
-                              color = Color(0xFF7E22CE),
+                              color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF7E22CE),
                               maxLines = 1,
                               softWrap = false
                             )
@@ -966,21 +968,21 @@ fun RmDashboardScreen(
                           ?: 0
                         Surface(
                           shape = RoundedCornerShape(10.dp),
-                          color = Color(0xFFFFFBEB),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A)),
+                          color = if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
+                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFFD97706) else Color(0xFFFDE68A)),
                           modifier = Modifier.fillMaxWidth()
                         ) {
                           Column(modifier = Modifier.padding(10.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Stars, contentDescription = null, tint = Color(0xFFD97706), modifier = Modifier.size(14.dp))
+                              Icon(Icons.Default.Stars, contentDescription = null, tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706), modifier = Modifier.size(14.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF92400E), maxLines = 1, softWrap = false)
+                              Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.Bottom) {
-                              Text("Target:", fontSize = 11.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
+                              Text("Target:", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFD97706))
+                              Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706))
                             }
                           }
                         }
@@ -1173,7 +1175,7 @@ fun RmDashboardScreen(
               Text(
                 text = "Mobile: ${file.mobile} • Updated: ${DateUtils.formatDateTime(file.updatedAt)}",
                 fontSize = 11.sp,
-                color = EblNavyPrimary,
+                color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary,
                 fontWeight = FontWeight.Medium
               )
             }

@@ -89,6 +89,7 @@ fun AdminDashboardScreen(
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
   var targetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
   val isRefreshing by viewModel.isRefreshing.collectAsState()
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   EblPullRefreshBox(
     isRefreshing = isRefreshing,
@@ -113,7 +114,6 @@ fun AdminDashboardScreen(
 
     item {
       Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
         // Operational Quick Links
         Row(
@@ -340,13 +340,13 @@ fun AdminDashboardScreen(
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .background(Color(0xFFE8EEF5))
+              .background(if (isDark) Color(0xFF1E293B) else Color(0xFFE8EEF5))
               .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Text("RM Officer", modifier = Modifier.weight(1.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+            Text("RM Officer", modifier = Modifier.weight(1.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark, maxLines = 1, softWrap = false)
             Text("STC", modifier = Modifier.weight(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), maxLines = 1, softWrap = false)
-            Text("Subm", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+            Text("Subm", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFE2E8F0) else EblNavyDark, maxLines = 1, softWrap = false)
             Text("Apprv", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D), maxLines = 1, softWrap = false)
             Text("Query", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706), maxLines = 1, softWrap = false)
             Text("RTS", modifier = Modifier.weight(0.6f), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE11D48), maxLines = 1, softWrap = false)
@@ -378,7 +378,7 @@ fun AdminDashboardScreen(
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Column(modifier = Modifier.weight(1.7f)) {
-                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = EblNavyDark, maxLines = 1, softWrap = false)
+                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark, maxLines = 1, softWrap = false)
                     Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray, maxLines = 1, softWrap = false)
                   }
                   Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F766E))

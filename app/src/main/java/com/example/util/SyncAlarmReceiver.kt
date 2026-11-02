@@ -40,8 +40,8 @@ class SyncAlarmReceiver : BroadcastReceiver() {
         BackgroundSyncWorker.triggerImmediateSync(appContext)
       } catch (_: Exception) {
       } finally {
-        // 3. Reschedule the next alarm to keep polling continuously even if app process is closed
-        scheduleNextAlarm(appContext, 60_000L)
+        // 3. Reschedule the next alarm to keep polling continuously even if app process is closed (10-second interval)
+        scheduleNextAlarm(appContext, 10_000L)
         try {
           pendingResult.finish()
         } catch (_: Exception) {}
@@ -52,7 +52,7 @@ class SyncAlarmReceiver : BroadcastReceiver() {
   companion object {
     private const val REQUEST_CODE = 8842
 
-    fun scheduleNextAlarm(context: Context, delayMillis: Long = 60_000L) {
+    fun scheduleNextAlarm(context: Context, delayMillis: Long = 10_000L) {
       try {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val intent = Intent(context, SyncAlarmReceiver::class.java)

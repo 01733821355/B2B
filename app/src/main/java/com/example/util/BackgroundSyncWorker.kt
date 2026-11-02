@@ -103,7 +103,7 @@ class BackgroundSyncWorker(
           ExistingWorkPolicy.KEEP,
           fastWork
         )
-        SyncAlarmReceiver.scheduleNextAlarm(context, 60_000L)
+        SyncAlarmReceiver.scheduleNextAlarm(context, 10_000L)
       } catch (_: Exception) {}
     }
 

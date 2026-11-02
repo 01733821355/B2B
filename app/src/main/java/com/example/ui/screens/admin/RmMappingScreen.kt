@@ -84,6 +84,7 @@ fun RmMappingScreen(
   val rmPerformanceList by viewModel.rmPerformanceList.collectAsState()
   var searchRmQuery by remember { mutableStateOf("") }
   var selectedRoleTab by remember { mutableStateOf("ALL") } // ALL, RM, MENTOR
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   var showAddDialog by remember { mutableStateOf(false) }
   var editingRm by remember { mutableStateOf<UserEntity?>(null) }
@@ -136,7 +137,7 @@ fun RmMappingScreen(
               text = "RM & Mentor Management",
               fontSize = 18.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
               maxLines = 1,
               overflow = TextOverflow.Ellipsis
             )
@@ -250,7 +251,7 @@ fun RmMappingScreen(
                     text = rm.name,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
-                    color = EblNavyDark
+                    color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                   )
                   Spacer(modifier = Modifier.width(6.dp))
                   val isMentor = rm.role.equals("MENTOR", true)
@@ -455,7 +456,7 @@ fun RmMappingScreen(
                     text = "Qtr Target: CC ${thisTarget?.creditCardTarget ?: 20} • Corp ${thisTarget?.corporateCardTarget ?: 10} • B2B ${thisTarget?.b2bTarget ?: 15}" + (if (customSuffix.isNotBlank()) " • $customSuffix" else ""),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
-                    color = EblNavyDark
+                    color = if (isDark) Color(0xFFCBD5E1) else EblNavyDark
                   )
                   Text(
                     text = "Annual Goal: CC ${thisTarget?.annualCreditCardTarget ?: ((thisTarget?.creditCardTarget ?: 20) * 4)} • Corp ${thisTarget?.annualCorporateCardTarget ?: ((thisTarget?.corporateCardTarget ?: 10) * 4)} • B2B ${thisTarget?.annualB2bTarget ?: ((thisTarget?.b2bTarget ?: 15) * 4)}",
@@ -571,7 +572,7 @@ fun RmMappingScreen(
             Text(addError!!, color = Color.Red, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(6.dp))
           }
-          Text("Account Role *", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text("Account Role *", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(4.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -705,7 +706,7 @@ fun RmMappingScreen(
       title = { Text("Edit Officer: ${editingRm!!.rmCode}", fontWeight = FontWeight.Bold) },
       text = {
         Column(modifier = Modifier.fillMaxWidth()) {
-          Text("Account Role", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = EblNavyDark)
+          Text("Account Role", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark)
           Spacer(modifier = Modifier.height(4.dp))
           Row(
             modifier = Modifier.fillMaxWidth(),

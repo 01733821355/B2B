@@ -1,6 +1,8 @@
 package com.example.ui.common
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,8 +34,10 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -57,6 +61,7 @@ import com.example.data.model.RmTargetEntity
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
+import com.example.ui.theme.LocalAppTheme
 import com.example.util.DateUtils
 
 @Composable
@@ -84,14 +89,21 @@ fun QuarterTargetSettingDialog(
   onSaveAssignedCriteria: ((List<String>) -> Unit)? = null,
   onSaveAllTargetsUnified: ((year: Int, quarterlyMap: Map<String, Map<String, Int>>, assignedList: List<String>) -> Unit)? = null
 ) {
+  val isDark = LocalAppTheme.current.isDark
   val selectedYear = 2026
 
+  val primaryTextColor = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
+  val secondaryTextColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+
   var hasUserModified by remember(rmCode) { mutableStateOf(false) }
+
+  // Track dynamically added criteria in this session so they never vanish
+  var localAddedCriteria by remember(rmCode) { mutableStateOf(listOf<String>()) }
 
   // Which criteria are currently checked/assigned to this RM
   var selectedAssignedCriteria by remember(rmCode) {
     val initialSet = if (assignedCriteria.isNotEmpty()) {
-      assignedCriteria.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }.toSet()
+      assignedCriteria.toSet()
     } else {
       allCriteria.toSet()
     }
@@ -107,13 +119,22 @@ fun QuarterTargetSettingDialog(
     mutableStateOf(qMap)
   }
 
+  // Compute effective all criteria from external list, local additions, assigned list, and current target keys
+  val effectiveAllCriteria = remember(allCriteria, localAddedCriteria, targetsByQuarterState.value, selectedAssignedCriteria) {
+    val combined = (allCriteria + localAddedCriteria + selectedAssignedCriteria + targetsByQuarterState.value.values.flatMap { it.keys })
+      .map { it.trim() }
+      .filter { it.isNotBlank() }
+      .distinct()
+    if (combined.isNotEmpty()) combined else listOf("Credit Card", "Corporate Card", "B2B")
+  }
+
   // Synchronize state when data loads from Room / Cloud or changes
   LaunchedEffect(rmCode, currentTarget, allQuarterCustomTargets, allCriteria, assignedCriteria) {
     if (!hasUserModified) {
       if (assignedCriteria.isNotEmpty()) {
-        selectedAssignedCriteria = assignedCriteria.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }.toSet()
+        selectedAssignedCriteria = assignedCriteria.toSet()
       } else {
-        selectedAssignedCriteria = allCriteria.toSet()
+        selectedAssignedCriteria = effectiveAllCriteria.toSet()
       }
 
       val newMap = mutableMapOf<String, MutableMap<String, String>>()
@@ -136,7 +157,7 @@ fun QuarterTargetSettingDialog(
           }
         }
 
-        allCriteria.forEach { crit ->
+        effectiveAllCriteria.forEach { crit ->
           if (!inner.containsKey(crit)) {
             inner[crit] = "0"
           }
@@ -147,7 +168,7 @@ fun QuarterTargetSettingDialog(
     } else {
       // If user is editing, ensure newly added criteria are safely populated
       val currentMap = targetsByQuarterState.value.toMutableMap()
-      allCriteria.forEach { crit ->
+      effectiveAllCriteria.forEach { crit ->
         listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
           val inner = (currentMap[q] ?: mutableMapOf()).toMutableMap()
           if (!inner.containsKey(crit)) {
@@ -185,8 +206,8 @@ fun QuarterTargetSettingDialog(
           }
         }
         Column {
-          Text("Target Setup (Q1, Q2, Q3, Q4 & Annual)", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-          Text("$rmName (RM $rmCode) • Year $selectedYear", fontSize = 11.sp, color = Color.Gray)
+          Text("Target Setup (Q1, Q2, Q3, Q4 & Annual)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = primaryTextColor)
+          Text("$rmName (RM $rmCode) • Year $selectedYear", fontSize = 11.sp, color = secondaryTextColor)
         }
       }
     },
@@ -200,27 +221,27 @@ fun QuarterTargetSettingDialog(
         // Guidance Box
         Surface(
           shape = RoundedCornerShape(8.dp),
-          color = Color(0xFFEFF6FF),
-          border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE)),
+          color = if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF2563EB) else Color(0xFFBFDBFE)),
           modifier = Modifier.fillMaxWidth()
         ) {
           Row(
             modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
           ) {
-            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = Color(0xFF1D4ED8), modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8), modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(8.dp))
             Column {
               Text(
                 text = "Target columns for each criterion (Q1, Q2, Q3, Q4 & Annual):",
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1E3A8A)
+                color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E3A8A)
               )
               Text(
-                text = "If target is 0 for any criterion, it will not be displayed in that RM's app.",
+                text = "Enter quarterly targets. Annual total is computed automatically and synced live.",
                 fontSize = 10.sp,
-                color = Color(0xFF2563EB)
+                color = if (isDark) Color(0xFFBFDBFE) else Color(0xFF2563EB)
               )
             }
           }
@@ -229,15 +250,35 @@ fun QuarterTargetSettingDialog(
         Spacer(modifier = Modifier.height(12.dp))
 
         // Display each criterion with 4 quarterly columns + Annual
-        allCriteria.forEach { crit ->
+        effectiveAllCriteria.forEach { crit ->
           val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
           val norm = crit.trim().lowercase()
 
           val (icon, iconColor, containerBg, borderClr) = when {
-            norm.contains("credit") -> Quad(Icons.Default.CreditCard, Color(0xFF15803D), Color(0xFFF0FDF4), Color(0xFFBBF7D0))
-            norm.contains("corp") -> Quad(Icons.Default.Business, Color(0xFF1D4ED8), Color(0xFFEFF6FF), Color(0xFFBFDBFE))
-            norm.contains("b2b") -> Quad(Icons.Default.Handshake, Color(0xFF7E22CE), Color(0xFFFAF5FF), Color(0xFFE9D5FF))
-            else -> Quad(Icons.Default.Stars, Color(0xFFD97706), Color(0xFFFFFBEB), Color(0xFFFDE68A))
+            norm.contains("credit") -> Quad(
+              Icons.Default.CreditCard,
+              if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D),
+              if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFF0FDF4),
+              if (isDark) Color(0xFF059669) else Color(0xFFBBF7D0)
+            )
+            norm.contains("corp") -> Quad(
+              Icons.Default.Business,
+              if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8),
+              if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
+              if (isDark) Color(0xFF2563EB) else Color(0xFFBFDBFE)
+            )
+            norm.contains("b2b") -> Quad(
+              Icons.Default.Handshake,
+              if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE),
+              if (isDark) Color(0xFF581C87).copy(alpha = 0.35f) else Color(0xFFFAF5FF),
+              if (isDark) Color(0xFF9333EA) else Color(0xFFE9D5FF)
+            )
+            else -> Quad(
+              Icons.Default.Stars,
+              if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706),
+              if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
+              if (isDark) Color(0xFFD97706) else Color(0xFFFDE68A)
+            )
           }
 
           val q1Val = targetsByQuarterState.value["Q1"]?.get(crit) ?: "0"
@@ -255,8 +296,8 @@ fun QuarterTargetSettingDialog(
 
           Surface(
             shape = RoundedCornerShape(10.dp),
-            color = if (isAssigned) containerBg else Color(0xFFF8FAFC),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (isAssigned) borderClr else Color(0xFFE2E8F0)),
+            color = if (isAssigned) containerBg else if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+            border = BorderStroke(1.dp, if (isAssigned) borderClr else if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
             modifier = Modifier
               .fillMaxWidth()
               .padding(vertical = 5.dp)
@@ -293,7 +334,7 @@ fun QuarterTargetSettingDialog(
                       text = crit,
                       fontWeight = FontWeight.Bold,
                       fontSize = 12.sp,
-                      color = if (isAssigned) EblNavyDark else Color.Gray
+                      color = if (isAssigned) primaryTextColor else secondaryTextColor
                     )
                     if (isAssigned) {
                       if (isAllZero) {
@@ -307,7 +348,7 @@ fun QuarterTargetSettingDialog(
                           text = "Active Target • Annual Goal: $autoAnnual (Displayed in RM's app ✓)",
                           fontSize = 10.sp,
                           fontWeight = FontWeight.SemiBold,
-                          color = Color(0xFF15803D)
+                          color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
                         )
                       }
                     }
@@ -334,110 +375,183 @@ fun QuarterTargetSettingDialog(
               }
 
               if (isAssigned) {
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                // 4 Quarters + Annual Columns in a neat row
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                  // Helper function to update quarter and annual
-                  fun updateQuarterValue(quarterKey: String, newVal: String) {
-                    hasUserModified = true
-                    val digits = newVal.filter { ch -> ch.isDigit() }
-                    val formatted = if (digits.length > 1 && digits.startsWith("0")) {
-                      digits.trimStart('0').ifEmpty { "0" }
-                    } else {
-                      digits
-                    }
-                    val qMap = targetsByQuarterState.value.toMutableMap()
-                    val inner = (qMap[quarterKey] ?: mutableMapOf()).toMutableMap()
-                    inner[crit] = formatted
-                    qMap[quarterKey] = inner
-
-                    // Recalculate annual automatically
-                    val nQ1 = (if (quarterKey == "Q1") formatted else qMap["Q1"]?.get(crit) ?: "0").toIntOrNull() ?: 0
-                    val nQ2 = (if (quarterKey == "Q2") formatted else qMap["Q2"]?.get(crit) ?: "0").toIntOrNull() ?: 0
-                    val nQ3 = (if (quarterKey == "Q3") formatted else qMap["Q3"]?.get(crit) ?: "0").toIntOrNull() ?: 0
-                    val nQ4 = (if (quarterKey == "Q4") formatted else qMap["Q4"]?.get(crit) ?: "0").toIntOrNull() ?: 0
-                    val innerAll = (qMap["ALL"] ?: mutableMapOf()).toMutableMap()
-                    innerAll[crit] = (nQ1 + nQ2 + nQ3 + nQ4).toString()
-                    qMap["ALL"] = innerAll
-
-                    targetsByQuarterState.value = qMap
+                // Helper function to update quarter and annual
+                fun updateQuarterValue(quarterKey: String, newVal: String) {
+                  hasUserModified = true
+                  val digits = newVal.filter { ch -> ch.isDigit() }
+                  val formatted = if (digits.length > 1 && digits.startsWith("0")) {
+                    digits.trimStart('0').ifEmpty { "0" }
+                  } else {
+                    digits
                   }
+                  val qMap = targetsByQuarterState.value.toMutableMap()
+                  val inner = (qMap[quarterKey] ?: mutableMapOf()).toMutableMap()
+                  inner[crit] = formatted
+                  qMap[quarterKey] = inner
 
+                  // Recalculate annual automatically
+                  val nQ1 = (if (quarterKey == "Q1") formatted else qMap["Q1"]?.get(crit) ?: "0").toIntOrNull() ?: 0
+                  val nQ2 = (if (quarterKey == "Q2") formatted else qMap["Q2"]?.get(crit) ?: "0").toIntOrNull() ?: 0
+                  val nQ3 = (if (quarterKey == "Q3") formatted else qMap["Q3"]?.get(crit) ?: "0").toIntOrNull() ?: 0
+                  val nQ4 = (if (quarterKey == "Q4") formatted else qMap["Q4"]?.get(crit) ?: "0").toIntOrNull() ?: 0
+                  val innerAll = (qMap["ALL"] ?: mutableMapOf()).toMutableMap()
+                  innerAll[crit] = (nQ1 + nQ2 + nQ3 + nQ4).toString()
+                  qMap["ALL"] = innerAll
+
+                  targetsByQuarterState.value = qMap
+                }
+
+                // Horizontally scrollable row ensuring Q1, Q2, Q3, Q4 & Annual never get squeezed
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                  horizontalArrangement = Arrangement.spacedBy(6.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
                   // Q1 Input Column
-                  Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Q1", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                  Column(modifier = Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Q1", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
+                    Spacer(modifier = Modifier.height(2.dp))
                     OutlinedTextField(
                       value = q1Val,
                       onValueChange = { updateQuarterValue("Q1", it) },
-                      textStyle = TextStyle(fontSize = 11.sp, textAlign = TextAlign.Center),
+                      textStyle = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                      ),
+                      colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        focusedBorderColor = EblNavyPrimary,
+                        unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+                      ),
                       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                       singleLine = true,
                       modifier = Modifier
-                        .fillMaxWidth()
+                        .width(62.dp)
                         .testTag("input_${crit.replace(" ", "_")}_q1")
                     )
                   }
 
                   // Q2 Input Column
-                  Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Q2", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                  Column(modifier = Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Q2", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
+                    Spacer(modifier = Modifier.height(2.dp))
                     OutlinedTextField(
                       value = q2Val,
                       onValueChange = { updateQuarterValue("Q2", it) },
-                      textStyle = TextStyle(fontSize = 11.sp, textAlign = TextAlign.Center),
+                      textStyle = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                      ),
+                      colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        focusedBorderColor = EblNavyPrimary,
+                        unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+                      ),
                       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                       singleLine = true,
                       modifier = Modifier
-                        .fillMaxWidth()
+                        .width(62.dp)
                         .testTag("input_${crit.replace(" ", "_")}_q2")
                     )
                   }
 
                   // Q3 Input Column
-                  Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Q3", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                  Column(modifier = Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Q3", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
+                    Spacer(modifier = Modifier.height(2.dp))
                     OutlinedTextField(
                       value = q3Val,
                       onValueChange = { updateQuarterValue("Q3", it) },
-                      textStyle = TextStyle(fontSize = 11.sp, textAlign = TextAlign.Center),
+                      textStyle = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                      ),
+                      colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        focusedBorderColor = EblNavyPrimary,
+                        unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+                      ),
                       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                       singleLine = true,
                       modifier = Modifier
-                        .fillMaxWidth()
+                        .width(62.dp)
                         .testTag("input_${crit.replace(" ", "_")}_q3")
                     )
                   }
 
-                  // Q4 Input Column
-                  Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Q4", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyDark)
+                  // Q4 Input Column - Fully editable and clear touch target
+                  Column(modifier = Modifier.width(62.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Q4", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = primaryTextColor)
+                    Spacer(modifier = Modifier.height(2.dp))
                     OutlinedTextField(
                       value = q4Val,
                       onValueChange = { updateQuarterValue("Q4", it) },
-                      textStyle = TextStyle(fontSize = 11.sp, textAlign = TextAlign.Center),
+                      textStyle = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        color = if (isDark) Color.White else Color(0xFF0F172A)
+                      ),
+                      colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+                        focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                        focusedBorderColor = EblNavyPrimary,
+                        unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1)
+                      ),
                       keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                       singleLine = true,
                       modifier = Modifier
-                        .fillMaxWidth()
+                        .width(62.dp)
                         .testTag("input_${crit.replace(" ", "_")}_q4")
                     )
                   }
 
                   // Annual (Total) Input Column - auto-calculated sum
-                  Column(modifier = Modifier.weight(1.2f), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Annual", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
+                  Column(modifier = Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Annual", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D))
+                    Spacer(modifier = Modifier.height(2.dp))
                     OutlinedTextField(
                       value = autoAnnual.toString(),
                       onValueChange = {},
                       readOnly = true,
-                      textStyle = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = Color(0xFF15803D)),
+                      textStyle = TextStyle(
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        textAlign = TextAlign.Center,
+                        color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D)
+                      ),
+                      colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D),
+                        unfocusedTextColor = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D),
+                        focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF0FDF4),
+                        unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF0FDF4),
+                        focusedBorderColor = if (isDark) Color(0xFF059669) else Color(0xFF86EFAC),
+                        unfocusedBorderColor = if (isDark) Color(0xFF059669) else Color(0xFF86EFAC)
+                      ),
                       singleLine = true,
                       modifier = Modifier
-                        .fillMaxWidth()
+                        .width(72.dp)
                         .testTag("input_${crit.replace(" ", "_")}_annual")
                     )
                   }
@@ -446,7 +560,7 @@ fun QuarterTargetSettingDialog(
                 Text(
                   text = "❌ Not assigned (Target 0, will not be displayed in RM's app)",
                   fontSize = 10.sp,
-                  color = Color.Gray,
+                  color = secondaryTextColor,
                   modifier = Modifier.padding(start = 36.dp, top = 2.dp)
                 )
               }
@@ -459,13 +573,13 @@ fun QuarterTargetSettingDialog(
         if (showAddCriteriaRow) {
           Surface(
             shape = RoundedCornerShape(8.dp),
-            color = Color(0xFFF0FDF4),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF86EFAC)),
+            color = if (isDark) Color(0xFF14532D).copy(alpha = 0.35f) else Color(0xFFF0FDF4),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF16A34A) else Color(0xFF86EFAC)),
             modifier = Modifier.fillMaxWidth()
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
-              Text("Add Universal Target Criteria:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF166534))
-              Text("Adding criteria automatically creates Q1, Q2, Q3, Q4 & Annual columns.", fontSize = 10.sp, color = Color(0xFF15803D))
+              Text("Add Universal Target Criteria:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF86EFAC) else Color(0xFF166534))
+              Text("Adding criteria automatically creates Q1, Q2, Q3, Q4 & Annual columns.", fontSize = 10.sp, color = if (isDark) Color(0xFFBBF7D0) else Color(0xFF15803D))
               Spacer(modifier = Modifier.height(6.dp))
               Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -485,6 +599,8 @@ fun QuarterTargetSettingDialog(
                   onClick = {
                     val clean = newCriteriaNameInput.trim()
                     if (clean.isNotBlank()) {
+                      hasUserModified = true
+                      localAddedCriteria = (localAddedCriteria + clean).distinct()
                       onAddCriteria?.invoke(clean)
                       val updatedSet = selectedAssignedCriteria.toMutableSet()
                       updatedSet.add(clean)
@@ -507,7 +623,7 @@ fun QuarterTargetSettingDialog(
                   shape = RoundedCornerShape(8.dp),
                   modifier = Modifier.testTag("btn_confirm_add_criteria")
                 ) {
-                  Text("Add", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                  Text("Add", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 }
               }
             }
@@ -521,9 +637,9 @@ fun QuarterTargetSettingDialog(
               .height(38.dp)
               .testTag("btn_show_add_criteria")
           ) {
-            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = EblNavyPrimary)
+            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("+ Add Universal Criteria", fontSize = 11.sp, color = EblNavyPrimary, fontWeight = FontWeight.SemiBold)
+            Text("+ Add Universal Criteria", fontSize = 11.sp, color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary, fontWeight = FontWeight.SemiBold)
           }
         }
 
@@ -531,7 +647,7 @@ fun QuarterTargetSettingDialog(
         Text(
           text = "Note: 4 Quarters (Q1, Q2, Q3, Q4) and Annual targets sync live with Google Sheets.",
           fontSize = 10.sp,
-          color = Color.Gray
+          color = secondaryTextColor
         )
       }
     },
@@ -542,7 +658,7 @@ fun QuarterTargetSettingDialog(
           listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
             val innerMap = mutableMapOf<String, Int>()
             val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
-            allCriteria.forEach { crit ->
+            effectiveAllCriteria.forEach { crit ->
               val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
               val rawVal = qInputs[crit]?.trim() ?: "0"
               val num = if (isAssigned) (rawVal.toIntOrNull() ?: 0) else 0
@@ -553,7 +669,7 @@ fun QuarterTargetSettingDialog(
 
           // Calculate ALL as exact mathematical sum of Q1 + Q2 + Q3 + Q4
           val annualMap = mutableMapOf<String, Int>()
-          allCriteria.forEach { crit ->
+          effectiveAllCriteria.forEach { crit ->
             val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
             if (isAssigned) {
               val sumAnnual = (allQuartersResult["Q1"]?.get(crit) ?: 0) +
@@ -578,11 +694,11 @@ fun QuarterTargetSettingDialog(
           val q3Map = allQuartersResult["Q3"] ?: emptyMap()
           val q4Map = allQuartersResult["Q4"] ?: emptyMap()
 
-          // Save assigned criteria list (only checked criteria with target > 0)
-          val assignedList = allCriteria.filter { crit ->
+          // Save assigned criteria list (criteria checked or target > 0)
+          val assignedList = effectiveAllCriteria.filter { crit ->
             val isAssigned = selectedAssignedCriteria.any { it.equals(crit, ignoreCase = true) }
             val hasTarget = (annualMap[crit] ?: 0) > 0
-            isAssigned && hasTarget
+            isAssigned || hasTarget
           }
 
           if (onSaveAllTargetsUnified != null) {
@@ -613,12 +729,12 @@ fun QuarterTargetSettingDialog(
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
         modifier = Modifier.testTag("btn_save_quarter_target")
       ) {
-        Text("Save All Quarter Targets", fontWeight = FontWeight.Bold)
+        Text("Save All Quarter Targets", fontWeight = FontWeight.Bold, color = Color.White)
       }
     },
     dismissButton = {
       OutlinedButton(onClick = onDismiss) {
-        Text("Cancel")
+        Text("Cancel", color = primaryTextColor)
       }
     }
   )
@@ -628,9 +744,9 @@ fun QuarterTargetSettingDialog(
     val critName = criteriaToDelete!!
     AlertDialog(
       onDismissRequest = { criteriaToDelete = null },
-      title = { Text("Delete Universal Criterion?", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+      title = { Text("Delete Universal Criterion?", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = primaryTextColor) },
       text = {
-        Text("Deleting '$critName' will permanently remove it universally for all RMs and Admin. Are you sure?")
+        Text("Deleting '$critName' will permanently remove it universally for all RMs and Admin. Are you sure?", color = secondaryTextColor)
       },
       confirmButton = {
         Button(
@@ -648,7 +764,7 @@ fun QuarterTargetSettingDialog(
       },
       dismissButton = {
         TextButton(onClick = { criteriaToDelete = null }) {
-          Text("Cancel")
+          Text("Cancel", color = primaryTextColor)
         }
       }
     )
