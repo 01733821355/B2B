@@ -90,6 +90,7 @@ fun AppSettingsScreen(
   val settings by viewModel.appSettings.collectAsState()
   val context = LocalContext.current
   val scrollState = rememberScrollState()
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
   val productSetting = settings.find { it.settingKey == "PRODUCT_TYPES" }?.settingValue
     ?: "Credit Card,B2B,Corporate Card,Split,Limit Enhancement"

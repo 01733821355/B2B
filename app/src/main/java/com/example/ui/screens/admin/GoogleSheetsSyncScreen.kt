@@ -75,6 +75,7 @@ fun GoogleSheetsSyncScreen(
   modifier: Modifier = Modifier
 ) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
   val syncStatus by viewModel.syncStatus.collectAsState()
   val status = syncStatus ?: SyncStatusEntity()
   val scrollState = rememberScrollState()
