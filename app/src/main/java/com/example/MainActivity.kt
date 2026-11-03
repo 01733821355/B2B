@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -498,10 +499,20 @@ fun EblMainApp(viewModel: AppViewModel) {
           }
 
           is Screen.DbrChecklist -> {
+            val initTab by viewModel.dbrChecklistInitialTab.collectAsState()
             DbrAndChecklistScreen(
               viewModel = viewModel,
               currentUser = user,
-              onNavigateBack = { viewModel.navigateBack() }
+              onNavigateBack = { viewModel.navigateBack() },
+              initialTab = initTab
+            )
+          }
+
+          is Screen.More -> {
+            com.example.ui.screens.more.MoreScreen(
+              viewModel = viewModel,
+              currentUser = user,
+              onNavigate = { viewModel.navigateTo(it) }
             )
           }
 
@@ -611,10 +622,10 @@ fun EblBottomNav(
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
-        selected = currentScreen is Screen.CommunicationHub,
-        onClick = { onSelectScreen(Screen.CommunicationHub) },
-        icon = { Icon(Icons.Default.Call, contentDescription = "Connect", modifier = Modifier.size(20.dp)) },
-        label = { Text("Connect", fontSize = 9.sp) },
+        selected = currentScreen is Screen.More,
+        onClick = { onSelectScreen(Screen.More) },
+        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
+        label = { Text("More", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     } else if (userRole == "ADMIN") {
@@ -647,10 +658,10 @@ fun EblBottomNav(
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
-        selected = currentScreen is Screen.AppSettings,
-        onClick = { onSelectScreen(Screen.AppSettings) },
-        icon = { Icon(Icons.Default.Settings, contentDescription = "Settings", modifier = Modifier.size(20.dp)) },
-        label = { Text("Settings", fontSize = 9.sp) },
+        selected = currentScreen is Screen.More,
+        onClick = { onSelectScreen(Screen.More) },
+        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
+        label = { Text("More", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     } else { // MENTOR
@@ -676,17 +687,17 @@ fun EblBottomNav(
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
-        selected = currentScreen is Screen.MentorUserLocationTracking,
-        onClick = { onSelectScreen(Screen.MentorUserLocationTracking) },
-        icon = { Icon(Icons.Default.LocationOn, contentDescription = "Locations", modifier = Modifier.size(20.dp)) },
-        label = { Text("Locations", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
         selected = currentScreen is Screen.GoogleSheetsSync,
         onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
         icon = { Icon(Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(20.dp)) },
         label = { Text("Sheets", fontSize = 9.sp) },
+        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
+      )
+      NavigationBarItem(
+        selected = currentScreen is Screen.More,
+        onClick = { onSelectScreen(Screen.More) },
+        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
+        label = { Text("More", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
     }
@@ -728,6 +739,12 @@ fun EblNavigationRail(
         icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports") },
         label = { Text("Reports") }
       )
+      NavigationRailItem(
+        selected = currentScreen is Screen.More,
+        onClick = { onSelectScreen(Screen.More) },
+        icon = { Icon(Icons.Default.Widgets, contentDescription = "More") },
+        label = { Text("More") }
+      )
     } else {
       NavigationRailItem(
         selected = currentScreen is Screen.AdminDashboard || currentScreen is Screen.MentorDashboard,
@@ -760,13 +777,13 @@ fun EblNavigationRail(
           icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
           label = { Text("Sync") }
         )
-        NavigationRailItem(
-          selected = currentScreen is Screen.MentorUserLocationTracking,
-          onClick = { onSelectScreen(Screen.MentorUserLocationTracking) },
-          icon = { Icon(Icons.Default.LocationOn, contentDescription = "Locations") },
-          label = { Text("Locations") }
-        )
       }
+      NavigationRailItem(
+        selected = currentScreen is Screen.More,
+        onClick = { onSelectScreen(Screen.More) },
+        icon = { Icon(Icons.Default.Widgets, contentDescription = "More") },
+        label = { Text("More") }
+      )
     }
   }
 }

@@ -280,7 +280,10 @@ class EblRepository(
     q1Cc: Int, q1Corp: Int, q1B2b: Int,
     q2Cc: Int, q2Corp: Int, q2B2b: Int,
     q3Cc: Int, q3Corp: Int, q3B2b: Int,
-    q4Cc: Int, q4Corp: Int, q4B2b: Int
+    q4Cc: Int, q4Corp: Int, q4B2b: Int,
+    allQuarterCustomTargets: Map<String, Map<String, Int>>? = null,
+    assignedCriteria: List<String>? = null,
+    syncToSheets: Boolean = true
   ): Result<Unit> = withContext(Dispatchers.IO) {
     val now = DateUtils.currentDhakaMillis()
     val cleanRm = rmCode.trim().uppercase()
@@ -324,13 +327,12 @@ class EblRepository(
       )
     } catch (_: Exception) {}
 
-    // Live sync to Google Sheets for each quarter
-    try {
-      syncTargetUpsertToGoogleSheets(cleanRm, "Q1", year, q1Cc, q1Corp, q1B2b)
-      syncTargetUpsertToGoogleSheets(cleanRm, "Q2", year, q2Cc, q2Corp, q2B2b)
-      syncTargetUpsertToGoogleSheets(cleanRm, "Q3", year, q3Cc, q3Corp, q3B2b)
-      syncTargetUpsertToGoogleSheets(cleanRm, "Q4", year, q4Cc, q4Corp, q4B2b)
-    } catch (_: Exception) {}
+    // Live sync to Google Sheets for all quarters in a single atomic payload if enabled
+    if (syncToSheets) {
+      try {
+        syncTargetUpsertToGoogleSheets(cleanRm, curQ, year, curCc, curCorp, curB2b, allQuarterCustomTargets, assignedCriteria)
+      } catch (_: Exception) {}
+    }
 
     Result.success(Unit)
   }
@@ -1554,7 +1556,9 @@ class EblRepository(
     year: Int,
     ccTarget: Int,
     corpTarget: Int,
-    b2bTarget: Int
+    b2bTarget: Int,
+    allQuarterTargets: Map<String, Map<String, Int>>? = null,
+    assignedCriteria: List<String>? = null
   ): Unit = withContext(Dispatchers.IO) {
     try {
       val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
@@ -1563,15 +1567,56 @@ class EblRepository(
       }
       if (activeWebAppUrl.isBlank() || !activeWebAppUrl.startsWith("http")) return@withContext
 
-      val fullTarget = database.rmTargetDao().getTargetForRm(rmCode)
+      val cleanRm = rmCode.trim().uppercase()
+      val fullTarget = database.rmTargetDao().getTargetForRm(cleanRm)
+
+      // Resolve effective allQuarterTargets
+      val effectiveQuarterTargets = if (allQuarterTargets != null) {
+        allQuarterTargets
+      } else {
+        val rawAll = database.appSettingDao().getSetting("RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm")?.settingValue
+        if (!rawAll.isNullOrBlank()) {
+          try {
+            val rootObj = org.json.JSONObject(rawAll)
+            val parsed = mutableMapOf<String, MutableMap<String, Int>>()
+            val keys = rootObj.keys()
+            while (keys.hasNext()) {
+              val qk = keys.next().uppercase()
+              val inner = rootObj.optJSONObject(qk)
+              if (inner != null) {
+                val im = mutableMapOf<String, Int>()
+                val ik = inner.keys()
+                while (ik.hasNext()) {
+                  val k = ik.next()
+                  im[k] = inner.optInt(k, 0)
+                }
+                parsed[qk] = im
+              }
+            }
+            parsed
+          } catch (_: Exception) { null }
+        } else null
+      }
+
+      val allQuartersJsonObj = org.json.JSONObject()
+      effectiveQuarterTargets?.forEach { (qKey, map) ->
+        allQuartersJsonObj.put(qKey.uppercase(), org.json.JSONObject(map))
+      }
+
       val payload = org.json.JSONObject().apply {
         put("action", "UPSERT_RM_TARGET")
-        put("rmCode", rmCode)
+        put("rmCode", cleanRm)
         put("quarter", quarter)
         put("year", year)
         put("creditCardTarget", ccTarget)
         put("corporateCardTarget", corpTarget)
         put("b2bTarget", b2bTarget)
+        if (allQuartersJsonObj.length() > 0) {
+          put("allQuarterTargets", allQuartersJsonObj)
+        }
+        if (assignedCriteria != null) {
+          put("assignedCriteria", org.json.JSONArray(assignedCriteria))
+        }
         if (fullTarget != null) {
           put("activeQuarter", fullTarget.activeQuarter)
           put("q1CreditCardTarget", fullTarget.q1CreditCardTarget)
@@ -1598,7 +1643,10 @@ class EblRepository(
       httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
 
       // Dual-sync to Universal_Settings so every device pulling settings immediately receives this target update
-      syncSettingUpsertToGoogleSheets("RM_TARGET_$rmCode", payload.toString())
+      syncSettingUpsertToGoogleSheets("RM_TARGET_$cleanRm", payload.toString())
+      if (allQuartersJsonObj.length() > 0) {
+        syncSettingUpsertToGoogleSheets("RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm", allQuartersJsonObj.toString())
+      }
     } catch (_: Exception) {}
   }
 
@@ -3028,25 +3076,36 @@ class EblRepository(
 
       val baseMap = parseTargetsJsonMap(baseSetting?.settingValue ?: "")
       listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
-        if (res[q].isNullOrEmpty()) {
-          val specificRaw = when (q) {
-            "Q1" -> q1Setting?.settingValue
-            "Q2" -> q2Setting?.settingValue
-            "Q3" -> q3Setting?.settingValue
-            "Q4" -> q4Setting?.settingValue
-            else -> baseSetting?.settingValue
-          }
-          val map = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else if (q == "ALL") baseMap else emptyMap()
-          res[q] = map.toMutableMap()
+        val specificRaw = when (q) {
+          "Q1" -> q1Setting?.settingValue
+          "Q2" -> q2Setting?.settingValue
+          "Q3" -> q3Setting?.settingValue
+          "Q4" -> q4Setting?.settingValue
+          else -> baseSetting?.settingValue
         }
+        val specificMap = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else if (q == "ALL") baseMap else emptyMap()
+        val curMap = (res[q] ?: mutableMapOf()).toMutableMap()
+        specificMap.forEach { (crit, v) ->
+          val existingKey = curMap.keys.firstOrNull { it.trim().equals(crit.trim(), ignoreCase = true) }
+          if (existingKey == null) {
+            curMap[crit] = v
+          } else if ((curMap[existingKey] ?: 0) == 0 && v > 0) {
+            curMap[existingKey] = v
+          }
+        }
+        res[q] = curMap
       }
       // Calculate ALL as exact sum of Q1 + Q2 + Q3 + Q4 for each criterion
       val allMap = (res["ALL"] ?: mutableMapOf()).toMutableMap()
-      val allKeys = res.values.flatMap { it.keys }.distinct()
+      val allKeys = res.values.flatMap { it.keys }.map { it.trim() }.distinct()
       allKeys.forEach { crit ->
-        val sumQ = (res["Q1"]?.get(crit) ?: 0) + (res["Q2"]?.get(crit) ?: 0) + (res["Q3"]?.get(crit) ?: 0) + (res["Q4"]?.get(crit) ?: 0)
-        if (sumQ > 0 || !allMap.containsKey(crit)) {
-          allMap[crit] = sumQ
+        val sumQ = (res["Q1"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0) +
+          (res["Q2"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0) +
+          (res["Q3"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0) +
+          (res["Q4"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0)
+        val existingAllKey = allMap.keys.firstOrNull { it.trim().equals(crit, ignoreCase = true) }
+        if (sumQ > 0 || existingAllKey == null) {
+          allMap[existingAllKey ?: crit] = sumQ
         }
       }
       res["ALL"] = allMap
@@ -3160,23 +3219,7 @@ class EblRepository(
       )
     }
 
-    // Live sync to Google Sheets sequentially to avoid Apps Script spreadsheet lock contention
-    applicationScope.launch {
-      syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson)
-      syncSettingUpsertToGoogleSheets(baseKey, org.json.JSONObject(quarterlyTargets["ALL"] ?: emptyMap<String, Int>()).toString())
-      listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
-        val qKey = "${baseKey}_$q"
-        val qJson = org.json.JSONObject(quarterlyTargets[q] ?: emptyMap<String, Int>()).toString()
-        syncSettingUpsertToGoogleSheets(qKey, qJson)
-      }
-      if (assignedCriteria != null) {
-        val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
-        val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
-        syncSettingUpsertToGoogleSheets(assignedKey, joined)
-      }
-    }
-
-    // Also update RmTargetEntity with all 4 quarters targets
+    // Update RmTargetEntity with all 4 quarters targets in Room
     val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)
     val q1Map = quarterlyTargets["Q1"] ?: emptyMap()
     val q2Map = quarterlyTargets["Q2"] ?: emptyMap()
@@ -3227,8 +3270,16 @@ class EblRepository(
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString(), "APP", now)
     )
+
+    // Live sync to Google Sheets: atomic UPSERT_RM_TARGET with all 4 quarters and criteria
     applicationScope.launch {
-      syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b)
+      syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b, quarterlyTargets, assignedCriteria)
+      syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson)
+      if (assignedCriteria != null) {
+        val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
+        val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+        syncSettingUpsertToGoogleSheets(assignedKey, joined)
+      }
     }
   }
 
@@ -4247,6 +4298,64 @@ class EblRepository(
             )
           )
           updatedCount++
+        }
+      }
+
+      // Parse customQuarterTargets from RM object returned from Google Sheets
+      if (obj.has("customQuarterTargets") && !isRecentLocalTargetChange) {
+        val cqtObj = obj.optJSONObject("customQuarterTargets")
+        if (cqtObj != null) {
+          val parsedMap = mutableMapOf<String, MutableMap<String, Int>>()
+          val qkIter = cqtObj.keys()
+          while (qkIter.hasNext()) {
+            val qk = qkIter.next().uppercase()
+            val inner = cqtObj.optJSONObject(qk)
+            if (inner != null) {
+              val im = mutableMapOf<String, Int>()
+              val ikIter = inner.keys()
+              while (ikIter.hasNext()) {
+                val crit = ikIter.next()
+                im[crit] = inner.optInt(crit, 0)
+              }
+              parsedMap[qk] = im
+            }
+          }
+          if (parsedMap.isNotEmpty()) {
+            val allQKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$code"
+            val rootObj = org.json.JSONObject()
+            parsedMap.forEach { (q, m) ->
+              rootObj.put(q, org.json.JSONObject(m))
+              val qKey = if (q.equals("ALL", true)) "RM_CUSTOM_TARGETS_$code" else "RM_CUSTOM_TARGETS_${code}_$q"
+              database.appSettingDao().insertOrUpdateSetting(
+                AppSettingEntity(qKey, org.json.JSONObject(m).toString(), "GoogleSheets_Universal", now)
+              )
+            }
+            database.appSettingDao().insertOrUpdateSetting(
+              AppSettingEntity(allQKey, rootObj.toString(), "GoogleSheets_Universal", now)
+            )
+          }
+        }
+      }
+
+      // Update universal TARGET_CRITERIA_LIST if new criteria were found in sheet headers
+      if (obj.has("allCriteria")) {
+        val arr = obj.optJSONArray("allCriteria")
+        if (arr != null && arr.length() > 0) {
+          val critList = mutableListOf<String>()
+          for (ci in 0 until arr.length()) {
+            val cName = arr.optString(ci).trim()
+            if (cName.isNotBlank()) critList.add(cName)
+          }
+          if (critList.isNotEmpty()) {
+            val existingCritStr = database.appSettingDao().getSetting("TARGET_CRITERIA_LIST")?.settingValue ?: ""
+            val existingCrits = existingCritStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            val mergedCrits = (existingCrits + critList).distinct()
+            if (mergedCrits.size > existingCrits.size) {
+              database.appSettingDao().insertOrUpdateSetting(
+                AppSettingEntity("TARGET_CRITERIA_LIST", mergedCrits.joinToString(","), "GoogleSheets_Universal", now)
+              )
+            }
+          }
         }
       }
     }

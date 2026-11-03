@@ -63,6 +63,8 @@ fun VoiceInputField(
     }
   }
 
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+
   OutlinedTextField(
     value = value,
     onValueChange = { raw ->
@@ -72,6 +74,16 @@ fun VoiceInputField(
     label = { Text(label, fontSize = 12.sp) },
     placeholder = if (placeholder.isNotBlank()) { { Text(placeholder, fontSize = 12.sp) } } else null,
     leadingIcon = leadingIcon,
+    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+      focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+      unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+      focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+      unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+      focusedBorderColor = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
+      unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1),
+      focusedLabelColor = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
+      unfocusedLabelColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
+    ),
     trailingIcon = {
       Row(verticalAlignment = Alignment.CenterVertically) {
         if (trailingIcon != null) {

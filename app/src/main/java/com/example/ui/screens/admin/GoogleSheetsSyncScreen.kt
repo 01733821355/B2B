@@ -140,7 +140,7 @@ function setupAllSheets() {
   }
 
   getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
-  getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Credit Card Target', 'Corporate Card Target', 'B2B Target', 'Password Hash', 'Salt', 'Created At', 'Last Updated', 'Last Latitude', 'Last Longitude', 'Last Location Address', 'Last Location Time', 'Is Online', 'Q1 CC Target', 'Q1 Corp Target', 'Q1 B2B Target', 'Q2 CC Target', 'Q2 Corp Target', 'Q2 B2B Target', 'Q3 CC Target', 'Q3 Corp Target', 'Q3 B2B Target', 'Q4 CC Target', 'Q4 Corp Target', 'Q4 B2B Target'], '#1E3A8A');
+  getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Credit Card Target', 'Corporate Card Target', 'B2B Target', 'Password Hash', 'Salt', 'Created At', 'Last Updated', 'Last Latitude', 'Last Longitude', 'Last Location Address', 'Last Location Time', 'Is Online', 'Credit Card Q1', 'Credit Card Q2', 'Credit Card Q3', 'Credit Card Q4', 'Credit Card Annual', 'Corporate Card Q1', 'Corporate Card Q2', 'Corporate Card Q3', 'Corporate Card Q4', 'Corporate Card Annual', 'B2B Q1', 'B2B Q2', 'B2B Q3', 'B2B Q4', 'B2B Annual'], '#1E3A8A');
   getOrCreateSheet(ss, 'Universal_Settings', ['Setting Key', 'Setting Value', 'Description', 'Last Updated By', 'Last Updated At'], '#065F46');
   getOrCreateSheet(ss, 'Audit_Trail', ['Log ID', 'User / RM Code', 'Role', 'Action Type', 'Target ID / File ID', 'Details', 'Timestamp'], '#7C2D12');
   getOrCreateSheet(ss, 'Attachments', ['Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp', 'Drive Link'], '#4C1D95');
@@ -154,6 +154,16 @@ function setupAllSheets() {
   try { authorizeDrivePermissions(); } catch (e) {}
   Logger.log("All 11 Sheets & Drive configured successfully!");
   return "All 11 Sheets & Drive configured successfully!";
+}
+
+function getRmSheet(ss) {
+  if (!ss) return null;
+  return ss.getSheetByName('RM Mapping') ||
+         ss.getSheetByName('RM_Mapping') ||
+         ss.getSheetByName('RM_Details') ||
+         ss.getSheetByName('RM Details') ||
+         ss.getSheetByName('RM_Directory') ||
+         ss.getSheetByName('RM Directory');
 }
 
 function getOrCreateSheet(ss, sheetName, headers, headerColor) {
@@ -170,6 +180,10 @@ function getOrCreateSheet(ss, sheetName, headers, headerColor) {
   if (!sheetName) {
     setupAllSheets();
     return ss.getActiveSheet();
+  }
+  if (sheetName === 'RM_Details' || sheetName === 'RM_Mapping' || sheetName === 'RM Mapping') {
+    var existingRm = getRmSheet(ss);
+    if (existingRm) return existingRm;
   }
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
@@ -331,12 +345,185 @@ function extractAllSheetFiles(sheet) {
   return list;
 }
 
+function normalizeCriteriaName(name) {
+  var n = String(name || '').trim();
+  var low = n.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (low === 'cc' || low === 'creditcard') return 'Credit Card';
+  if (low === 'corp' || low === 'corporate' || low === 'corporatecard') return 'Corporate Card';
+  if (low === 'b2b') return 'B2B';
+  if (low === 'casa') return 'CASA';
+  if (low === 'sme') return 'SME';
+  if (n.length > 0) {
+    return n.charAt(0).toUpperCase() + n.slice(1);
+  }
+  return n;
+}
+
+function parseTargetHeader(headerStr) {
+  var h = String(headerStr || '').trim();
+  if (!h) return null;
+  var cleanH = h.replace(/\s+/g, ' ').trim();
+
+  // 1. Annual / Anual / Total patterns (e.g. "Credit Card Annual", "B2B Anual", "Company Annual Target", "b2banual", "b2bannual", "Company Total")
+  var mAnnual = cleanH.match(/^(.+?)[\s_-]?(?:Annual|Anual|Total)(?:\s*Target)?$/i);
+  if (mAnnual) {
+    var rawCritA = mAnnual[1].replace(/Target$/i, '').trim();
+    if (rawCritA) {
+      return { criteria: normalizeCriteriaName(rawCritA), quarter: 'ALL' };
+    }
+  }
+
+  // 2. Pattern: "<Criteria> Q[1-4]" or "<Criteria> Q[1-4] Target" or "<Criteria> Target Q[1-4]" or "b2bq1" or "companyq4"
+  var mQuarterEnd = cleanH.match(/^(.+?)[\s_-]?(?:Target[\s_-]?)?(Q[1-4])(?:\s*Target)?$/i);
+  if (mQuarterEnd) {
+    var rawCritQ = mQuarterEnd[1].replace(/Target$/i, '').trim();
+    if (rawCritQ) {
+      return { criteria: normalizeCriteriaName(rawCritQ), quarter: mQuarterEnd[2].toUpperCase() };
+    }
+  }
+
+  // 3. Pattern: "Q[1-4] <Criteria>" or "Q[1-4] <Criteria> Target" (e.g. "Q1 CC Target", "Q4 Company Target", "Q4 B2B Target")
+  var mQuarterStart = cleanH.match(/^(Q[1-4])[\s_-]+(.+?)(?:\s*Target)?$/i);
+  if (mQuarterStart) {
+    var rawCritStart = mQuarterStart[2].replace(/Target$/i, '').trim();
+    if (rawCritStart) {
+      return { criteria: normalizeCriteriaName(rawCritStart), quarter: mQuarterStart[1].toUpperCase() };
+    }
+  }
+
+  return null;
+}
+
+function getTargetValueCaseInsensitive(quarterObj, criteriaName) {
+  if (!quarterObj || typeof quarterObj !== 'object') return null;
+  if (quarterObj[criteriaName] !== undefined && quarterObj[criteriaName] !== null) {
+    var directNum = Number(quarterObj[criteriaName]);
+    return isNaN(directNum) ? 0 : directNum;
+  }
+  var targetClean = normalizeCriteriaName(criteriaName).toLowerCase().replace(/[^a-z0-9]/g, '');
+  var keys = Object.keys(quarterObj);
+  for (var i = 0; i < keys.length; i++) {
+    var kClean = normalizeCriteriaName(keys[i]).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (kClean === targetClean) {
+      var foundNum = Number(quarterObj[keys[i]]);
+      return isNaN(foundNum) ? 0 : foundNum;
+    }
+  }
+  return null;
+}
+
+function ensureTargetColumns(sheet, criteriaList) {
+  if (!sheet) return {};
+  var data = sheet.getDataRange().getValues();
+  var headers = data.length > 0 ? data[0].map(function(h) { return String(h || '').trim(); }) : [];
+
+  // Map existing detected criteria and quarters from headers
+  var existingMap = {};
+  for (var c = 0; c < headers.length; c++) {
+    var info = parseTargetHeader(headers[c]);
+    if (info) {
+      var normC = normalizeCriteriaName(info.criteria);
+      if (!existingMap[normC]) existingMap[normC] = {};
+      existingMap[normC][info.quarter] = c + 1; // 1-based column index
+    }
+  }
+
+  var defaultCriteria = (criteriaList && criteriaList.length > 0) ? criteriaList : ['Credit Card', 'Corporate Card', 'B2B'];
+  var newColsToAdd = [];
+
+  defaultCriteria.forEach(function(crit) {
+    var cNorm = normalizeCriteriaName(crit);
+    var quarters = ['Q1', 'Q2', 'Q3', 'Q4', 'Annual'];
+    quarters.forEach(function(q) {
+      var qKey = (q === 'Annual') ? 'ALL' : q;
+      // If column for this criterion + quarter doesn't exist yet, queue it to add
+      if (!existingMap[cNorm] || !existingMap[cNorm][qKey]) {
+        var colName = cNorm + ' ' + q;
+        newColsToAdd.push(colName);
+      }
+    });
+  });
+
+  if (newColsToAdd.length > 0) {
+    var lastCol = sheet.getLastColumn();
+    for (var i = 0; i < newColsToAdd.length; i++) {
+      var targetCol = lastCol + i + 1;
+      sheet.getRange(1, targetCol).setValue(newColsToAdd[i])
+        .setBackground('#1E3A8A')
+        .setFontColor('#FFFFFF')
+        .setFontWeight('bold');
+    }
+  }
+
+  // Re-read headers and return fresh column index map
+  var freshData = sheet.getDataRange().getValues();
+  var freshHeaders = freshData.length > 0 ? freshData[0].map(function(h) { return String(h || '').trim(); }) : [];
+  var freshMap = {};
+  for (var fc = 0; fc < freshHeaders.length; fc++) {
+    var finfo = parseTargetHeader(freshHeaders[fc]);
+    if (finfo) {
+      var fn = normalizeCriteriaName(finfo.criteria);
+      if (!freshMap[fn]) freshMap[fn] = {};
+      freshMap[fn][finfo.quarter] = fc + 1;
+    }
+  }
+  return freshMap;
+}
+
 function extractAllSheetRms(sheet) {
   var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  var headers = data[0].map(function(h) { return String(h || '').trim(); });
+
+  var targetColMap = [];
+  var allDetectedCriteria = {};
+  for (var c = 0; c < headers.length; c++) {
+    var tInfo = parseTargetHeader(headers[c]);
+    if (tInfo) {
+      targetColMap.push({ colIndex: c, criteria: tInfo.criteria, quarter: tInfo.quarter });
+      allDetectedCriteria[tInfo.criteria] = true;
+    }
+  }
+
   var list = [];
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     if (!row[0]) continue;
+
+    var customQuarterTargets = { "Q1": {}, "Q2": {}, "Q3": {}, "Q4": {}, "ALL": {} };
+    targetColMap.forEach(function(m) {
+      var rawVal = row[m.colIndex];
+      var numVal = (rawVal !== undefined && rawVal !== '' && !isNaN(parseInt(rawVal))) ? parseInt(rawVal) : 0;
+      if (!customQuarterTargets[m.quarter]) customQuarterTargets[m.quarter] = {};
+      customQuarterTargets[m.quarter][m.criteria] = numVal;
+    });
+
+    Object.keys(allDetectedCriteria).forEach(function(crit) {
+      var q1 = customQuarterTargets["Q1"][crit] || 0;
+      var q2 = customQuarterTargets["Q2"][crit] || 0;
+      var q3 = customQuarterTargets["Q3"][crit] || 0;
+      var q4 = customQuarterTargets["Q4"][crit] || 0;
+      var currentAll = customQuarterTargets["ALL"][crit] || 0;
+      if (currentAll === 0 && (q1 + q2 + q3 + q4) > 0) {
+        customQuarterTargets["ALL"][crit] = q1 + q2 + q3 + q4;
+      }
+    });
+
+    var ccQ1 = customQuarterTargets["Q1"]["Credit Card"] || (row[19] !== undefined && !isNaN(parseInt(row[19])) ? parseInt(row[19]) : 0);
+    var ccQ2 = customQuarterTargets["Q2"]["Credit Card"] || (row[22] !== undefined && !isNaN(parseInt(row[22])) ? parseInt(row[22]) : 0);
+    var ccQ3 = customQuarterTargets["Q3"]["Credit Card"] || (row[25] !== undefined && !isNaN(parseInt(row[25])) ? parseInt(row[25]) : 0);
+    var ccQ4 = customQuarterTargets["Q4"]["Credit Card"] || (row[28] !== undefined && !isNaN(parseInt(row[28])) ? parseInt(row[28]) : 0);
+
+    var corpQ1 = customQuarterTargets["Q1"]["Corporate Card"] || (row[20] !== undefined && !isNaN(parseInt(row[20])) ? parseInt(row[20]) : 0);
+    var corpQ2 = customQuarterTargets["Q2"]["Corporate Card"] || (row[23] !== undefined && !isNaN(parseInt(row[23])) ? parseInt(row[23]) : 0);
+    var corpQ3 = customQuarterTargets["Q3"]["Corporate Card"] || (row[26] !== undefined && !isNaN(parseInt(row[26])) ? parseInt(row[26]) : 0);
+    var corpQ4 = customQuarterTargets["Q4"]["Corporate Card"] || (row[29] !== undefined && !isNaN(parseInt(row[29])) ? parseInt(row[29]) : 0);
+
+    var b2bQ1 = customQuarterTargets["Q1"]["B2B"] || (row[21] !== undefined && !isNaN(parseInt(row[21])) ? parseInt(row[21]) : 0);
+    var b2bQ2 = customQuarterTargets["Q2"]["B2B"] || (row[24] !== undefined && !isNaN(parseInt(row[24])) ? parseInt(row[24]) : 0);
+    var b2bQ3 = customQuarterTargets["Q3"]["B2B"] || (row[27] !== undefined && !isNaN(parseInt(row[27])) ? parseInt(row[27]) : 0);
+    var b2bQ4 = customQuarterTargets["Q4"]["B2B"] || (row[30] !== undefined && !isNaN(parseInt(row[30])) ? parseInt(row[30]) : 0);
+
     list.push({
       rmCode: String(row[0] || '').trim().toUpperCase(),
       name: String(row[1] || ''),
@@ -345,9 +532,9 @@ function extractAllSheetRms(sheet) {
       officeAddress: String(row[4] || ''),
       role: String(row[5] || 'RM'),
       accountStatus: String(row[6] || 'ACTIVE'),
-      creditCardTarget: (row[7] !== undefined && row[7] !== '' && !isNaN(parseInt(row[7]))) ? parseInt(row[7]) : 0,
-      corporateCardTarget: (row[8] !== undefined && row[8] !== '' && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : 0,
-      b2bTarget: (row[9] !== undefined && row[9] !== '' && !isNaN(parseInt(row[9]))) ? parseInt(row[9]) : 0,
+      creditCardTarget: (row[7] !== undefined && row[7] !== '' && !isNaN(parseInt(row[7]))) ? parseInt(row[7]) : (ccQ4 || ccQ1),
+      corporateCardTarget: (row[8] !== undefined && row[8] !== '' && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : (corpQ4 || corpQ1),
+      b2bTarget: (row[9] !== undefined && row[9] !== '' && !isNaN(parseInt(row[9]))) ? parseInt(row[9]) : (b2bQ4 || b2bQ1),
       passwordHash: String(row[10] || ''),
       salt: String(row[11] || ''),
       createdAt: String(row[12] || ''),
@@ -357,18 +544,20 @@ function extractAllSheetRms(sheet) {
       lastLocationAddress: String(row[16] || ''),
       lastLocationTime: String(row[17] || ''),
       isOnline: Boolean(row[18] === true || String(row[18]).toLowerCase() === 'true'),
-      q1CreditCardTarget: (row[19] !== undefined && row[19] !== '' && !isNaN(parseInt(row[19]))) ? parseInt(row[19]) : 0,
-      q1CorporateCardTarget: (row[20] !== undefined && row[20] !== '' && !isNaN(parseInt(row[20]))) ? parseInt(row[20]) : 0,
-      q1B2bTarget: (row[21] !== undefined && row[21] !== '' && !isNaN(parseInt(row[21]))) ? parseInt(row[21]) : 0,
-      q2CreditCardTarget: (row[22] !== undefined && row[22] !== '' && !isNaN(parseInt(row[22]))) ? parseInt(row[22]) : 0,
-      q2CorporateCardTarget: (row[23] !== undefined && row[23] !== '' && !isNaN(parseInt(row[23]))) ? parseInt(row[23]) : 0,
-      q2B2bTarget: (row[24] !== undefined && row[24] !== '' && !isNaN(parseInt(row[24]))) ? parseInt(row[24]) : 0,
-      q3CreditCardTarget: (row[25] !== undefined && row[25] !== '' && !isNaN(parseInt(row[25]))) ? parseInt(row[25]) : 0,
-      q3CorporateCardTarget: (row[26] !== undefined && row[26] !== '' && !isNaN(parseInt(row[26]))) ? parseInt(row[26]) : 0,
-      q3B2bTarget: (row[27] !== undefined && row[27] !== '' && !isNaN(parseInt(row[27]))) ? parseInt(row[27]) : 0,
-      q4CreditCardTarget: (row[28] !== undefined && row[28] !== '' && !isNaN(parseInt(row[28]))) ? parseInt(row[28]) : 0,
-      q4CorporateCardTarget: (row[29] !== undefined && row[29] !== '' && !isNaN(parseInt(row[29]))) ? parseInt(row[29]) : 0,
-      q4B2bTarget: (row[30] !== undefined && row[30] !== '' && !isNaN(parseInt(row[30]))) ? parseInt(row[30]) : 0
+      q1CreditCardTarget: ccQ1,
+      q1CorporateCardTarget: corpQ1,
+      q1B2bTarget: b2bQ1,
+      q2CreditCardTarget: ccQ2,
+      q2CorporateCardTarget: corpQ2,
+      q2B2bTarget: b2bQ2,
+      q3CreditCardTarget: ccQ3,
+      q3CorporateCardTarget: corpQ3,
+      q3B2bTarget: b2bQ3,
+      q4CreditCardTarget: ccQ4,
+      q4CorporateCardTarget: corpQ4,
+      q4B2bTarget: b2bQ4,
+      customQuarterTargets: customQuarterTargets,
+      allCriteria: Object.keys(allDetectedCriteria)
     });
   }
   return list;
@@ -600,7 +789,7 @@ function handleFetchAllData() {
       try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
     }
     var fileSheet = ss ? (ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files')) : null;
-    var rmSheet = ss ? (ss.getSheetByName('RM_Details') || ss.getSheetByName('RM_Directory')) : null;
+    var rmSheet = ss ? getRmSheet(ss) : null;
     var settingsSheet = ss ? (ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings')) : null;
     var docSheet = ss ? ss.getSheetByName('Important_Documents') : null;
     var chatSheet = ss ? ss.getSheetByName('Chat_And_Calls') : null;
@@ -611,7 +800,7 @@ function handleFetchAllData() {
     var locSheet = ss ? (ss.getSheetByName('RM_Location_Logs') || ss.getSheetByName('Location_Logs')) : null;
 
     var knownSheetNames = [
-      'Customer_Files', 'Files', 'RM_Details', 'RM_Directory', 'Universal_Settings',
+      'Customer_Files', 'Files', 'RM_Details', 'RM Details', 'RM Mapping', 'RM_Mapping', 'RM_Directory', 'RM Directory', 'Universal_Settings',
       'Settings', 'Audit_Trail', 'Attachments', 'SMS_Notifications',
       'RM_Location_Logs', 'Location_Logs', 'Important_Documents',
       'Chat_And_Calls', 'Team_Events', 'Event_Submissions'
@@ -1615,42 +1804,42 @@ function doPost(e) {
     // Handle Direct RM Profile, Role Switching, Status, Targets & Password Update (or insert new RM row if not found in sheet)
     if (data.action === 'UPDATE_RM_PASSWORD' || data.action === 'UPSERT_RM' || data.action === 'UPDATE_RM_PROFILE' || data.action === 'APPROVE_RM' || data.action === 'REJECT_RM' || data.action === 'UPSERT_RM_TARGET' || data.action === 'UPDATE_RM_TARGET' || data.action === 'SET_RM_TARGET') {
       var targetRmCode = String(data.rmCode || (data.rm && data.rm.rmCode) || '').trim().toUpperCase();
-      var curRmsP = rmSheet.getDataRange().getValues();
-      var foundRm = false;
       var nowTimeStr = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
       var updateTime = data.updatedAt || nowTimeStr;
+
+      var allTargetsPayload = data.allQuarterTargets || data.targetsByQuarter || data.quarterlyTargets || null;
+      var criteriaToEnsure = ['Credit Card', 'Corporate Card', 'B2B'];
+      if (allTargetsPayload) {
+        Object.keys(allTargetsPayload).forEach(function(qk) {
+          var inner = allTargetsPayload[qk];
+          if (inner && typeof inner === 'object') {
+            Object.keys(inner).forEach(function(ck) {
+              var norm = normalizeCriteriaName(ck);
+              if (norm && criteriaToEnsure.indexOf(norm) === -1) criteriaToEnsure.push(norm);
+            });
+          }
+        });
+      }
+      if (data.assignedCriteria && Array.isArray(data.assignedCriteria)) {
+        data.assignedCriteria.forEach(function(ck) {
+          var norm = normalizeCriteriaName(ck);
+          if (norm && criteriaToEnsure.indexOf(norm) === -1) criteriaToEnsure.push(norm);
+        });
+      }
+
+      var colMap = ensureTargetColumns(rmSheet, criteriaToEnsure);
+
+      var curRmsP = rmSheet.getDataRange().getValues();
+      var foundRowIdx = -1;
       for (var pr = 1; pr < curRmsP.length; pr++) {
         if (String(curRmsP[pr][0] || '').trim().toUpperCase() === targetRmCode) {
-          if (data.name) rmSheet.getRange(pr + 1, 2).setValue(data.name);
-          if (data.mobile) rmSheet.getRange(pr + 1, 3).setValue(data.mobile);
-          if (data.email) rmSheet.getRange(pr + 1, 4).setValue(data.email);
-          if (data.officeAddress) rmSheet.getRange(pr + 1, 5).setValue(data.officeAddress);
-          if (data.role) rmSheet.getRange(pr + 1, 6).setValue(data.role);
-          if (data.accountStatus || data.status) rmSheet.getRange(pr + 1, 7).setValue(data.accountStatus || data.status);
-          if (data.creditCardTarget !== undefined) rmSheet.getRange(pr + 1, 8).setValue(Number(data.creditCardTarget) || 0);
-          if (data.corporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 9).setValue(Number(data.corporateCardTarget) || 0);
-          if (data.b2bTarget !== undefined) rmSheet.getRange(pr + 1, 10).setValue(Number(data.b2bTarget) || 0);
-          if (data.passwordHash) rmSheet.getRange(pr + 1, 11).setValue(data.passwordHash);
-          if (data.salt) rmSheet.getRange(pr + 1, 12).setValue(data.salt);
-          if (data.q1CreditCardTarget !== undefined) rmSheet.getRange(pr + 1, 20).setValue(Number(data.q1CreditCardTarget) || 0);
-          if (data.q1CorporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 21).setValue(Number(data.q1CorporateCardTarget) || 0);
-          if (data.q1B2bTarget !== undefined) rmSheet.getRange(pr + 1, 22).setValue(Number(data.q1B2bTarget) || 0);
-          if (data.q2CreditCardTarget !== undefined) rmSheet.getRange(pr + 1, 23).setValue(Number(data.q2CreditCardTarget) || 0);
-          if (data.q2CorporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 24).setValue(Number(data.q2CorporateCardTarget) || 0);
-          if (data.q2B2bTarget !== undefined) rmSheet.getRange(pr + 1, 25).setValue(Number(data.q2B2bTarget) || 0);
-          if (data.q3CreditCardTarget !== undefined) rmSheet.getRange(pr + 1, 26).setValue(Number(data.q3CreditCardTarget) || 0);
-          if (data.q3CorporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 27).setValue(Number(data.q3CorporateCardTarget) || 0);
-          if (data.q3B2bTarget !== undefined) rmSheet.getRange(pr + 1, 28).setValue(Number(data.q3B2bTarget) || 0);
-          if (data.q4CreditCardTarget !== undefined) rmSheet.getRange(pr + 1, 29).setValue(Number(data.q4CreditCardTarget) || 0);
-          if (data.q4CorporateCardTarget !== undefined) rmSheet.getRange(pr + 1, 30).setValue(Number(data.q4CorporateCardTarget) || 0);
-          if (data.q4B2bTarget !== undefined) rmSheet.getRange(pr + 1, 31).setValue(Number(data.q4B2bTarget) || 0);
-          rmSheet.getRange(pr + 1, 14).setValue(updateTime);
-          foundRm = true;
+          foundRowIdx = pr + 1;
           break;
         }
       }
-      if (!foundRm && targetRmCode) {
-        rmSheet.appendRow([
+
+      if (foundRowIdx === -1 && targetRmCode) {
+        var baseAppendRow = [
           targetRmCode,
           data.name || 'Relationship Manager',
           data.mobile || '',
@@ -1665,46 +1854,126 @@ function doPost(e) {
           data.salt || '',
           data.createdAt || updateTime,
           updateTime,
-          0.0, 0.0, '', '', false,
-          Number(data.q1CreditCardTarget) || 0,
-          Number(data.q1CorporateCardTarget) || 0,
-          Number(data.q1B2bTarget) || 0,
-          Number(data.q2CreditCardTarget) || 0,
-          Number(data.q2CorporateCardTarget) || 0,
-          Number(data.q2B2bTarget) || 0,
-          Number(data.q3CreditCardTarget) || 0,
-          Number(data.q3CorporateCardTarget) || 0,
-          Number(data.q3B2bTarget) || 0,
-          Number(data.q4CreditCardTarget) || 0,
-          Number(data.q4CorporateCardTarget) || 0,
-          Number(data.q4B2bTarget) || 0
-        ]);
+          0.0, 0.0, '', '', false
+        ];
+        rmSheet.appendRow(baseAppendRow);
+        foundRowIdx = rmSheet.getLastRow();
       }
 
-      // Also persist to Universal_Settings under RM_TARGET_<rmCode> so all quarterly and annual targets sync to every phone
-      if (data.action === 'UPSERT_RM_TARGET' || data.action === 'UPDATE_RM_TARGET' || data.action === 'SET_RM_TARGET' || data.creditCardTarget !== undefined) {
-        try {
-          var setSheetT = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
-          if (setSheetT && targetRmCode) {
-            var tKey = 'RM_TARGET_' + targetRmCode;
-            var tVal = JSON.stringify(data);
-            var setValsT = setSheetT.getDataRange().getValues();
-            var tRowIdx = -1;
-            for (var tr = 1; tr < setValsT.length; tr++) {
-              if (String(setValsT[tr][0] || '').trim().toUpperCase() === tKey) {
-                tRowIdx = tr + 1;
+      if (foundRowIdx > 0) {
+        if (data.name) rmSheet.getRange(foundRowIdx, 2).setValue(data.name);
+        if (data.mobile) rmSheet.getRange(foundRowIdx, 3).setValue(data.mobile);
+        if (data.email) rmSheet.getRange(foundRowIdx, 4).setValue(data.email);
+        if (data.officeAddress) rmSheet.getRange(foundRowIdx, 5).setValue(data.officeAddress);
+        if (data.role) rmSheet.getRange(foundRowIdx, 6).setValue(data.role);
+        if (data.accountStatus || data.status) rmSheet.getRange(foundRowIdx, 7).setValue(data.accountStatus || data.status);
+        if (data.creditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 8).setValue(Number(data.creditCardTarget) || 0);
+        if (data.corporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 9).setValue(Number(data.corporateCardTarget) || 0);
+        if (data.b2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 10).setValue(Number(data.b2bTarget) || 0);
+        if (data.passwordHash) rmSheet.getRange(foundRowIdx, 11).setValue(data.passwordHash);
+        if (data.salt) rmSheet.getRange(foundRowIdx, 12).setValue(data.salt);
+        rmSheet.getRange(foundRowIdx, 14).setValue(updateTime);
+
+        criteriaToEnsure.forEach(function(crit) {
+          var cNorm = normalizeCriteriaName(crit);
+          var critMap = colMap[cNorm] || colMap[crit];
+          if (!critMap) return;
+          var valQ1 = null, valQ2 = null, valQ3 = null, valQ4 = null, valAnnual = null;
+          if (allTargetsPayload) {
+            valQ1 = getTargetValueCaseInsensitive(allTargetsPayload.Q1, cNorm);
+            valQ2 = getTargetValueCaseInsensitive(allTargetsPayload.Q2, cNorm);
+            valQ3 = getTargetValueCaseInsensitive(allTargetsPayload.Q3, cNorm);
+            valQ4 = getTargetValueCaseInsensitive(allTargetsPayload.Q4, cNorm);
+            valAnnual = getTargetValueCaseInsensitive(allTargetsPayload.ALL, cNorm);
+          }
+          if (valQ1 === null) {
+            if (cNorm === 'Credit Card') valQ1 = Number(data.q1CreditCardTarget) || 0;
+            else if (cNorm === 'Corporate Card') valQ1 = Number(data.q1CorporateCardTarget) || 0;
+            else if (cNorm === 'B2B') valQ1 = Number(data.q1B2bTarget) || 0;
+            else valQ1 = 0;
+          }
+          if (valQ2 === null) {
+            if (cNorm === 'Credit Card') valQ2 = Number(data.q2CreditCardTarget) || 0;
+            else if (cNorm === 'Corporate Card') valQ2 = Number(data.q2CorporateCardTarget) || 0;
+            else if (cNorm === 'B2B') valQ2 = Number(data.q2B2bTarget) || 0;
+            else valQ2 = 0;
+          }
+          if (valQ3 === null) {
+            if (cNorm === 'Credit Card') valQ3 = Number(data.q3CreditCardTarget) || 0;
+            else if (cNorm === 'Corporate Card') valQ3 = Number(data.q3CorporateCardTarget) || 0;
+            else if (cNorm === 'B2B') valQ3 = Number(data.q3B2bTarget) || 0;
+            else valQ3 = 0;
+          }
+          if (valQ4 === null) {
+            if (cNorm === 'Credit Card') valQ4 = Number(data.q4CreditCardTarget) || 0;
+            else if (cNorm === 'Corporate Card') valQ4 = Number(data.q4CorporateCardTarget) || 0;
+            else if (cNorm === 'B2B') valQ4 = Number(data.q4B2bTarget) || 0;
+            else valQ4 = 0;
+          }
+          if (valAnnual === null || valAnnual === 0) {
+            valAnnual = valQ1 + valQ2 + valQ3 + valQ4;
+          }
+
+          if (critMap['Q1']) rmSheet.getRange(foundRowIdx, critMap['Q1']).setValue(valQ1);
+          if (critMap['Q2']) rmSheet.getRange(foundRowIdx, critMap['Q2']).setValue(valQ2);
+          if (critMap['Q3']) rmSheet.getRange(foundRowIdx, critMap['Q3']).setValue(valQ3);
+          if (critMap['Q4']) rmSheet.getRange(foundRowIdx, critMap['Q4']).setValue(valQ4);
+          if (critMap['ALL']) rmSheet.getRange(foundRowIdx, critMap['ALL']).setValue(valAnnual);
+        });
+
+        if (data.q1CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 20).setValue(Number(data.q1CreditCardTarget) || 0);
+        if (data.q1CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 21).setValue(Number(data.q1CorporateCardTarget) || 0);
+        if (data.q1B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 22).setValue(Number(data.q1B2bTarget) || 0);
+        if (data.q2CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 23).setValue(Number(data.q2CreditCardTarget) || 0);
+        if (data.q2CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 24).setValue(Number(data.q2CorporateCardTarget) || 0);
+        if (data.q2B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 25).setValue(Number(data.q2B2bTarget) || 0);
+        if (data.q3CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 26).setValue(Number(data.q3CreditCardTarget) || 0);
+        if (data.q3CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 27).setValue(Number(data.q3CorporateCardTarget) || 0);
+        if (data.q3B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 28).setValue(Number(data.q3B2bTarget) || 0);
+        if (data.q4CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 29).setValue(Number(data.q4CreditCardTarget) || 0);
+        if (data.q4CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 30).setValue(Number(data.q4CorporateCardTarget) || 0);
+        if (data.q4B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 31).setValue(Number(data.q4B2bTarget) || 0);
+      }
+
+      try {
+        var setSheetT = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+        if (setSheetT && targetRmCode) {
+          var tKey = 'RM_TARGET_' + targetRmCode;
+          var tVal = JSON.stringify(data);
+          var setValsT = setSheetT.getDataRange().getValues();
+          var tRowIdx = -1;
+          for (var tr = 1; tr < setValsT.length; tr++) {
+            if (String(setValsT[tr][0] || '').trim().toUpperCase() === tKey) {
+              tRowIdx = tr + 1;
+              break;
+            }
+          }
+          if (tRowIdx > 0) {
+            setSheetT.getRange(tRowIdx, 2).setValue(tVal);
+            setSheetT.getRange(tRowIdx, 5).setValue(nowTimeStr);
+          } else {
+            setSheetT.appendRow([tKey, tVal, 'Target for ' + targetRmCode, 'App_Sync', nowTimeStr]);
+          }
+
+          if (allTargetsPayload) {
+            var allQKey = 'RM_CUSTOM_TARGETS_ALL_QUARTERS_' + targetRmCode;
+            var allQVal = JSON.stringify(allTargetsPayload);
+            var allQRowIdx = -1;
+            for (var tr2 = 1; tr2 < setValsT.length; tr2++) {
+              if (String(setValsT[tr2][0] || '').trim().toUpperCase() === allQKey) {
+                allQRowIdx = tr2 + 1;
                 break;
               }
             }
-            if (tRowIdx > 0) {
-              setSheetT.getRange(tRowIdx, 2).setValue(tVal);
-              setSheetT.getRange(tRowIdx, 5).setValue(nowTimeStr);
+            if (allQRowIdx > 0) {
+              setSheetT.getRange(allQRowIdx, 2).setValue(allQVal);
+              setSheetT.getRange(allQRowIdx, 5).setValue(nowTimeStr);
             } else {
-              setSheetT.appendRow([tKey, tVal, 'Target for ' + targetRmCode, 'App_Sync', nowTimeStr]);
+              setSheetT.appendRow([allQKey, allQVal, 'All Quarter Targets for ' + targetRmCode, 'App_Sync', nowTimeStr]);
             }
           }
-        } catch (eT) {}
-      }
+        }
+      } catch (eT) {}
 
       return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details, targets and credentials synchronized in sheet." }))
         .setMimeType(ContentService.MimeType.JSON);

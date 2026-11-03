@@ -56,6 +56,7 @@ sealed class Screen {
   object CommunicationHub : Screen()
   object ImportantDocuments : Screen()
   object CompanyProfile : Screen()
+  object More : Screen()
   data class FieldRoutePlanner(val initialSelectedFileIds: List<String> = emptyList()) : Screen()
 }
 
@@ -161,6 +162,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
   // Navigation backstack support
   private val screenBackstack = mutableListOf<Screen>()
+  val dbrChecklistInitialTab = MutableStateFlow(0)
 
   private val _uiMessage = MutableSharedFlow<String>()
   val uiMessage: SharedFlow<String> = _uiMessage.asSharedFlow()
@@ -1354,13 +1356,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val q2Map = quarterlyMap["Q2"] ?: emptyMap()
         val q3Map = quarterlyMap["Q3"] ?: emptyMap()
         val q4Map = quarterlyMap["Q4"] ?: emptyMap()
+
+        fun getVal(map: Map<String, Int>, key: String): Int {
+          return map[key] ?: map.entries.firstOrNull { it.key.trim().equals(key.trim(), true) }?.value ?: 0
+        }
+
         eblRepository.setRmAllQuarterTargets(
           rmCode = rmCode,
           year = year,
-          q1Cc = q1Map["Credit Card"] ?: 0, q1Corp = q1Map["Corporate Card"] ?: 0, q1B2b = q1Map["B2B"] ?: 0,
-          q2Cc = q2Map["Credit Card"] ?: 0, q2Corp = q2Map["Corporate Card"] ?: 0, q2B2b = q2Map["B2B"] ?: 0,
-          q3Cc = q3Map["Credit Card"] ?: 0, q3Corp = q3Map["Corporate Card"] ?: 0, q3B2b = q3Map["B2B"] ?: 0,
-          q4Cc = q4Map["Credit Card"] ?: 0, q4Corp = q4Map["Corporate Card"] ?: 0, q4B2b = q4Map["B2B"] ?: 0
+          q1Cc = getVal(q1Map, "Credit Card"), q1Corp = getVal(q1Map, "Corporate Card"), q1B2b = getVal(q1Map, "B2B"),
+          q2Cc = getVal(q2Map, "Credit Card"), q2Corp = getVal(q2Map, "Corporate Card"), q2B2b = getVal(q2Map, "B2B"),
+          q3Cc = getVal(q3Map, "Credit Card"), q3Corp = getVal(q3Map, "Corporate Card"), q3B2b = getVal(q3Map, "B2B"),
+          q4Cc = getVal(q4Map, "Credit Card"), q4Corp = getVal(q4Map, "Corporate Card"), q4B2b = getVal(q4Map, "B2B"),
+          allQuarterCustomTargets = quarterlyMap,
+          assignedCriteria = assignedCriteria,
+          syncToSheets = false
         )
       }
       val ok = res.isSuccess

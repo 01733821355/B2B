@@ -64,6 +64,15 @@ import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.theme.LocalAppTheme
 import com.example.util.DateUtils
 
+// Case-insensitive target value extractor
+fun getQuarterTargetValue(qMap: Map<String, String>?, criterion: String): String {
+  if (qMap == null) return "0"
+  val exact = qMap[criterion]
+  if (exact != null && exact.isNotBlank()) return exact
+  val match = qMap.entries.firstOrNull { it.key.trim().equals(criterion.trim(), ignoreCase = true) }
+  return match?.value?.ifBlank { "0" } ?: "0"
+}
+
 @Composable
 fun QuarterTargetSettingDialog(
   rmCode: String,
@@ -158,13 +167,15 @@ fun QuarterTargetSettingDialog(
         }
 
         effectiveAllCriteria.forEach { crit ->
-          if (!inner.containsKey(crit)) {
-            val qVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+          val normCrit = crit.trim()
+          val hasKey = inner.keys.any { it.trim().equals(normCrit, ignoreCase = true) }
+          if (!hasKey) {
+            val qVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value
             val vToUse = if (qVal != null) {
               qVal
             } else if (q == "ALL") {
-              allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
-                ?: initialCustomTargets.entries.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
+              allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value
+                ?: initialCustomTargets.entries.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value
                 ?: 0
             } else 0
             inner[crit] = vToUse.toString()
@@ -177,11 +188,13 @@ fun QuarterTargetSettingDialog(
       // If user is editing, ensure newly added criteria are safely populated
       val currentMap = targetsByQuarterState.value.toMutableMap()
       effectiveAllCriteria.forEach { crit ->
+        val normCrit = crit.trim()
         listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q ->
           val inner = (currentMap[q] ?: mutableMapOf()).toMutableMap()
-          if (!inner.containsKey(crit)) {
-            val loadedVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value
-              ?: (if (q == "ALL") (allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(crit.trim(), true) }?.value ?: initialCustomTargets[crit]) else 0)
+          val hasKey = inner.keys.any { it.trim().equals(normCrit, ignoreCase = true) }
+          if (!hasKey) {
+            val loadedVal = allQuarterCustomTargets[q]?.entries?.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value
+              ?: (if (q == "ALL") (allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value ?: initialCustomTargets.entries.firstOrNull { it.key.trim().equals(normCrit, ignoreCase = true) }?.value) else 0)
               ?: 0
             inner[crit] = loadedVal.toString()
             currentMap[q] = inner
@@ -289,11 +302,11 @@ fun QuarterTargetSettingDialog(
             )
           }
 
-          val q1Val = targetsByQuarterState.value["Q1"]?.get(crit) ?: "0"
-          val q2Val = targetsByQuarterState.value["Q2"]?.get(crit) ?: "0"
-          val q3Val = targetsByQuarterState.value["Q3"]?.get(crit) ?: "0"
-          val q4Val = targetsByQuarterState.value["Q4"]?.get(crit) ?: "0"
-          val allVal = targetsByQuarterState.value["ALL"]?.get(crit) ?: "0"
+          val q1Val = getQuarterTargetValue(targetsByQuarterState.value["Q1"], crit)
+          val q2Val = getQuarterTargetValue(targetsByQuarterState.value["Q2"], crit)
+          val q3Val = getQuarterTargetValue(targetsByQuarterState.value["Q3"], crit)
+          val q4Val = getQuarterTargetValue(targetsByQuarterState.value["Q4"], crit)
+          val allVal = getQuarterTargetValue(targetsByQuarterState.value["ALL"], crit)
 
           val q1Int = q1Val.toIntOrNull() ?: 0
           val q2Int = q2Val.toIntOrNull() ?: 0
@@ -667,9 +680,7 @@ fun QuarterTargetSettingDialog(
             val innerMap = mutableMapOf<String, Int>()
             val qInputs = targetsByQuarterState.value[q] ?: emptyMap()
             effectiveAllCriteria.forEach { crit ->
-              val rawVal = qInputs[crit]?.trim()
-                ?: qInputs.entries.firstOrNull { it.key.trim().equals(crit.trim(), ignoreCase = true) }?.value?.trim()
-                ?: "0"
+              val rawVal = getQuarterTargetValue(qInputs, crit)
               val inputNum = rawVal.toIntOrNull() ?: 0
               val isAssigned = selectedAssignedCriteria.any { it.trim().equals(crit.trim(), ignoreCase = true) } || inputNum > 0
               val num = if (isAssigned) inputNum else 0

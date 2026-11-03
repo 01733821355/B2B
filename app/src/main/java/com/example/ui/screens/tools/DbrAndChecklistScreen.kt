@@ -163,7 +163,7 @@ fun DbrAndChecklistScreen(
   onNavigateBack: () -> Unit,
   initialTab: Int = 0
 ) {
-  var selectedTab by remember { mutableIntStateOf(initialTab) }
+  var selectedTab by remember(initialTab) { mutableIntStateOf(initialTab) }
   val context = LocalContext.current
   val allFiles by viewModel.allFiles.collectAsState()
 
@@ -171,10 +171,17 @@ fun DbrAndChecklistScreen(
     onNavigateBack()
   }
 
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+  val screenBg = if (isDark) Color(0xFF0B1422) else Color(0xFFF8FAFC)
+  val tabRowBg = if (isDark) Color(0xFF101E33) else Color.White
+  val cardBg = if (isDark) Color(0xFF101E33) else Color.White
+  val primaryText = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+  val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .background(Color(0xFFF8FAFC))
+      .background(screenBg)
       .testTag("dbr_checklist_screen")
   ) {
     // Top Bar Header
@@ -218,12 +225,12 @@ fun DbrAndChecklistScreen(
     // Tabs: 1. DBR Calculator, 2. Document Checklist Sender, 3. Age Calculator
     TabRow(
       selectedTabIndex = selectedTab,
-      containerColor = Color.White,
-      contentColor = EblNavyPrimary,
+      containerColor = tabRowBg,
+      contentColor = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
       indicator = { tabPositions ->
         TabRowDefaults.SecondaryIndicator(
           modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-          color = EblNavyPrimary,
+          color = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
           height = 3.dp
         )
       }
@@ -312,6 +319,10 @@ private fun sanitizeNumberInput(raw: String): String {
 @Composable
 fun DbrCalculatorTab(currentUser: UserEntity) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+  val cardBg = if (isDark) Color(0xFF101E33) else Color.White
+  val primaryText = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+  val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
   val nf = remember { NumberFormat.getNumberInstance(Locale.US) }
 
   // Customer Profile Inputs
@@ -454,7 +465,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -462,7 +473,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             text = "1. Customer & Income Details",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark
+            color = primaryText
           )
           Spacer(modifier = Modifier.height(10.dp))
 
@@ -549,7 +560,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -563,7 +574,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 text = "2. Existing Credit Cards",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark,
+                color = primaryText,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
@@ -792,7 +803,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -806,7 +817,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
                 text = "3. Existing Loans",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = EblNavyDark,
+                color = primaryText,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
@@ -983,7 +994,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -991,7 +1002,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             text = "4. Proposed Limit & Obligation",
             fontSize = 14.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark
+            color = primaryText
           )
           Spacer(modifier = Modifier.height(8.dp))
 
@@ -1051,7 +1062,7 @@ fun DbrCalculatorTab(currentUser: UserEntity) {
             text = "DEBT BURDEN RATIO (DBR) RESULT",
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = EblNavyDark,
+            color = primaryText,
             letterSpacing = 1.sp
           )
 
@@ -1236,6 +1247,10 @@ fun DocumentChecklistSenderTab(
   viewModel: AppViewModel? = null
 ) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+  val cardBg = if (isDark) Color(0xFF101E33) else Color.White
+  val primaryText = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+  val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
   val coroutineScope = rememberCoroutineScope()
   var isTranslatingWithAi by remember { mutableStateOf(false) }
   var showGoogleTranslateHelpDialog by remember { mutableStateOf(false) }
@@ -1850,7 +1865,7 @@ fun DocumentChecklistSenderTab(
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -1863,7 +1878,7 @@ fun DocumentChecklistSenderTab(
               text = "1. Checklist Preset & Customer",
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = primaryText,
               maxLines = 1,
               softWrap = false,
               overflow = TextOverflow.Ellipsis,
@@ -1963,7 +1978,7 @@ fun DocumentChecklistSenderTab(
               text = "Customer Selection / গ্রাহক নির্বাচন:",
               fontSize = 12.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = primaryText,
               maxLines = 1,
               softWrap = false,
               overflow = TextOverflow.Ellipsis
@@ -2081,7 +2096,7 @@ fun DocumentChecklistSenderTab(
                     "👥 সাম্প্রতিক গ্রাহক তালিকা (${sortedCustomers.size}) - সর্বশেষ সবার উপরে",
                   fontWeight = FontWeight.Bold,
                   fontSize = 11.5.sp,
-                  color = EblNavyDark
+                  color = primaryText
                 )
               }
               Surface(
@@ -2284,7 +2299,7 @@ fun DocumentChecklistSenderTab(
                                   text = cust.customerName,
                                   fontWeight = FontWeight.Bold,
                                   fontSize = 12.5.sp,
-                                  color = EblNavyDark,
+                                  color = primaryText,
                                   maxLines = 1,
                                   overflow = TextOverflow.Ellipsis
                                 )
@@ -2379,7 +2394,7 @@ fun DocumentChecklistSenderTab(
               text = "Checklist Preset:",
               fontSize = 12.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = primaryText,
               maxLines = 1,
               softWrap = false,
               overflow = TextOverflow.Ellipsis,
@@ -2482,7 +2497,7 @@ fun DocumentChecklistSenderTab(
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -2725,7 +2740,7 @@ fun DocumentChecklistSenderTab(
                   text = "🏢 Part 1: Company Docs (${corporateCompanyItems.count { it.isChecked }}/${corporateCompanyItems.size})",
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark,
+                  color = primaryText,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
@@ -2895,7 +2910,7 @@ fun DocumentChecklistSenderTab(
                   text = "👤 Part 2: Employee Docs (${corporateEmployeeItems.count { it.isChecked }}/${corporateEmployeeItems.size})",
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark,
+                  color = primaryText,
                   maxLines = 1,
                   overflow = TextOverflow.Ellipsis
                 )
@@ -3064,7 +3079,7 @@ fun DocumentChecklistSenderTab(
                   text = "$selectedPreset (${singleChecklistItems.count { it.isChecked }}/${singleChecklistItems.size})",
                   fontSize = 13.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark,
+                  color = primaryText,
                   maxLines = 1,
                   softWrap = false,
                   overflow = TextOverflow.Ellipsis
@@ -3284,7 +3299,7 @@ fun DocumentChecklistSenderTab(
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -3297,7 +3312,7 @@ fun DocumentChecklistSenderTab(
               text = "Dispatched Message Preview",
               fontSize = 14.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark,
+              color = primaryText,
               maxLines = 1,
               softWrap = false,
               overflow = TextOverflow.Ellipsis,
@@ -3756,6 +3771,10 @@ fun AgeCalculatorTab(
   availableFiles: List<CustomerFileEntity> = emptyList()
 ) {
   val context = LocalContext.current
+  val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
+  val cardBg = if (isDark) Color(0xFF101E33) else Color.White
+  val primaryText = if (isDark) Color(0xFFF1F5F9) else Color(0xFF0F172A)
+  val secondaryText = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
   val keyboardController = LocalSoftwareKeyboardController.current
 
   // Date input state with default "25 10 1997" as requested
@@ -3862,7 +3881,7 @@ fun AgeCalculatorTab(
     item {
       Card(
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Column(modifier = Modifier.padding(14.dp)) {
@@ -3875,7 +3894,7 @@ fun AgeCalculatorTab(
               text = "1. Enter Birth Date",
               fontSize = 13.5.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = primaryText
             )
             if (dateInput.isNotBlank()) {
               TextButton(
@@ -4221,7 +4240,7 @@ fun AgeCalculatorTab(
       item {
         Card(
           shape = RoundedCornerShape(12.dp),
-          colors = CardDefaults.cardColors(containerColor = Color.White),
+          colors = CardDefaults.cardColors(containerColor = cardBg),
           elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
           Column(modifier = Modifier.padding(14.dp)) {
@@ -4229,7 +4248,7 @@ fun AgeCalculatorTab(
               text = "🏦 Banking Credit & Loan Eligibility",
               fontSize = 13.5.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = primaryText
             )
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -4360,7 +4379,7 @@ fun AgeCalculatorTab(
       item {
         Card(
           shape = RoundedCornerShape(12.dp),
-          colors = CardDefaults.cardColors(containerColor = Color.White),
+          colors = CardDefaults.cardColors(containerColor = cardBg),
           elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
           Column(modifier = Modifier.padding(14.dp)) {
@@ -4368,7 +4387,7 @@ fun AgeCalculatorTab(
               text = "📊 Life Duration Statistics",
               fontSize = 13.sp,
               fontWeight = FontWeight.Bold,
-              color = EblNavyDark
+              color = primaryText
             )
             Spacer(modifier = Modifier.height(10.dp))
             Row(

@@ -387,7 +387,7 @@ fun LoginScreen(
           .fillMaxWidth()
           .testTag("login_card"),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
       ) {
         Column(
@@ -403,7 +403,7 @@ fun LoginScreen(
           Text(
             text = "Enter your assigned RM Code or Admin username",
             fontSize = 12.sp,
-            color = Color.Gray,
+            color = if (isDark) Color(0xFF94A3B8) else Color.Gray,
             textAlign = TextAlign.Center
           )
 
@@ -485,6 +485,16 @@ fun LoginScreen(
                 focusManager.clearFocus()
                 doLogin()
               }
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+              focusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+              unfocusedTextColor = if (isDark) Color.White else Color(0xFF0F172A),
+              focusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+              unfocusedContainerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+              focusedBorderColor = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
+              unfocusedBorderColor = if (isDark) Color(0xFF475569) else Color(0xFFCBD5E1),
+              focusedLabelColor = if (isDark) Color(0xFF60A5FA) else EblNavyPrimary,
+              unfocusedLabelColor = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B)
             ),
             modifier = Modifier
               .fillMaxWidth()
