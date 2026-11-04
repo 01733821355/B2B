@@ -140,7 +140,7 @@ function setupAllSheets() {
   }
 
   getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
-  getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Credit Card Target', 'Corporate Card Target', 'B2B Target', 'Password Hash', 'Salt', 'Created At', 'Last Updated', 'Last Latitude', 'Last Longitude', 'Last Location Address', 'Last Location Time', 'Is Online', 'Credit Card Q1', 'Credit Card Q2', 'Credit Card Q3', 'Credit Card Q4', 'Credit Card Annual', 'Corporate Card Q1', 'Corporate Card Q2', 'Corporate Card Q3', 'Corporate Card Q4', 'Corporate Card Annual', 'B2B Q1', 'B2B Q2', 'B2B Q3', 'B2B Q4', 'B2B Annual'], '#1E3A8A');
+  getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Password Hash', 'Salt', 'Created At', 'Last Updated', 'Last Latitude', 'Last Longitude', 'Last Location Address', 'Last Location Time', 'Is Online', 'Credit Card Q1', 'Credit Card Q2', 'Credit Card Q3', 'Credit Card Q4', 'Credit Card Annual', 'Corporate Card Q1', 'Corporate Card Q2', 'Corporate Card Q3', 'Corporate Card Q4', 'Corporate Card Annual', 'B2B Q1', 'B2B Q2', 'B2B Q3', 'B2B Q4', 'B2B Annual'], '#1E3A8A');
   getOrCreateSheet(ss, 'Universal_Settings', ['Setting Key', 'Setting Value', 'Description', 'Last Updated By', 'Last Updated At'], '#065F46');
   getOrCreateSheet(ss, 'Audit_Trail', ['Log ID', 'User / RM Code', 'Role', 'Action Type', 'Target ID / File ID', 'Details', 'Timestamp'], '#7C2D12');
   getOrCreateSheet(ss, 'Attachments', ['Attachment ID', 'File ID', 'File Name', 'Category', 'File Size (Bytes)', 'Uploaded By', 'Timestamp', 'Drive Link'], '#4C1D95');
@@ -150,6 +150,20 @@ function setupAllSheets() {
   getOrCreateSheet(ss, 'Chat_And_Calls', ['Message ID', 'Sender RM', 'Sender Name', 'Sender Role', 'Recipient RM', 'Message Text', 'Message Type', 'Event ID', 'Timestamp', 'Attachment URL', 'Reply To ID', 'Reply To Sender', 'Reply To Text'], '#1D4ED8');
   getOrCreateSheet(ss, 'Team_Events', ['Event ID', 'Title', 'Description', 'Creator RM', 'Creator Name', 'Target Date', 'Allowed Fields', 'Status', 'Created At', 'Close Time'], '#7E22CE');
   getOrCreateSheet(ss, 'Event_Submissions', ['Response ID', 'Event ID', 'RM Code', 'RM Name', 'Files Count', 'Requested Date', 'Location', 'Remarks', 'Customer Entries JSON', 'Submitted At'], '#B45309');
+
+  // Purge any lingering target rows from Universal_Settings so target data is strictly in RM_Details
+  try {
+    var uSheet = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
+    if (uSheet) {
+      var uData = uSheet.getDataRange().getValues();
+      for (var ur = uData.length - 1; ur >= 1; ur--) {
+        var uk = String(uData[ur][0] || '').trim().toUpperCase();
+        if (uk.indexOf('RM_TARGET_') === 0 || uk.indexOf('RM_CUSTOM_TARGETS_') === 0 || uk.indexOf('RM_ASSIGNED_CRITERIA_') === 0) {
+          uSheet.deleteRow(ur + 1);
+        }
+      }
+    }
+  } catch (eU) {}
 
   try { authorizeDrivePermissions(); } catch (e) {}
   Logger.log("All 11 Sheets & Drive configured successfully!");
@@ -509,41 +523,51 @@ function extractAllSheetRms(sheet) {
       }
     });
 
-    var ccQ1 = customQuarterTargets["Q1"]["Credit Card"] || (row[19] !== undefined && !isNaN(parseInt(row[19])) ? parseInt(row[19]) : 0);
-    var ccQ2 = customQuarterTargets["Q2"]["Credit Card"] || (row[22] !== undefined && !isNaN(parseInt(row[22])) ? parseInt(row[22]) : 0);
-    var ccQ3 = customQuarterTargets["Q3"]["Credit Card"] || (row[25] !== undefined && !isNaN(parseInt(row[25])) ? parseInt(row[25]) : 0);
-    var ccQ4 = customQuarterTargets["Q4"]["Credit Card"] || (row[28] !== undefined && !isNaN(parseInt(row[28])) ? parseInt(row[28]) : 0);
+    var ccQ1 = customQuarterTargets["Q1"]["Credit Card"] || 0;
+    var ccQ2 = customQuarterTargets["Q2"]["Credit Card"] || 0;
+    var ccQ3 = customQuarterTargets["Q3"]["Credit Card"] || 0;
+    var ccQ4 = customQuarterTargets["Q4"]["Credit Card"] || 0;
 
-    var corpQ1 = customQuarterTargets["Q1"]["Corporate Card"] || (row[20] !== undefined && !isNaN(parseInt(row[20])) ? parseInt(row[20]) : 0);
-    var corpQ2 = customQuarterTargets["Q2"]["Corporate Card"] || (row[23] !== undefined && !isNaN(parseInt(row[23])) ? parseInt(row[23]) : 0);
-    var corpQ3 = customQuarterTargets["Q3"]["Corporate Card"] || (row[26] !== undefined && !isNaN(parseInt(row[26])) ? parseInt(row[26]) : 0);
-    var corpQ4 = customQuarterTargets["Q4"]["Corporate Card"] || (row[29] !== undefined && !isNaN(parseInt(row[29])) ? parseInt(row[29]) : 0);
+    var corpQ1 = customQuarterTargets["Q1"]["Corporate Card"] || 0;
+    var corpQ2 = customQuarterTargets["Q2"]["Corporate Card"] || 0;
+    var corpQ3 = customQuarterTargets["Q3"]["Corporate Card"] || 0;
+    var corpQ4 = customQuarterTargets["Q4"]["Corporate Card"] || 0;
 
-    var b2bQ1 = customQuarterTargets["Q1"]["B2B"] || (row[21] !== undefined && !isNaN(parseInt(row[21])) ? parseInt(row[21]) : 0);
-    var b2bQ2 = customQuarterTargets["Q2"]["B2B"] || (row[24] !== undefined && !isNaN(parseInt(row[24])) ? parseInt(row[24]) : 0);
-    var b2bQ3 = customQuarterTargets["Q3"]["B2B"] || (row[27] !== undefined && !isNaN(parseInt(row[27])) ? parseInt(row[27]) : 0);
-    var b2bQ4 = customQuarterTargets["Q4"]["B2B"] || (row[30] !== undefined && !isNaN(parseInt(row[30])) ? parseInt(row[30]) : 0);
+    var b2bQ1 = customQuarterTargets["Q1"]["B2B"] || 0;
+    var b2bQ2 = customQuarterTargets["Q2"]["B2B"] || 0;
+    var b2bQ3 = customQuarterTargets["Q3"]["B2B"] || 0;
+    var b2bQ4 = customQuarterTargets["Q4"]["B2B"] || 0;
+
+    function getColVal(colName, fallback) {
+      for (var ci = 0; ci < headers.length; ci++) {
+        if (headers[ci].toLowerCase() === colName.toLowerCase()) {
+          var v = row[ci];
+          return (v !== undefined && v !== null && v !== '') ? v : fallback;
+        }
+      }
+      return fallback;
+    }
 
     list.push({
-      rmCode: String(row[0] || '').trim().toUpperCase(),
-      name: String(row[1] || ''),
-      mobile: String(row[2] || ''),
-      email: String(row[3] || ''),
-      officeAddress: String(row[4] || ''),
-      role: String(row[5] || 'RM'),
-      accountStatus: String(row[6] || 'ACTIVE'),
-      creditCardTarget: (row[7] !== undefined && row[7] !== '' && !isNaN(parseInt(row[7]))) ? parseInt(row[7]) : (ccQ4 || ccQ1),
-      corporateCardTarget: (row[8] !== undefined && row[8] !== '' && !isNaN(parseInt(row[8]))) ? parseInt(row[8]) : (corpQ4 || corpQ1),
-      b2bTarget: (row[9] !== undefined && row[9] !== '' && !isNaN(parseInt(row[9]))) ? parseInt(row[9]) : (b2bQ4 || b2bQ1),
-      passwordHash: String(row[10] || ''),
-      salt: String(row[11] || ''),
-      createdAt: String(row[12] || ''),
-      updatedAt: String(row[13] || ''),
-      lastLatitude: parseFloat(row[14]) || 0.0,
-      lastLongitude: parseFloat(row[15]) || 0.0,
-      lastLocationAddress: String(row[16] || ''),
-      lastLocationTime: String(row[17] || ''),
-      isOnline: Boolean(row[18] === true || String(row[18]).toLowerCase() === 'true'),
+      rmCode: String(getColVal('RM Code', row[0] || '')).trim().toUpperCase(),
+      name: String(getColVal('Full Name', getColVal('Name', row[1] || ''))),
+      mobile: String(getColVal('Mobile', row[2] || '')),
+      email: String(getColVal('Email', row[3] || '')),
+      officeAddress: String(getColVal('Office Address', row[4] || '')),
+      role: String(getColVal('Role', row[5] || 'RM')),
+      accountStatus: String(getColVal('Account Status', row[6] || 'ACTIVE')),
+      creditCardTarget: ccQ4 || ccQ1 || (row[7] !== undefined && !isNaN(parseInt(row[7])) ? parseInt(row[7]) : 20),
+      corporateCardTarget: corpQ4 || corpQ1 || (row[8] !== undefined && !isNaN(parseInt(row[8])) ? parseInt(row[8]) : 10),
+      b2bTarget: b2bQ4 || b2bQ1 || (row[9] !== undefined && !isNaN(parseInt(row[9])) ? parseInt(row[9]) : 15),
+      passwordHash: String(getColVal('Password Hash', row[7] || '')),
+      salt: String(getColVal('Salt', row[8] || '')),
+      createdAt: String(getColVal('Created At', row[9] || '')),
+      updatedAt: String(getColVal('Last Updated', row[10] || '')),
+      lastLatitude: parseFloat(getColVal('Last Latitude', 0.0)) || 0.0,
+      lastLongitude: parseFloat(getColVal('Last Longitude', 0.0)) || 0.0,
+      lastLocationAddress: String(getColVal('Last Location Address', '')),
+      lastLocationTime: String(getColVal('Last Location Time', '')),
+      isOnline: Boolean(getColVal('Is Online', false) === true || String(getColVal('Is Online', '')).toLowerCase() === 'true'),
       q1CreditCardTarget: ccQ1,
       q1CorporateCardTarget: corpQ1,
       q1B2bTarget: b2bQ1,
@@ -1592,6 +1616,9 @@ function doPost(e) {
       var sKeyU = String(data.settingKey || data.key || '').trim();
       var sValU = String(data.settingValue != null ? data.settingValue : (data.value != null ? data.value : ''));
       if (sKeyU) {
+        if (sKeyU.indexOf('RM_TARGET_') === 0 || sKeyU.indexOf('RM_CUSTOM_TARGETS_') === 0 || sKeyU.indexOf('RM_ASSIGNED_CRITERIA_') === 0) {
+          return ContentService.createTextOutput(JSON.stringify({ status: "IGNORED", message: "Target data is exclusively stored in RM_Details tab." })).setMimeType(ContentService.MimeType.JSON);
+        }
         var curSettingsU = settingsSheet.getDataRange().getValues();
         var foundSetRow = 0;
         for (var stu = 1; stu < curSettingsU.length; stu++) {
@@ -1847,9 +1874,6 @@ function doPost(e) {
           data.officeAddress || '',
           data.role || 'RM',
           data.accountStatus || data.status || 'ACTIVE',
-          data.creditCardTarget !== undefined ? (Number(data.creditCardTarget) || 0) : 0,
-          data.corporateCardTarget !== undefined ? (Number(data.corporateCardTarget) || 0) : 0,
-          data.b2bTarget !== undefined ? (Number(data.b2bTarget) || 0) : 0,
           data.passwordHash || '',
           data.salt || '',
           data.createdAt || updateTime,
@@ -1861,18 +1885,23 @@ function doPost(e) {
       }
 
       if (foundRowIdx > 0) {
-        if (data.name) rmSheet.getRange(foundRowIdx, 2).setValue(data.name);
-        if (data.mobile) rmSheet.getRange(foundRowIdx, 3).setValue(data.mobile);
-        if (data.email) rmSheet.getRange(foundRowIdx, 4).setValue(data.email);
-        if (data.officeAddress) rmSheet.getRange(foundRowIdx, 5).setValue(data.officeAddress);
-        if (data.role) rmSheet.getRange(foundRowIdx, 6).setValue(data.role);
-        if (data.accountStatus || data.status) rmSheet.getRange(foundRowIdx, 7).setValue(data.accountStatus || data.status);
-        if (data.creditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 8).setValue(Number(data.creditCardTarget) || 0);
-        if (data.corporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 9).setValue(Number(data.corporateCardTarget) || 0);
-        if (data.b2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 10).setValue(Number(data.b2bTarget) || 0);
-        if (data.passwordHash) rmSheet.getRange(foundRowIdx, 11).setValue(data.passwordHash);
-        if (data.salt) rmSheet.getRange(foundRowIdx, 12).setValue(data.salt);
-        rmSheet.getRange(foundRowIdx, 14).setValue(updateTime);
+        var curH = rmSheet.getDataRange().getValues()[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+        function setRmCol(hName, val) {
+          var ci = curH.indexOf(hName.toLowerCase());
+          if (ci > -1) {
+            rmSheet.getRange(foundRowIdx, ci + 1).setValue(val);
+          }
+        }
+
+        if (data.name) setRmCol('Full Name', data.name);
+        if (data.mobile) setRmCol('Mobile', data.mobile);
+        if (data.email) setRmCol('Email', data.email);
+        if (data.officeAddress) setRmCol('Office Address', data.officeAddress);
+        if (data.role) setRmCol('Role', data.role);
+        if (data.accountStatus || data.status) setRmCol('Account Status', data.accountStatus || data.status);
+        if (data.passwordHash) setRmCol('Password Hash', data.passwordHash);
+        if (data.salt) setRmCol('Salt', data.salt);
+        setRmCol('Last Updated', updateTime);
 
         criteriaToEnsure.forEach(function(crit) {
           var cNorm = normalizeCriteriaName(crit);
@@ -1920,62 +1949,9 @@ function doPost(e) {
           if (critMap['Q4']) rmSheet.getRange(foundRowIdx, critMap['Q4']).setValue(valQ4);
           if (critMap['ALL']) rmSheet.getRange(foundRowIdx, critMap['ALL']).setValue(valAnnual);
         });
-
-        if (data.q1CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 20).setValue(Number(data.q1CreditCardTarget) || 0);
-        if (data.q1CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 21).setValue(Number(data.q1CorporateCardTarget) || 0);
-        if (data.q1B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 22).setValue(Number(data.q1B2bTarget) || 0);
-        if (data.q2CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 23).setValue(Number(data.q2CreditCardTarget) || 0);
-        if (data.q2CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 24).setValue(Number(data.q2CorporateCardTarget) || 0);
-        if (data.q2B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 25).setValue(Number(data.q2B2bTarget) || 0);
-        if (data.q3CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 26).setValue(Number(data.q3CreditCardTarget) || 0);
-        if (data.q3CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 27).setValue(Number(data.q3CorporateCardTarget) || 0);
-        if (data.q3B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 28).setValue(Number(data.q3B2bTarget) || 0);
-        if (data.q4CreditCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 29).setValue(Number(data.q4CreditCardTarget) || 0);
-        if (data.q4CorporateCardTarget !== undefined) rmSheet.getRange(foundRowIdx, 30).setValue(Number(data.q4CorporateCardTarget) || 0);
-        if (data.q4B2bTarget !== undefined) rmSheet.getRange(foundRowIdx, 31).setValue(Number(data.q4B2bTarget) || 0);
       }
 
-      try {
-        var setSheetT = ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings');
-        if (setSheetT && targetRmCode) {
-          var tKey = 'RM_TARGET_' + targetRmCode;
-          var tVal = JSON.stringify(data);
-          var setValsT = setSheetT.getDataRange().getValues();
-          var tRowIdx = -1;
-          for (var tr = 1; tr < setValsT.length; tr++) {
-            if (String(setValsT[tr][0] || '').trim().toUpperCase() === tKey) {
-              tRowIdx = tr + 1;
-              break;
-            }
-          }
-          if (tRowIdx > 0) {
-            setSheetT.getRange(tRowIdx, 2).setValue(tVal);
-            setSheetT.getRange(tRowIdx, 5).setValue(nowTimeStr);
-          } else {
-            setSheetT.appendRow([tKey, tVal, 'Target for ' + targetRmCode, 'App_Sync', nowTimeStr]);
-          }
-
-          if (allTargetsPayload) {
-            var allQKey = 'RM_CUSTOM_TARGETS_ALL_QUARTERS_' + targetRmCode;
-            var allQVal = JSON.stringify(allTargetsPayload);
-            var allQRowIdx = -1;
-            for (var tr2 = 1; tr2 < setValsT.length; tr2++) {
-              if (String(setValsT[tr2][0] || '').trim().toUpperCase() === allQKey) {
-                allQRowIdx = tr2 + 1;
-                break;
-              }
-            }
-            if (allQRowIdx > 0) {
-              setSheetT.getRange(allQRowIdx, 2).setValue(allQVal);
-              setSheetT.getRange(allQRowIdx, 5).setValue(nowTimeStr);
-            } else {
-              setSheetT.appendRow([allQKey, allQVal, 'All Quarter Targets for ' + targetRmCode, 'App_Sync', nowTimeStr]);
-            }
-          }
-        }
-      } catch (eT) {}
-
-      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details, targets and credentials synchronized in sheet." }))
+      return ContentService.createTextOutput(JSON.stringify({ status: "SUCCESS", message: "RM details and targets synchronized in sheet." }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

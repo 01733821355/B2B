@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -335,6 +336,22 @@ fun MoreScreen(
     }
 
     if (currentUser.role == "ADMIN") {
+      item {
+        ToolActionCard(
+          title = "System Settings & Preferences",
+          subtitle = "Configure app branding, name, custom criteria, font styles, sync & system configurations",
+          badge = "Admin Config",
+          icon = Icons.Default.Settings,
+          iconTint = Color(0xFF0F766E),
+          iconBg = Color(0xFFCCFBF1),
+          cardBg = cardBg,
+          primaryText = primaryText,
+          secondaryText = secondaryText,
+          onClick = { onNavigate(Screen.AppSettings) },
+          testTag = "more_tool_app_settings"
+        )
+      }
+
       item {
         ToolActionCard(
           title = "Audit Logs & Security",

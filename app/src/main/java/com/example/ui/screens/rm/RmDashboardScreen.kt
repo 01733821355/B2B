@@ -435,17 +435,26 @@ fun RmDashboardScreen(
               horizontalArrangement = Arrangement.SpaceBetween,
               verticalAlignment = Alignment.CenterVertically
             ) {
-              Column {
+              Column(
+                modifier = Modifier
+                  .weight(1f)
+                  .padding(end = 8.dp)
+              ) {
                 Text(
                   text = "📅 2026 Annual Goal:",
                   fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
-                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
+                  maxLines = 1,
+                  softWrap = false
                 )
                 Text(
                   text = annualSummaryText,
                   fontSize = 10.sp,
-                  color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569)
+                  color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                  maxLines = 1,
+                  overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                  softWrap = false
                 )
               }
               Surface(
@@ -459,7 +468,9 @@ fun RmDashboardScreen(
                   fontSize = 10.sp,
                   fontWeight = FontWeight.Bold,
                   color = if (isAnnual) Color.White else if (isDark) Color(0xFF93C5FD) else EblNavyPrimary,
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                  maxLines = 1,
+                  softWrap = false
                 )
               }
             }

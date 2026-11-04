@@ -204,6 +204,9 @@ fun KpiGridSection(
           verticalAlignment = Alignment.CenterVertically
         ) {
           Row(
+            modifier = Modifier
+              .weight(1f)
+              .padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
           ) {
@@ -221,14 +224,18 @@ fun KpiGridSection(
               )
             }
             Column {
-              Row(verticalAlignment = Alignment.CenterVertically) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+              ) {
                 Text(
                   text = "STC (Achievement / Done)",
-                  fontSize = 15.sp,
+                  fontSize = 14.sp,
                   fontWeight = FontWeight.Bold,
-                  color = Color.White
+                  color = Color.White,
+                  maxLines = 1,
+                  softWrap = false
                 )
-                Spacer(modifier = Modifier.width(6.dp))
                 Surface(
                   shape = RoundedCornerShape(4.dp),
                   color = EblGold
@@ -238,7 +245,9 @@ fun KpiGridSection(
                     fontSize = 9.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = EblNavyDark,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    maxLines = 1,
+                    softWrap = false
                   )
                 }
               }
@@ -246,16 +255,21 @@ fun KpiGridSection(
               Text(
                 text = "Production Done • Official Goal Metric",
                 fontSize = 11.sp,
-                color = Color(0xFFCCFBF1)
+                color = Color(0xFFCCFBF1),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
               )
             }
           }
 
           Text(
             text = stats.stc.toString(),
-            fontSize = 32.sp,
+            fontSize = 28.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color.White
+            color = Color.White,
+            maxLines = 1,
+            softWrap = false
           )
         }
       }

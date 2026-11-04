@@ -1642,11 +1642,7 @@ class EblRepository(
       val request = Request.Builder().url(activeWebAppUrl).post(requestBody).build()
       httpClient.newCall(request).execute().use { resp -> resp.body?.string() }
 
-      // Dual-sync to Universal_Settings so every device pulling settings immediately receives this target update
-      syncSettingUpsertToGoogleSheets("RM_TARGET_$cleanRm", payload.toString())
-      if (allQuartersJsonObj.length() > 0) {
-        syncSettingUpsertToGoogleSheets("RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm", allQuartersJsonObj.toString())
-      }
+      // Target data is synchronized directly to RM_Details / RM Mapping sheet
     } catch (_: Exception) {}
   }
 
@@ -3271,15 +3267,9 @@ class EblRepository(
       AppSettingEntity("RM_TARGET_UPDATED_AT_$cleanRm", now.toString(), "APP", now)
     )
 
-    // Live sync to Google Sheets: atomic UPSERT_RM_TARGET with all 4 quarters and criteria
+    // Live sync to Google Sheets: atomic UPSERT_RM_TARGET with all 4 quarters and criteria directly to RM_Details / RM Mapping
     applicationScope.launch {
       syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b, quarterlyTargets, assignedCriteria)
-      syncSettingUpsertToGoogleSheets(allQuartersKey, fullJson)
-      if (assignedCriteria != null) {
-        val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
-        val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
-        syncSettingUpsertToGoogleSheets(assignedKey, joined)
-      }
     }
   }
 
@@ -3579,6 +3569,9 @@ class EblRepository(
           if (s.settingKey.uppercase() in delPresetSet) continue
           // Filter internal password update sync state and duplicate legacy template keys
           if (s.settingKey.startsWith("RM_PASS_UPDATED_AT_")) continue
+          if (s.settingKey.startsWith("RM_TARGET_", ignoreCase = true)) continue
+          if (s.settingKey.startsWith("RM_CUSTOM_TARGETS_", ignoreCase = true)) continue
+          if (s.settingKey.startsWith("RM_ASSIGNED_CRITERIA_", ignoreCase = true)) continue
           if (s.settingKey == "CHECKLIST_HEADER_TEMPLATE" && hasHdrKey) continue
           if (s.settingKey == "CHECKLIST_REGARDS_TEMPLATE" && hasFtrKey) continue
           // If a clean preset name exists, omit the uppercase underscore legacy alias
@@ -4573,53 +4566,6 @@ class EblRepository(
             database.appSettingDao().insertOrUpdateSetting(
               AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
             )
-          } else if (key.startsWith("RM_TARGET_", true)) {
-            val tRmCode = key.substringAfter("RM_TARGET_").trim().uppercase()
-            if (tRmCode.isNotBlank()) {
-              try {
-                val tObj = org.json.JSONObject(value)
-                val yr = tObj.optInt("year", 2026)
-                val actQ = tObj.optString("activeQuarter", tObj.optString("quarter", "Q4")).trim().uppercase()
-                val cc = tObj.optInt("creditCardTarget", 20)
-                val corp = tObj.optInt("corporateCardTarget", 10)
-                val b2b = tObj.optInt("b2bTarget", 15)
-                val q1Cc = tObj.optInt("q1CreditCardTarget", cc)
-                val q1Corp = tObj.optInt("q1CorporateCardTarget", corp)
-                val q1B2b = tObj.optInt("q1B2bTarget", b2b)
-                val q2Cc = tObj.optInt("q2CreditCardTarget", cc)
-                val q2Corp = tObj.optInt("q2CorporateCardTarget", corp)
-                val q2B2b = tObj.optInt("q2B2bTarget", b2b)
-                val q3Cc = tObj.optInt("q3CreditCardTarget", cc)
-                val q3Corp = tObj.optInt("q3CorporateCardTarget", corp)
-                val q3B2b = tObj.optInt("q3B2bTarget", b2b)
-                val q4Cc = tObj.optInt("q4CreditCardTarget", cc)
-                val q4Corp = tObj.optInt("q4CorporateCardTarget", corp)
-                val q4B2b = tObj.optInt("q4B2bTarget", b2b)
-
-                val existingT = database.rmTargetDao().getTargetForRm(tRmCode)
-                val updatedT = (existingT ?: RmTargetEntity(rmCode = tRmCode)).copy(
-                  targetYear = yr,
-                  activeQuarter = actQ,
-                  creditCardTarget = cc,
-                  corporateCardTarget = corp,
-                  b2bTarget = b2b,
-                  q1CreditCardTarget = q1Cc,
-                  q1CorporateCardTarget = q1Corp,
-                  q1B2bTarget = q1B2b,
-                  q2CreditCardTarget = q2Cc,
-                  q2CorporateCardTarget = q2Corp,
-                  q2B2bTarget = q2B2b,
-                  q3CreditCardTarget = q3Cc,
-                  q3CorporateCardTarget = q3Corp,
-                  q3B2bTarget = q3B2b,
-                  q4CreditCardTarget = q4Cc,
-                  q4CorporateCardTarget = q4Corp,
-                  q4B2bTarget = q4B2b,
-                  updatedAt = now
-                )
-                database.rmTargetDao().insertOrUpdateTarget(updatedT)
-              } catch (_: Exception) {}
-            }
           } else if (key.startsWith("CHECKLIST_PRESET_") || key.startsWith("CHECKLIST_CUSTOM_")) {
             val nonKeywords = listOf("THEME", "SCALE", "FONT", "COLOR", "STYLE", "STATUS", "PASSWORD", "APP_NAME")
             val isRogue = nonKeywords.any { friendlyName.uppercase().contains(it) || keyUpper.contains(it) }

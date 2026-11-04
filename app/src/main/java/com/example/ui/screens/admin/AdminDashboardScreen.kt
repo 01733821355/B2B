@@ -103,19 +103,84 @@ fun AdminDashboardScreen(
         .testTag("admin_dashboard_screen")
     ) {
       // Executive Theme Photo Banner
-    item {
-      com.example.ui.common.ThemeVisualBanner(
-        title = "Central Administration Console",
-        subtitle = "Signed in: ${currentUser.name} (${currentUser.role})",
-        badgeText = "System Administrator • Live Operations",
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-      )
+      item {
+        com.example.ui.common.ThemeVisualBanner(
+          title = "Central Administration Console",
+          subtitle = "Signed in: ${currentUser.name} (${currentUser.role})",
+          badgeText = "System Administrator • Live Operations",
+          modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+        )
+      }
+
+      // Admin Quick Action Shortcuts
+      item {
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+      ) {
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (isDark) Color(0xFF0F766E).copy(alpha = 0.25f) else Color(0xFFCCFBF1),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF0D9488) else Color(0xFF99F6E4)),
+          modifier = Modifier
+            .weight(1f)
+            .clickable { onNavigate(Screen.AppSettings) }
+            .testTag("admin_quick_btn_settings")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+          ) {
+            Icon(Icons.Default.Settings, contentDescription = "Settings", tint = if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E), modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Settings", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF5EEAD4) else Color(0xFF0F766E), maxLines = 1, softWrap = false)
+          }
+        }
+
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.25f) else Color(0xFFEFF6FF),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF2563EB) else Color(0xFFBFDBFE)),
+          modifier = Modifier
+            .weight(1f)
+            .clickable { onNavigate(Screen.RmMapping) }
+            .testTag("admin_quick_btn_rm_mapping")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+          ) {
+            Icon(Icons.Default.Group, contentDescription = "RM Mapping", tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8), modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("RM Mapping", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8), maxLines = 1, softWrap = false)
+          }
+        }
+
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = if (isDark) Color(0xFF4C1D95).copy(alpha = 0.25f) else Color(0xFFF3E8FF),
+          border = BorderStroke(1.dp, if (isDark) Color(0xFF7C3AED) else Color(0xFFDDD6FE)),
+          modifier = Modifier
+            .weight(1f)
+            .clickable { onNavigate(Screen.Reports) }
+            .testTag("admin_quick_btn_reports")
+        ) {
+          Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+          ) {
+            Icon(Icons.Default.Assessment, contentDescription = "Reports", tint = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE), modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Reports", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF7E22CE), maxLines = 1, softWrap = false)
+          }
+        }
+      }
     }
-
-
-
-
-    // Time filter pills
     item {
       TimeFilterBar(
         selectedFilter = selectedTimeFilter,
