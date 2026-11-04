@@ -113,6 +113,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.ChatMessageEntity
 import com.example.data.model.EventResponseEntity
 import com.example.data.model.TeamEventEntity
+import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
@@ -134,6 +135,7 @@ fun CommunicationHubScreen(
   val events by viewModel.teamEvents.collectAsState()
   val callState by viewModel.callState.collectAsState()
   val appCustomName by viewModel.appCustomName.collectAsState()
+  val allFiles by viewModel.allFiles.collectAsState()
 
   var messageInput by remember { mutableStateOf("") }
   var showCreateEventDialog by remember { mutableStateOf(false) }
@@ -180,6 +182,7 @@ fun CommunicationHubScreen(
     val evt = activeResponseEvent!!
     SubmitDeliveryResponseDialog(
       event = evt,
+      availableCustomers = allFiles,
       onDismiss = { activeResponseEvent = null },
       onSubmit = { filesCount, reqDate, loc, remarks, customerEntriesJson ->
         viewModel.submitEventResponse(evt.eventId, filesCount, reqDate, loc, remarks, customerEntriesJson) { success, _ ->
@@ -1637,6 +1640,7 @@ data class CustomerEntryItem(
 @Composable
 fun SubmitDeliveryResponseDialog(
   event: TeamEventEntity,
+  availableCustomers: List<CustomerFileEntity> = emptyList(),
   onDismiss: () -> Unit,
   onSubmit: (Int, String, String, String, String) -> Unit
 ) {
@@ -1644,6 +1648,7 @@ fun SubmitDeliveryResponseDialog(
   var requestedDate by remember { mutableStateOf(event.targetDate) }
   var location by remember { mutableStateOf("") }
   var remarks by remember { mutableStateOf("") }
+  var showCustomerPicker by remember { mutableStateOf(false) }
 
   // Check allowed fields configured by Admin/Mentor
   val allowed = event.allowedFields.ifBlank { "CUSTOMERS,COUNT,DATE,LOCATION,REMARKS" }
@@ -1658,6 +1663,29 @@ fun SubmitDeliveryResponseDialog(
     mutableStateListOf(CustomerEntryItem())
   }
   val isExpired = event.status.equals("CLOSED", ignoreCase = true) || DateUtils.isEventExpired(event.closeTime, event.targetDate)
+
+  if (showCustomerPicker) {
+    MultiCustomerPickerDialog(
+      availableCustomers = availableCustomers,
+      onCustomersSelected = { selectedList ->
+        if (selectedList.isNotEmpty()) {
+          // If customerList only has 1 blank item, remove it before adding selected
+          if (customerList.size == 1 && customerList[0].name.isBlank() && customerList[0].mobile.isBlank()) {
+            customerList.clear()
+          }
+          selectedList.forEach { cust ->
+            val exists = customerList.any { it.mobile.isNotBlank() && it.mobile == cust.mobile }
+            if (!exists) {
+              customerList.add(CustomerEntryItem(name = cust.customerName, mobile = cust.mobile))
+            }
+          }
+          filesCountText = customerList.size.toString()
+        }
+        showCustomerPicker = false
+      },
+      onDismiss = { showCustomerPicker = false }
+    )
+  }
 
   AlertDialog(
     onDismissRequest = onDismiss,
@@ -1692,19 +1720,39 @@ fun SubmitDeliveryResponseDialog(
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Customer List:",
+              text = "Customer List (${customerList.size}):",
               fontWeight = FontWeight.Bold,
               fontSize = 12.sp,
               color = EblNavyDark
             )
-            TextButton(
-              onClick = {
-                customerList.add(CustomerEntryItem())
-              }
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(4.dp),
+              verticalAlignment = Alignment.CenterVertically
             ) {
-              Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-              Spacer(modifier = Modifier.width(2.dp))
-              Text("+ Add Customer", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+              if (availableCustomers.isNotEmpty()) {
+                OutlinedButton(
+                  onClick = { showCustomerPicker = true },
+                  shape = RoundedCornerShape(6.dp),
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.height(28.dp).testTag("btn_select_existing_customers")
+                ) {
+                  Icon(Icons.Default.Group, contentDescription = null, modifier = Modifier.size(13.dp), tint = EblNavyPrimary)
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text("Select Existing", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                }
+              }
+              TextButton(
+                onClick = {
+                  customerList.add(CustomerEntryItem())
+                  filesCountText = customerList.size.toString()
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.height(28.dp).testTag("btn_add_manual_customer")
+              ) {
+                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(13.dp))
+                Spacer(modifier = Modifier.width(2.dp))
+                Text("+ Manual", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+              }
             }
           }
 
@@ -1724,7 +1772,10 @@ fun SubmitDeliveryResponseDialog(
                   Text("Customer #${idx + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
                   if (customerList.size > 1) {
                     IconButton(
-                      onClick = { customerList.removeAt(idx) },
+                      onClick = {
+                        customerList.removeAt(idx)
+                        filesCountText = customerList.size.toString()
+                      },
                       modifier = Modifier.size(24.dp)
                     ) {
                       Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red, modifier = Modifier.size(14.dp))
@@ -1823,6 +1874,170 @@ fun SubmitDeliveryResponseDialog(
         colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary)
       ) {
         Text(if (isExpired) "Expired (Submissions Closed)" else "Submit Entry")
+      }
+    },
+    dismissButton = {
+      TextButton(onClick = onDismiss) { Text("Cancel") }
+    }
+  )
+}
+
+// Dialog to select multiple existing customers for Event entry
+@Composable
+fun MultiCustomerPickerDialog(
+  availableCustomers: List<CustomerFileEntity>,
+  onCustomersSelected: (List<CustomerFileEntity>) -> Unit,
+  onDismiss: () -> Unit
+) {
+  val activeFiles = remember(availableCustomers) {
+    availableCustomers.filter { !it.isDeleted && !it.fileId.startsWith("demo_", true) }
+  }
+  var searchQuery by remember { mutableStateOf("") }
+  val filteredFiles = remember(searchQuery, activeFiles) {
+    if (searchQuery.isBlank()) activeFiles
+    else activeFiles.filter {
+      it.customerName.contains(searchQuery, ignoreCase = true) ||
+      it.mobile.contains(searchQuery) ||
+      it.companyName.contains(searchQuery, ignoreCase = true) ||
+      it.ccNumber.contains(searchQuery, ignoreCase = true)
+    }
+  }
+
+  val selectedCustomerIds = remember { mutableStateListOf<String>() }
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    title = {
+      Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Column(modifier = Modifier.weight(1f)) {
+          Text("Select Existing Customers", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = EblNavyDark)
+          Text("Pick multiple customers to auto-fill event entry", fontSize = 11.sp, color = Color.Gray)
+        }
+        TextButton(
+          onClick = {
+            if (selectedCustomerIds.size == filteredFiles.size) {
+              selectedCustomerIds.clear()
+            } else {
+              selectedCustomerIds.clear()
+              selectedCustomerIds.addAll(filteredFiles.map { it.fileId })
+            }
+          }
+        ) {
+          Text(
+            if (selectedCustomerIds.size == filteredFiles.size && filteredFiles.isNotEmpty()) "Clear All" else "Select All",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold
+          )
+        }
+      }
+    },
+    text = {
+      Column(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(380.dp)
+      ) {
+        OutlinedTextField(
+          value = searchQuery,
+          onValueChange = { searchQuery = it },
+          placeholder = { Text("Search by name, mobile, company...") },
+          leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = EblNavyPrimary) },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("input_search_existing_customers")
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (filteredFiles.isEmpty()) {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .weight(1f),
+            contentAlignment = Alignment.Center
+          ) {
+            Text("No matching customers found", fontSize = 12.sp, color = Color.Gray)
+          }
+        } else {
+          LazyColumn(
+            modifier = Modifier
+              .fillMaxWidth()
+              .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+          ) {
+            items(filteredFiles, key = { it.fileId }) { cust ->
+              val isChecked = cust.fileId in selectedCustomerIds
+              Card(
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                  containerColor = if (isChecked) Color(0xFFEFF6FF) else Color(0xFFF8FAFC)
+                ),
+                border = androidx.compose.foundation.BorderStroke(
+                  1.dp,
+                  if (isChecked) EblNavyPrimary else Color(0xFFE2E8F0)
+                ),
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .clickable {
+                    if (isChecked) {
+                      selectedCustomerIds.remove(cust.fileId)
+                    } else {
+                      selectedCustomerIds.add(cust.fileId)
+                    }
+                  }
+                  .testTag("item_pick_customer_${cust.fileId}")
+              ) {
+                Row(
+                  modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  androidx.compose.material3.Checkbox(
+                    checked = isChecked,
+                    onCheckedChange = { checked ->
+                      if (checked) {
+                        if (cust.fileId !in selectedCustomerIds) selectedCustomerIds.add(cust.fileId)
+                      } else {
+                        selectedCustomerIds.remove(cust.fileId)
+                      }
+                    }
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                      text = cust.customerName,
+                      fontSize = 12.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = EblNavyDark
+                    )
+                    Text(
+                      text = "${cust.mobile} • ${cust.productType}${if (cust.companyName.isNotBlank() && cust.companyName != "N/A") " • ${cust.companyName}" else ""}",
+                      fontSize = 11.sp,
+                      color = Color.DarkGray
+                    )
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    confirmButton = {
+      Button(
+        onClick = {
+          val selected = activeFiles.filter { it.fileId in selectedCustomerIds }
+          onCustomersSelected(selected)
+        },
+        enabled = selectedCustomerIds.isNotEmpty(),
+        colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
+        modifier = Modifier.testTag("btn_confirm_picked_customers")
+      ) {
+        Text("Add Selected (${selectedCustomerIds.size})")
       }
     },
     dismissButton = {

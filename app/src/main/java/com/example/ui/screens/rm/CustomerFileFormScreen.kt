@@ -329,6 +329,8 @@ fun CustomerFileFormScreen(
   var ccNumber by remember { mutableStateOf("") }
   var serialNumber by remember { mutableStateOf("") }
   var assignedRmCode by remember { mutableStateOf(currentUser.rmCode) }
+  var limit by remember { mutableStateOf("") }
+  var analyst by remember { mutableStateOf("") }
   val allRms by viewModel.allRms.collectAsState()
   val allFiles by viewModel.allFiles.collectAsState()
   val allActiveFiles = remember(allFiles) { allFiles.filter { !it.isDeleted && !it.fileId.startsWith("demo_", true) && !it.customerName.contains("Demo", true) } }
@@ -501,6 +503,8 @@ fun CustomerFileFormScreen(
         email = file.email
         ccNumber = file.ccNumber
         assignedRmCode = file.assignedRmCode
+        limit = file.limit
+        analyst = file.analyst
         selectedProductType = file.productType
         selectedApplicationStatus = file.applicationStatus
         selectedActiveStatus = file.activeStatus
@@ -578,6 +582,8 @@ fun CustomerFileFormScreen(
         activeStatus = selectedActiveStatus,
         assignedRmCode = assignedRmCode,
         ccNumber = ccNumber,
+        limit = limit.trim(),
+        analyst = analyst.trim(),
         pendingDocuments = selectedPendingDocs.toList(),
         remarks = remarks,
         cpvStatus = selectedCpvStatus,
@@ -1161,6 +1167,36 @@ fun CustomerFileFormScreen(
             }
           }
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 1st Input: Limit (Sanctioned / Credit / Card Limit)
+        OutlinedTextField(
+          value = limit,
+          onValueChange = { limit = it },
+          label = { Text("Limit (Sanctioned / Card Limit)") },
+          placeholder = { Text("e.g. 50,000 or 1,00,000") },
+          leadingIcon = {
+            Icon(Icons.Default.CreditCard, contentDescription = null, tint = EblNavyPrimary)
+          },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("form_input_limit")
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // 2nd Input: Analyst (Credit Analyst / Underwriter)
+        OutlinedTextField(
+          value = analyst,
+          onValueChange = { analyst = it },
+          label = { Text("Analyst (Credit Analyst / Underwriter)") },
+          placeholder = { Text("e.g. Analyst Name / ID") },
+          leadingIcon = {
+            Icon(Icons.Default.Person, contentDescription = null, tint = EblNavyPrimary)
+          },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth().testTag("form_input_analyst")
+        )
       }
     }
 

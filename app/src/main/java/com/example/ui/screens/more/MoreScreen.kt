@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
@@ -36,13 +37,18 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import android.widget.Toast
+import com.example.util.BiometricHelper
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -117,6 +123,91 @@ fun MoreScreen(
               color = Color(0xFF94A3B8)
             )
           }
+        }
+      }
+    }
+
+    // Security & Biometric Sign In
+    item {
+      val context = LocalContext.current
+      val isBiometricEnabled = viewModel.isBiometricEnabled(currentUser.rmCode)
+      val bioStatus = remember { BiometricHelper.checkBiometricAvailability(context) }
+
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = cardBg),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth().testTag("more_tool_biometric_card")
+      ) {
+        Row(
+          modifier = Modifier.padding(14.dp),
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = if (isDark) Color(0xFF065F46).copy(alpha = 0.3f) else Color(0xFFD1FAE5),
+            modifier = Modifier.size(42.dp)
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = Icons.Default.Fingerprint,
+                contentDescription = "Fingerprint Login",
+                tint = Color(0xFF059669),
+                modifier = Modifier.size(24.dp)
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.width(12.dp))
+
+          Column(modifier = Modifier.weight(1f)) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+              Text(
+                text = "Fingerprint Login",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = primaryText
+              )
+              Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = if (isBiometricEnabled) Color(0xFF059669).copy(alpha = 0.15f) else (if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
+              ) {
+                Text(
+                  text = if (isBiometricEnabled) "Enabled" else "Off",
+                  fontSize = 9.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = if (isBiometricEnabled) Color(0xFF059669) else secondaryText,
+                  modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
+              }
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+              text = if (isBiometricEnabled) "Fast biometric sign-in enabled for RM ${currentUser.rmCode}" else "Enable instant biometric sign-in with your fingerprint",
+              fontSize = 11.sp,
+              color = secondaryText,
+              lineHeight = 15.sp
+            )
+          }
+
+          Spacer(modifier = Modifier.width(8.dp))
+
+          Switch(
+            checked = isBiometricEnabled,
+            onCheckedChange = { enabled ->
+              if (enabled && !bioStatus.isAvailable) {
+                Toast.makeText(context, bioStatus.statusMessage, Toast.LENGTH_LONG).show()
+              } else {
+                viewModel.setBiometricEnabled(currentUser.rmCode, enabled)
+                val msg = if (enabled) "✓ Fingerprint login enabled" else "Fingerprint login disabled"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+              }
+            },
+            modifier = Modifier.testTag("switch_more_biometric")
+          )
         }
       }
     }

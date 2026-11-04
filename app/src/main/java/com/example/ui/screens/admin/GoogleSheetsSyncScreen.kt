@@ -139,7 +139,7 @@ function setupAllSheets() {
     return "Spreadsheet not found";
   }
 
-  getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
+  getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'Limit', 'Analyst', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
   getOrCreateSheet(ss, 'RM_Details', ['RM Code', 'Full Name', 'Mobile', 'Email', 'Office Address', 'Role', 'Account Status', 'Password Hash', 'Salt', 'Created At', 'Last Updated', 'Last Latitude', 'Last Longitude', 'Last Location Address', 'Last Location Time', 'Is Online', 'Credit Card Q1', 'Credit Card Q2', 'Credit Card Q3', 'Credit Card Q4', 'Credit Card Annual', 'Corporate Card Q1', 'Corporate Card Q2', 'Corporate Card Q3', 'Corporate Card Q4', 'Corporate Card Annual', 'B2B Q1', 'B2B Q2', 'B2B Q3', 'B2B Q4', 'B2B Annual'], '#1E3A8A');
   getOrCreateSheet(ss, 'Universal_Settings', ['Setting Key', 'Setting Value', 'Description', 'Last Updated By', 'Last Updated At'], '#065F46');
   getOrCreateSheet(ss, 'Audit_Trail', ['Log ID', 'User / RM Code', 'Role', 'Action Type', 'Target ID / File ID', 'Details', 'Timestamp'], '#7C2D12');
@@ -322,6 +322,8 @@ function extractAllSheetFiles(sheet) {
       activeStatus: getVal(row, ['active status', 'activestatus', 'active'], 'N'),
       assignedRmCode: getVal(row, ['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], ''),
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
+      limit: getVal(row, ['limit', 'card limit', 'credit limit', 'loan limit', 'sanction limit'], ''),
+      analyst: getVal(row, ['analyst', 'credit analyst', 'underwriter', 'ca'], ''),
       cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks', 'cpv notes', 'cpv note'], ''),
       remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
       cpvStatus: (function() {
@@ -593,8 +595,12 @@ function extractAllSheetSettings(sheet) {
   for (var r = 1; r < data.length; r++) {
     var row = data[r];
     if (!row[0]) continue;
+    var k = String(row[0] || '').trim();
+    if (k.indexOf('RM_TARGET_') === 0 || k.indexOf('RM_CUSTOM_TARGETS_') === 0 || k.indexOf('RM_ASSIGNED_CRITERIA_') === 0) {
+      continue;
+    }
     list.push({
-      settingKey: String(row[0] || '').trim(),
+      settingKey: k,
       settingValue: String(row[1] || ''),
       description: String(row[2] || '')
     });
@@ -899,6 +905,7 @@ function doPost(e) {
       'SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name',
       'Office Address', 'Mobile', 'Email', 'Product Type',
       'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
+      'Limit', 'Analyst',
       'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng',
       'Last Updated', 'Updated By'
     ], '#0A192F');
@@ -2020,6 +2027,8 @@ function doPost(e) {
           f.activeStatus || 'N',
           f.assignedRmCode || '',
           f.pendingDocuments || '',
+          f.limit || '',
+          f.analyst || '',
           f.cpvRemarks || f.remarks || '',
           f.cpvStatus || 'Pending',
           f.submissionAddress || '',

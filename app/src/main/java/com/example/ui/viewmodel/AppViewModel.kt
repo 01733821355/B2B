@@ -962,6 +962,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     submissionLongitude: Double? = null,
     submissionAddress: String? = null,
     serialNumber: String? = null,
+    limit: String = "",
+    analyst: String = "",
     onResult: (Boolean, String?) -> Unit
   ) {
     viewModelScope.launch {
@@ -989,7 +991,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         submissionLatitude = submissionLatitude,
         submissionLongitude = submissionLongitude,
         submissionAddress = submissionAddress,
-        serialNumber = serialNumber
+        serialNumber = serialNumber,
+        limit = limit,
+        analyst = analyst
       )
       res.onSuccess { entity ->
         _uiMessage.emit("File ${entity.fileId} saved successfully.")

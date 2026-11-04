@@ -382,6 +382,8 @@ fun CustomerDetailDialog(
               if (currentFile.altMobile.isNotBlank()) DetailRow("Alt Mobile", currentFile.altMobile)
               if (currentFile.email.isNotBlank()) DetailRow("Email Address", currentFile.email)
               DetailRow("Product Type", currentFile.productType)
+              if (currentFile.limit.isNotBlank()) DetailRow("Limit", currentFile.limit)
+              if (currentFile.analyst.isNotBlank()) DetailRow("Analyst", currentFile.analyst)
               DetailRow("Created Date", DateUtils.formatDateTime(currentFile.createdAt))
               DetailRow("Last Updated", DateUtils.formatDateTime(currentFile.updatedAt))
               if (currentFile.submittedAt != null) DetailRow("Submitted Date", DateUtils.formatDateTime(currentFile.submittedAt))

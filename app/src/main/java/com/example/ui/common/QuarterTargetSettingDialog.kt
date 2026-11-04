@@ -131,9 +131,9 @@ fun QuarterTargetSettingDialog(
   // Compute effective all criteria from external list, local additions, assigned list, and current target keys
   val effectiveAllCriteria = remember(allCriteria, localAddedCriteria, targetsByQuarterState.value, selectedAssignedCriteria) {
     val combined = (allCriteria + localAddedCriteria + selectedAssignedCriteria + targetsByQuarterState.value.values.flatMap { it.keys })
-      .map { it.trim() }
+      .map { com.example.data.repository.EblRepository.normalizeCriteria(it.trim()) }
       .filter { it.isNotBlank() }
-      .distinct()
+      .distinctBy { it.lowercase() }
     if (combined.isNotEmpty()) combined else listOf("Credit Card", "Corporate Card", "B2B")
   }
 

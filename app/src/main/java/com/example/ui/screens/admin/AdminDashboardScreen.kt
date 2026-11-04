@@ -312,7 +312,8 @@ fun AdminDashboardScreen(
                 val customAnnual = row.allQuarterCustomTargets["ALL"] ?: emptyMap()
                 val standardSet = setOf("Credit Card", "Corporate Card", "B2B")
                 val customCriteriaEntries = (customQuarter.keys + customAnnual.keys + row.assignedCriteria)
-                  .distinct()
+                  .map { com.example.data.repository.EblRepository.normalizeCriteria(it) }
+                  .distinctBy { it.lowercase() }
                   .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
                   .mapNotNull { critName ->
                     val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)

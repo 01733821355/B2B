@@ -28,6 +28,8 @@ data class CustomerFileEntity(
   val activeStatus: String = "N", // Y, N, C
   val assignedRmCode: String,
   val ccNumber: String = "", // Credit Card / Reference Number
+  val limit: String = "", // Credit/Card Limit
+  val analyst: String = "", // Assigned Credit Analyst
   val pendingDocuments: String = "", // Comma-separated list of pending documents
   val remarks: String = "",
   

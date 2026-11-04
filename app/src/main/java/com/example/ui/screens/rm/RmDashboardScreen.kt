@@ -133,10 +133,10 @@ fun RmDashboardScreen(
   val corpTarget = currentQuarterTargets.second
   val b2bTarget = currentQuarterTargets.third
 
-  // Custom targets specific to the selected quarter
+  // Custom targets specific to the selected quarter with normalized criteria names
   val currentQuarterCustomTargets = remember(selectedKpiQuarter, allQuarterCustomTargets, customTargets) {
     val qKey = selectedKpiQuarter.uppercase()
-    when {
+    val baseMap = when {
       qKey.startsWith("Q") -> {
         val qMap = allQuarterCustomTargets[qKey]
         if (!qMap.isNullOrEmpty()) qMap else customTargets
@@ -149,7 +149,8 @@ fun RmDashboardScreen(
           val sumMap = mutableMapOf<String, Int>()
           listOf("Q1", "Q2", "Q3", "Q4").forEach { q ->
             allQuarterCustomTargets[q]?.forEach { (crit, v) ->
-              sumMap[crit] = (sumMap[crit] ?: 0) + v
+              val nKey = com.example.data.repository.EblRepository.normalizeCriteria(crit)
+              sumMap[nKey] = (sumMap[nKey] ?: 0) + v
             }
           }
           if (sumMap.isNotEmpty()) sumMap else customTargets
@@ -157,40 +158,59 @@ fun RmDashboardScreen(
       }
       else -> customTargets
     }
+    val normalizedMap = mutableMapOf<String, Int>()
+    baseMap.forEach { (k, v) ->
+      val nKey = com.example.data.repository.EblRepository.normalizeCriteria(k)
+      if (nKey.isNotBlank()) {
+        normalizedMap[nKey] = maxOf(normalizedMap[nKey] ?: 0, v)
+      }
+    }
+    normalizedMap
   }
 
-  // Only show criteria assigned specifically to this RM where target is > 0
+  // Only show criteria assigned specifically to this RM where target is > 0 (strictly deduplicated case-insensitively)
   val activeRmCriteria = remember(targetCriteria, assignedCriteria, target, customTargets, allQuarterCustomTargets, selectedKpiQuarter, ccTarget, corpTarget, b2bTarget, currentQuarterCustomTargets) {
-    val assigned = if (assignedCriteria.isNotEmpty()) {
-      assignedCriteria
+    val normAssigned = assignedCriteria
+      .map { com.example.data.repository.EblRepository.normalizeCriteria(it) }
+      .filter { it.isNotBlank() }
+      .distinctBy { it.lowercase() }
+
+    val rawList = if (normAssigned.isNotEmpty()) {
+      normAssigned
     } else {
       val list = mutableListOf<String>()
       if (ccTarget > 0) list.add("Credit Card")
       if (corpTarget > 0) list.add("Corporate Card")
       if (b2bTarget > 0) list.add("B2B")
-      customTargets.forEach { (k, v) -> if (v > 0) list.add(k) }
-      allQuarterCustomTargets.values.forEach { qm ->
-        qm.forEach { (k, v) -> if (v > 0 && !list.contains(k)) list.add(k) }
+      currentQuarterCustomTargets.forEach { (k, v) ->
+        val nk = com.example.data.repository.EblRepository.normalizeCriteria(k)
+        if (v > 0 && list.none { it.equals(nk, ignoreCase = true) }) list.add(nk)
       }
       list
     }
-    assigned.filter { a ->
-      val inOptions = targetCriteria.isEmpty() || targetCriteria.any { it.equals(a, ignoreCase = true) }
-      if (!inOptions) return@filter false
-      when {
-        a.equals("Credit Card", ignoreCase = true) -> ccTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
-        a.equals("Corporate Card", ignoreCase = true) -> corpTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
-        a.equals("B2B", ignoreCase = true) -> b2bTarget > 0 || isAnnual || assignedCriteria.any { it.equals(a, true) }
-        else -> {
-          val customVal = currentQuarterCustomTargets[a]
-            ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(a, true) }?.value
-            ?: 0
-          val annualCustomVal = allQuarterCustomTargets["ALL"]?.get(a)
-            ?: (allQuarterCustomTargets.values.sumOf { it[a] ?: 0 })
-          customVal > 0 || annualCustomVal > 0 || assignedCriteria.any { it.equals(a, true) }
+
+    rawList
+      .map { com.example.data.repository.EblRepository.normalizeCriteria(it) }
+      .filter { it.isNotBlank() }
+      .distinctBy { it.lowercase() }
+      .filter { a ->
+        val isExplicitlyAssigned = normAssigned.any { it.equals(a, ignoreCase = true) }
+        if (isExplicitlyAssigned) {
+          true
+        } else {
+          when {
+            a.equals("Credit Card", ignoreCase = true) -> ccTarget > 0 || isAnnual
+            a.equals("Corporate Card", ignoreCase = true) -> corpTarget > 0 || isAnnual
+            a.equals("B2B", ignoreCase = true) -> b2bTarget > 0 || isAnnual
+            else -> {
+              val customVal = currentQuarterCustomTargets[a]
+                ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(a, true) }?.value
+                ?: 0
+              customVal > 0
+            }
+          }
         }
       }
-    }
   }
   Box(
     modifier = modifier
@@ -223,55 +243,7 @@ fun RmDashboardScreen(
       )
     }
 
-    item {
-      Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
-
-
-
-          // Biometric Fingerprint Login Switch for RM
-          Row(
-            modifier = Modifier
-              .fillMaxWidth()
-              .clip(RoundedCornerShape(8.dp))
-              .background(Color(0xFF0F2642))
-              .padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-          ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Icon(
-                imageVector = Icons.Default.Fingerprint,
-                contentDescription = "Fingerprint Login",
-                tint = if (isBiometricEnabled) Color(0xFF34D399) else Color(0xFF94A3B8),
-                modifier = Modifier.size(20.dp)
-              )
-              Spacer(modifier = Modifier.width(8.dp))
-              Column {
-                Text(
-                  text = "Fingerprint Login",
-                  fontSize = 11.sp,
-                  fontWeight = FontWeight.Bold,
-                  color = Color.White
-                )
-                Text(
-                  text = if (isBiometricEnabled) "Enabled (Biometric Active)" else "Disabled (Password Required)",
-                  fontSize = 9.sp,
-                  color = if (isBiometricEnabled) Color(0xFF34D399) else Color.LightGray
-                )
-              }
-            }
-            androidx.compose.material3.Switch(
-              checked = isBiometricEnabled,
-              onCheckedChange = { onToggleBiometric?.invoke(it) },
-              modifier = Modifier.testTag("switch_rm_biometric")
-            )
-          }
-
-
-        }
-      }
 
     // Unread SMS Alert Card from Admin/Mentor
     if (unreadSmsCount > 0) {
@@ -408,13 +380,14 @@ fun RmDashboardScreen(
           val standardCritSet = setOf("Credit Card", "Corporate Card", "B2B")
           activeRmCriteria.filter { crit ->
             standardCritSet.none { it.equals(crit.trim(), ignoreCase = true) }
-          }.forEach { crit ->
-            val sumQ = ((allQuarterCustomTargets["Q1"]?.get(crit) ?: allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
-                        (allQuarterCustomTargets["Q2"]?.get(crit) ?: allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
-                        (allQuarterCustomTargets["Q3"]?.get(crit) ?: allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0) +
-                        (allQuarterCustomTargets["Q4"]?.get(crit) ?: allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: 0))
-            val annualCustom = if (sumQ > 0) sumQ else (allQuarterCustomTargets["ALL"]?.get(crit) ?: allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.equals(crit, true) }?.value ?: (customTargets[crit] ?: 0) * 4)
-            annualSummaryParts.add("$crit $annualCustom")
+          }.distinctBy { com.example.data.repository.EblRepository.normalizeCriteria(it).lowercase() }.forEach { crit ->
+            val normCrit = com.example.data.repository.EblRepository.normalizeCriteria(crit)
+            val sumQ = ((allQuarterCustomTargets["Q1"]?.get(normCrit) ?: allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.equals(normCrit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q2"]?.get(normCrit) ?: allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.equals(normCrit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q3"]?.get(normCrit) ?: allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.equals(normCrit, true) }?.value ?: 0) +
+                        (allQuarterCustomTargets["Q4"]?.get(normCrit) ?: allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.equals(normCrit, true) }?.value ?: 0))
+            val annualCustom = if (sumQ > 0) sumQ else (allQuarterCustomTargets["ALL"]?.get(normCrit) ?: allQuarterCustomTargets["ALL"]?.entries?.firstOrNull { it.key.equals(normCrit, true) }?.value ?: (customTargets[normCrit] ?: 0) * 4)
+            annualSummaryParts.add("$normCrit $annualCustom")
           }
           val annualSummaryText = if (annualSummaryParts.isNotEmpty()) {
             "Total: " + annualSummaryParts.joinToString(" • ")
@@ -665,7 +638,7 @@ fun RmDashboardScreen(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                               Icon(Icons.Default.Stars, contentDescription = null, tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706), modifier = Modifier.size(14.dp))
                               Spacer(modifier = Modifier.width(4.dp))
-                              Text(crit, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E), maxLines = 1, softWrap = false)
+                              Text(com.example.data.repository.EblRepository.normalizeCriteria(crit), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E), maxLines = 1, softWrap = false)
                             }
                             Spacer(modifier = Modifier.height(6.dp))
                             Row(verticalAlignment = Alignment.Bottom) {

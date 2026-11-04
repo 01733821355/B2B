@@ -38,6 +38,29 @@ class EblRepository(
   private val authRepository: AuthRepository,
   private val context: Context? = null
 ) {
+  companion object {
+    fun normalizeCriteria(name: String): String {
+      val clean = name.trim()
+      val low = clean.lowercase().replace("[^a-z0-9]".toRegex(), "")
+      return when (low) {
+        "cc", "creditcard" -> "Credit Card"
+        "corp", "corporate", "corporatecard", "corpcard" -> "Corporate Card"
+        "b2b" -> "B2B"
+        "casa" -> "CASA"
+        "sme" -> "SME"
+        "deposit" -> "Deposit"
+        "company" -> "Company"
+        "loan" -> "Loan"
+        else -> {
+          if (clean.isBlank()) return ""
+          clean.split("\\s+".toRegex()).joinToString(" ") { word ->
+            word.lowercase().replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+          }
+        }
+      }
+    }
+  }
+
   private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
   private val httpClient = OkHttpClient.Builder()
@@ -686,7 +709,9 @@ class EblRepository(
     submissionLatitude: Double? = null,
     submissionLongitude: Double? = null,
     submissionAddress: String? = null,
-    serialNumber: String? = null
+    serialNumber: String? = null,
+    limit: String = "",
+    analyst: String = ""
   ): Result<CustomerFileEntity> = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
       ?: return@withContext Result.failure(Exception("Unauthorized operation."))
@@ -780,6 +805,8 @@ class EblRepository(
       activeStatus = activeStatus,
       assignedRmCode = resolvedRmCode,
       ccNumber = ccNumber.trim(),
+      limit = limit.trim().ifBlank { existing?.limit ?: "" },
+      analyst = analyst.trim().ifBlank { existing?.analyst ?: "" },
       pendingDocuments = pendingDocsJoined,
       remarks = remarks.trim(),
       cpvStatus = cpvStatus,
@@ -1530,6 +1557,9 @@ class EblRepository(
   }
 
   suspend fun syncSettingUpsertToGoogleSheets(key: String, value: String): Unit = withContext(Dispatchers.IO) {
+    if (key.startsWith("RM_TARGET_") || key.startsWith("RM_CUSTOM_TARGETS_") || key.startsWith("RM_ASSIGNED_CRITERIA_")) {
+      return@withContext
+    }
     try {
       val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
       val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
@@ -1588,7 +1618,10 @@ class EblRepository(
                 val ik = inner.keys()
                 while (ik.hasNext()) {
                   val k = ik.next()
-                  im[k] = inner.optInt(k, 0)
+                  val normK = normalizeCriteria(k)
+                  val v = inner.optInt(k, 0)
+                  val cur = im[normK] ?: 0
+                  im[normK] = if (v > 0) v else cur
                 }
                 parsed[qk] = im
               }
@@ -1600,7 +1633,11 @@ class EblRepository(
 
       val allQuartersJsonObj = org.json.JSONObject()
       effectiveQuarterTargets?.forEach { (qKey, map) ->
-        allQuartersJsonObj.put(qKey.uppercase(), org.json.JSONObject(map))
+        val innerJson = org.json.JSONObject()
+        map.forEach { (ck, cv) ->
+          innerJson.put(normalizeCriteria(ck), cv)
+        }
+        allQuartersJsonObj.put(qKey.uppercase(), innerJson)
       }
 
       val payload = org.json.JSONObject().apply {
@@ -1615,7 +1652,8 @@ class EblRepository(
           put("allQuarterTargets", allQuartersJsonObj)
         }
         if (assignedCriteria != null) {
-          put("assignedCriteria", org.json.JSONArray(assignedCriteria))
+          val normAssigned = assignedCriteria.map { normalizeCriteria(it.trim()) }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+          put("assignedCriteria", org.json.JSONArray(normAssigned))
         }
         if (fullTarget != null) {
           put("activeQuarter", fullTarget.activeQuarter)
@@ -3008,7 +3046,10 @@ class EblRepository(
             val keys = qObj.keys()
             while (keys.hasNext()) {
               val k = keys.next()
-              map[k] = qObj.optInt(k, 0)
+              val norm = normalizeCriteria(k)
+              val v = qObj.optInt(k, 0)
+              val cur = map[norm] ?: 0
+              map[norm] = if (v > 0) v else cur
             }
             return@combine map
           }
@@ -3062,7 +3103,10 @@ class EblRepository(
               val iKeys = innerObj.keys()
               while (iKeys.hasNext()) {
                 val k = iKeys.next()
-                map[k] = innerObj.optInt(k, 0)
+                val norm = normalizeCriteria(k)
+                val v = innerObj.optInt(k, 0)
+                val cur = map[norm] ?: 0
+                map[norm] = if (v > 0) v else cur
               }
               res[qKey] = map
             }
@@ -3082,9 +3126,10 @@ class EblRepository(
         val specificMap = if (!specificRaw.isNullOrBlank()) parseTargetsJsonMap(specificRaw) else if (q == "ALL") baseMap else emptyMap()
         val curMap = (res[q] ?: mutableMapOf()).toMutableMap()
         specificMap.forEach { (crit, v) ->
-          val existingKey = curMap.keys.firstOrNull { it.trim().equals(crit.trim(), ignoreCase = true) }
+          val normCrit = normalizeCriteria(crit)
+          val existingKey = curMap.keys.firstOrNull { it.trim().equals(normCrit, ignoreCase = true) }
           if (existingKey == null) {
-            curMap[crit] = v
+            curMap[normCrit] = v
           } else if ((curMap[existingKey] ?: 0) == 0 && v > 0) {
             curMap[existingKey] = v
           }
@@ -3093,7 +3138,7 @@ class EblRepository(
       }
       // Calculate ALL as exact sum of Q1 + Q2 + Q3 + Q4 for each criterion
       val allMap = (res["ALL"] ?: mutableMapOf()).toMutableMap()
-      val allKeys = res.values.flatMap { it.keys }.map { it.trim() }.distinct()
+      val allKeys = res.values.flatMap { it.keys }.map { normalizeCriteria(it) }.distinctBy { it.lowercase() }
       allKeys.forEach { crit ->
         val sumQ = (res["Q1"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0) +
           (res["Q2"]?.entries?.firstOrNull { it.key.trim().equals(crit, ignoreCase = true) }?.value ?: 0) +
@@ -3116,7 +3161,10 @@ class EblRepository(
       val keys = obj.keys()
       while (keys.hasNext()) {
         val k = keys.next()
-        map[k] = obj.optInt(k, 0)
+        val norm = normalizeCriteria(k)
+        val v = obj.optInt(k, 0)
+        val cur = map[norm] ?: 0
+        map[norm] = if (v > 0) v else cur
       }
       map
     } catch (_: Exception) {
@@ -3126,7 +3174,13 @@ class EblRepository(
 
   suspend fun saveRmCustomTargets(rmCode: String, targets: Map<String, Int>, quarter: String? = null) = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
-    val json = org.json.JSONObject(targets).toString()
+    val normalizedTargets = mutableMapOf<String, Int>()
+    targets.forEach { (k, v) ->
+      val norm = normalizeCriteria(k)
+      val cur = normalizedTargets[norm] ?: 0
+      normalizedTargets[norm] = if (v > 0) v else cur
+    }
+    val json = org.json.JSONObject(normalizedTargets).toString()
     val now = DateUtils.currentDhakaMillis()
     val cleanRm = rmCode.trim().uppercase()
     val normQuarter = quarter?.trim()?.uppercase()
@@ -3142,7 +3196,6 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets(targetKey, json) }
 
     // Update allQuarters JSON structure
     val existingAllSetting = database.appSettingDao().getSetting(allQuartersKey)
@@ -3153,7 +3206,7 @@ class EblRepository(
       org.json.JSONObject()
     }
     val activeQ = if (normQuarter.isNullOrBlank()) "ALL" else normQuarter
-    rootObj.put(activeQ, org.json.JSONObject(targets))
+    rootObj.put(activeQ, org.json.JSONObject(normalizedTargets))
     val updatedAllJson = rootObj.toString()
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity(
@@ -3163,7 +3216,44 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets(allQuartersKey, updatedAllJson) }
+
+    // Live sync directly to RM Mapping / RM Details sheet via syncTargetUpsertToGoogleSheets
+    val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)
+    val quarterlyTargets = mutableMapOf<String, MutableMap<String, Int>>()
+    listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q -> quarterlyTargets[q] = mutableMapOf() }
+    val allKeys = rootObj.keys()
+    while (allKeys.hasNext()) {
+      val qk = allKeys.next().uppercase()
+      val inner = rootObj.optJSONObject(qk)
+      if (inner != null) {
+        val qm = mutableMapOf<String, Int>()
+        val ik = inner.keys()
+        while (ik.hasNext()) {
+          val ck = ik.next()
+          qm[normalizeCriteria(ck)] = inner.optInt(ck, 0)
+        }
+        quarterlyTargets[qk] = qm
+      }
+    }
+    quarterlyTargets[activeQ] = normalizedTargets.toMutableMap()
+
+    val curQ = DateUtils.getCurrentQuarter()
+    val cc = quarterlyTargets[curQ]?.get("Credit Card") ?: existingTarget.creditCardTarget
+    val corp = quarterlyTargets[curQ]?.get("Corporate Card") ?: existingTarget.corporateCardTarget
+    val b2b = quarterlyTargets[curQ]?.get("B2B") ?: existingTarget.b2bTarget
+
+    applicationScope.launch {
+      syncTargetUpsertToGoogleSheets(
+        cleanRm,
+        curQ,
+        existingTarget.targetYear,
+        cc,
+        corp,
+        b2b,
+        quarterlyTargets.mapValues { it.value.toMap() },
+        null
+      )
+    }
   }
 
   suspend fun saveRmCustomTargetsAllQuarters(
@@ -3177,11 +3267,22 @@ class EblRepository(
     val allQuartersKey = "RM_CUSTOM_TARGETS_ALL_QUARTERS_$cleanRm"
     val baseKey = "RM_CUSTOM_TARGETS_$cleanRm"
 
+    val normalizedQuarterlyTargets = mutableMapOf<String, MutableMap<String, Int>>()
+    listOf("Q1", "Q2", "Q3", "Q4", "ALL").forEach { q -> normalizedQuarterlyTargets[q] = mutableMapOf() }
+
     val rootObj = org.json.JSONObject()
     quarterlyTargets.forEach { (q, map) ->
-      rootObj.put(q.uppercase(), org.json.JSONObject(map))
-      val qKey = if (q.equals("ALL", true)) baseKey else "${baseKey}_${q.uppercase()}"
-      val qJson = org.json.JSONObject(map).toString()
+      val normMap = mutableMapOf<String, Int>()
+      map.forEach { (ck, cv) ->
+        val norm = normalizeCriteria(ck)
+        val cur = normMap[norm] ?: 0
+        normMap[norm] = if (cv > 0) cv else cur
+      }
+      val qUpper = q.uppercase()
+      normalizedQuarterlyTargets[qUpper] = normMap
+      rootObj.put(qUpper, org.json.JSONObject(normMap))
+      val qKey = if (qUpper == "ALL") baseKey else "${baseKey}_$qUpper"
+      val qJson = org.json.JSONObject(normMap).toString()
       database.appSettingDao().insertOrUpdateSetting(
         AppSettingEntity(
           settingKey = qKey,
@@ -3202,9 +3303,10 @@ class EblRepository(
       )
     )
 
-    if (assignedCriteria != null) {
+    val normAssigned = assignedCriteria?.map { normalizeCriteria(it.trim()) }?.filter { it.isNotBlank() }?.distinctBy { it.lowercase() }
+    if (normAssigned != null) {
       val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
-      val joined = assignedCriteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+      val joined = normAssigned.joinToString(", ")
       database.appSettingDao().insertOrUpdateSetting(
         AppSettingEntity(
           settingKey = assignedKey,
@@ -3217,10 +3319,10 @@ class EblRepository(
 
     // Update RmTargetEntity with all 4 quarters targets in Room
     val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)
-    val q1Map = quarterlyTargets["Q1"] ?: emptyMap()
-    val q2Map = quarterlyTargets["Q2"] ?: emptyMap()
-    val q3Map = quarterlyTargets["Q3"] ?: emptyMap()
-    val q4Map = quarterlyTargets["Q4"] ?: emptyMap()
+    val q1Map = normalizedQuarterlyTargets["Q1"] ?: emptyMap()
+    val q2Map = normalizedQuarterlyTargets["Q2"] ?: emptyMap()
+    val q3Map = normalizedQuarterlyTargets["Q3"] ?: emptyMap()
+    val q4Map = normalizedQuarterlyTargets["Q4"] ?: emptyMap()
 
     val q1Cc = q1Map["Credit Card"] ?: existingTarget.q1CreditCardTarget
     val q1Corp = q1Map["Corporate Card"] ?: existingTarget.q1CorporateCardTarget
@@ -3269,7 +3371,7 @@ class EblRepository(
 
     // Live sync to Google Sheets: atomic UPSERT_RM_TARGET with all 4 quarters and criteria directly to RM_Details / RM Mapping
     applicationScope.launch {
-      syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b, quarterlyTargets, assignedCriteria)
+      syncTargetUpsertToGoogleSheets(cleanRm, curQ, updatedTarget.targetYear, curCc, curCorp, curB2b, normalizedQuarterlyTargets, normAssigned)
     }
   }
 
@@ -3284,23 +3386,24 @@ class EblRepository(
     ) { setting, allCriteria, rmTarget, customTargets ->
       val raw = setting?.settingValue
       if (!raw.isNullOrBlank()) {
-        val assigned = raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-        val filtered = assigned.filter { a -> allCriteria.any { it.equals(a, ignoreCase = true) } }
+        val assigned = raw.split(",").map { normalizeCriteria(it.trim()) }.filter { it.isNotBlank() }
+        val filtered = assigned.distinctBy { it.lowercase() }
         filtered
       } else {
         val list = mutableListOf<String>()
         val cc = rmTarget?.creditCardTarget ?: 0
         val corp = rmTarget?.corporateCardTarget ?: 0
         val b2b = rmTarget?.b2bTarget ?: 0
-        if (cc > 0 && allCriteria.any { it.equals("Credit Card", ignoreCase = true) }) list.add("Credit Card")
-        if (corp > 0 && allCriteria.any { it.equals("Corporate Card", ignoreCase = true) }) list.add("Corporate Card")
-        if (b2b > 0 && allCriteria.any { it.equals("B2B", ignoreCase = true) }) list.add("B2B")
+        if (cc > 0) list.add("Credit Card")
+        if (corp > 0) list.add("Corporate Card")
+        if (b2b > 0) list.add("B2B")
         customTargets.forEach { (k, v) ->
-          if (v > 0 && allCriteria.any { it.equals(k, ignoreCase = true) } && !list.contains(k)) {
-            list.add(k)
+          val normK = normalizeCriteria(k)
+          if (v > 0 && list.none { it.equals(normK, ignoreCase = true) }) {
+            list.add(normK)
           }
         }
-        list
+        list.distinctBy { it.lowercase() }
       }
     }
   }
@@ -3309,7 +3412,8 @@ class EblRepository(
     val currentUser = authRepository.currentUser.value
     val cleanRm = rmCode.trim().uppercase()
     val assignedKey = "RM_ASSIGNED_CRITERIA_$cleanRm"
-    val joined = criteria.map { it.trim() }.filter { it.isNotBlank() }.joinToString(", ")
+    val normList = criteria.map { normalizeCriteria(it.trim()) }.filter { it.isNotBlank() }.distinctBy { it.lowercase() }
+    val joined = normList.joinToString(", ")
     val now = DateUtils.currentDhakaMillis()
     database.appSettingDao().insertOrUpdateSetting(
       AppSettingEntity(
@@ -3319,7 +3423,20 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets(assignedKey, joined) }
+    val existingTarget = database.rmTargetDao().getTargetForRm(cleanRm) ?: RmTargetEntity(rmCode = cleanRm)
+    val curQ = DateUtils.getCurrentQuarter()
+    applicationScope.launch {
+      syncTargetUpsertToGoogleSheets(
+        cleanRm,
+        curQ,
+        existingTarget.targetYear,
+        existingTarget.creditCardTarget,
+        existingTarget.corporateCardTarget,
+        existingTarget.b2bTarget,
+        null,
+        normList
+      )
+    }
   }
 
 
@@ -3516,6 +3633,8 @@ class EblRepository(
             put("applicationStatus", f.applicationStatus)
             put("activeStatus", f.activeStatus)
             put("assignedRmCode", f.assignedRmCode)
+            put("limit", f.limit)
+            put("analyst", f.analyst)
             put("pendingDocuments", f.pendingDocuments)
             put("remarks", f.remarks)
             put("cpvRemarks", f.cpvRemarks)
@@ -4308,7 +4427,10 @@ class EblRepository(
               val ikIter = inner.keys()
               while (ikIter.hasNext()) {
                 val crit = ikIter.next()
-                im[crit] = inner.optInt(crit, 0)
+                val normCrit = normalizeCriteria(crit)
+                val targetVal = inner.optInt(crit, 0)
+                val curVal = im[normCrit] ?: 0
+                im[normCrit] = if (targetVal > 0) targetVal else curVal
               }
               parsedMap[qk] = im
             }
@@ -4336,14 +4458,14 @@ class EblRepository(
         if (arr != null && arr.length() > 0) {
           val critList = mutableListOf<String>()
           for (ci in 0 until arr.length()) {
-            val cName = arr.optString(ci).trim()
+            val cName = normalizeCriteria(arr.optString(ci).trim())
             if (cName.isNotBlank()) critList.add(cName)
           }
           if (critList.isNotEmpty()) {
             val existingCritStr = database.appSettingDao().getSetting("TARGET_CRITERIA_LIST")?.settingValue ?: ""
-            val existingCrits = existingCritStr.split(",").map { it.trim() }.filter { it.isNotBlank() }
-            val mergedCrits = (existingCrits + critList).distinct()
-            if (mergedCrits.size > existingCrits.size) {
+            val existingCrits = existingCritStr.split(",").map { normalizeCriteria(it.trim()) }.filter { it.isNotBlank() }
+            val mergedCrits = (existingCrits + critList).distinctBy { it.lowercase() }
+            if (mergedCrits.size > existingCrits.distinctBy { it.lowercase() }.size) {
               database.appSettingDao().insertOrUpdateSetting(
                 AppSettingEntity("TARGET_CRITERIA_LIST", mergedCrits.joinToString(","), "GoogleSheets_Universal", now)
               )
@@ -4364,22 +4486,15 @@ class EblRepository(
       val value = obj.optString("settingValue").trim()
       if (key.isBlank()) continue
 
+      // RM targets and assigned criteria must NEVER be read from Universal_Settings
+      if (key.startsWith("RM_CUSTOM_TARGETS") || key.startsWith("RM_ASSIGNED_CRITERIA") || key.startsWith("RM_TARGET_")) {
+        continue
+      }
+
       val existing = database.appSettingDao().getSetting(key)
-      // Protect target settings and recently edited settings from stale sheet overwrites
-      val isTargetKey = key.startsWith("RM_CUSTOM_TARGETS") || key.startsWith("RM_ASSIGNED_CRITERIA") || key == "TARGET_CRITERIA_LIST"
-      if (isTargetKey) {
-        val wasRecentlyEdited = existing != null && (now - existing.updatedAt < 300_000L) && (existing.updatedBy != "GoogleSheets_Universal")
-        if (wasRecentlyEdited) continue
-        if (value.isBlank() || value == "{}" || value == "[]" || value == "0") {
-          if (existing != null && existing.settingValue.isNotBlank() && existing.settingValue != "{}" && existing.settingValue != "[]") {
-            continue
-          }
-        }
-      } else {
-        val wasRecentlyEditedLocally = existing != null && (now - existing.updatedAt < 60_000L) && (existing.updatedBy != "GoogleSheets_Universal")
-        if (wasRecentlyEditedLocally && !key.startsWith("deleted_")) {
-          continue
-        }
+      val wasRecentlyEditedLocally = existing != null && (now - existing.updatedAt < 60_000L) && (existing.updatedBy != "GoogleSheets_Universal")
+      if (wasRecentlyEditedLocally && !key.startsWith("deleted_")) {
+        continue
       }
 
       if (key.equals("deleted_file_ids", true)) {
@@ -5251,6 +5366,8 @@ class EblRepository(
         val mob = obj.optString("mobile", existing.mobile)
         val em = obj.optString("email", existing.email)
         val prodType = obj.optString("productType", existing.productType)
+        val sheetLimit = obj.optString("limit", existing.limit).trim()
+        val sheetAnalyst = obj.optString("analyst", existing.analyst).trim()
 
         val sheetCpvRaw = listOf("cpvStatus", "cpv_status", "cpv", "CPV Status", "CPV", "verificationStatus", "cpv_stat", "cpvStat")
           .firstNotNullOfOrNull { key ->
@@ -5297,9 +5414,11 @@ class EblRepository(
         val hasCcChanged = ccNumber.isNotBlank() && existing.ccNumber.trim() != ccNumber.trim()
         val hasRmChanged = rmCode.isNotBlank() && !existing.assignedRmCode.trim().equals(rmCode.trim(), ignoreCase = true)
         val hasSlChanged = sheetSl.isNotBlank() && existing.serialNumber.trim() != sheetSl.trim()
+        val hasLimitOrAnalystChanged = (sheetLimit.isNotBlank() && existing.limit.trim() != sheetLimit) ||
+                                       (sheetAnalyst.isNotBlank() && existing.analyst.trim() != sheetAnalyst)
         val hasDetailsChanged = existing.customerName.trim() != custName.trim() || existing.companyName.trim() != compName.trim() ||
                                 existing.mobile.trim() != mob.trim() || existing.email.trim() != em.trim() || existing.officeAddress.trim() != offAddr.trim() ||
-                                existing.productType.trim() != prodType.trim() || hasCpvChanged
+                                existing.productType.trim() != prodType.trim() || hasCpvChanged || hasLimitOrAnalystChanged
 
         if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged || hasCpvChanged) {
           val updated = existing.copy(
@@ -5311,6 +5430,8 @@ class EblRepository(
             productType = prodType,
             applicationStatus = appStatus,
             activeStatus = activeStatus,
+            limit = if (sheetLimit.isNotBlank()) sheetLimit else existing.limit,
+            analyst = if (sheetAnalyst.isNotBlank()) sheetAnalyst else existing.analyst,
             remarks = remarksVal,
             cpvRemarks = cpvRemarks,
             cpvStatus = cpvStatus,
@@ -5425,6 +5546,8 @@ class EblRepository(
           activeStatus = activeStatus,
           assignedRmCode = rmCode,
           ccNumber = ccNumber,
+          limit = obj.optString("limit", "").trim(),
+          analyst = obj.optString("analyst", "").trim(),
           pendingDocuments = pendingDocs,
           remarks = remarks,
           cpvStatus = normalizedSheetCpv,
