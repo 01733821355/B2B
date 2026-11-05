@@ -198,8 +198,13 @@ fun MoreScreen(
           Switch(
             checked = isBiometricEnabled,
             onCheckedChange = { enabled ->
-              if (enabled && !bioStatus.isAvailable) {
-                Toast.makeText(context, bioStatus.statusMessage, Toast.LENGTH_LONG).show()
+              if (enabled && bioStatus != BiometricHelper.BiometricAvailability.AVAILABLE) {
+                val errorMsg = when (bioStatus) {
+                  BiometricHelper.BiometricAvailability.NO_HARDWARE -> "Fingerprint sensor is not available on this device."
+                  BiometricHelper.BiometricAvailability.NONE_ENROLLED -> "No fingerprint enrolled. Please enroll a fingerprint in Android Settings."
+                  else -> "Biometric authentication is not supported or currently unavailable."
+                }
+                Toast.makeText(context, errorMsg, Toast.LENGTH_LONG).show()
               } else {
                 viewModel.setBiometricEnabled(currentUser.rmCode, enabled)
                 val msg = if (enabled) "✓ Fingerprint login enabled" else "Fingerprint login disabled"
