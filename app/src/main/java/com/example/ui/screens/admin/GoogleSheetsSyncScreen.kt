@@ -322,8 +322,8 @@ function extractAllSheetFiles(sheet) {
       activeStatus: getVal(row, ['active status', 'activestatus', 'active'], 'N'),
       assignedRmCode: getVal(row, ['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], ''),
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
-      limit: getVal(row, ['limit', 'card limit', 'credit limit', 'loan limit', 'sanction limit'], ''),
-      analyst: getVal(row, ['analyst', 'credit analyst', 'underwriter', 'ca'], ''),
+      limit: getVal(row, ['limit', 'card limit', 'credit limit', 'loan limit', 'sanction limit', 'loan amount', 'loanamount', 'amount'], ''),
+      analyst: getVal(row, ['analyst', 'credit analyst', 'underwriter', 'ca', 'analyst name', 'analystname'], ''),
       cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks', 'cpv notes', 'cpv note'], ''),
       remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
       cpvStatus: (function() {
@@ -1969,18 +1969,36 @@ function doPost(e) {
     // Upsert Customer Files (ONLY files sent by app - NEVER overwrite manual sheet edits)
     var filesToProcess = data.files || (data.file ? [data.file] : []);
     if (filesToProcess && filesToProcess.length > 0) {
-      var fileExistingData = fileSheet.getDataRange().getValues();
-      var headers = fileExistingData.length > 0 ? fileExistingData[0].map(function(h) { return String(h || '').trim().toLowerCase(); }) : [];
-      var hasSlCol = headers.length > 0 && (headers[0] === 'sl' || headers[0] === 'sl no' || headers[0] === 'sl.' || headers[0] === 'serial');
-      var colFid = -1;
-      var colCc = -1;
-      for (var h = 0; h < headers.length; h++) {
-        var cleanH = headers[h].replace(/[^a-z0-9]/g, '');
-        if (cleanH === 'fileid' || cleanH === 'customerid') colFid = h;
-        if (cleanH === 'ccnumber' || cleanH === 'cardnumber' || cleanH === 'ccno' || cleanH === 'cc') colCc = h;
+      if (fileSheet.getLastRow() === 0) {
+        getOrCreateSheet(ss, 'Customer_Files', ['SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name', 'Office Address', 'Mobile', 'Email', 'Product Type', 'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents', 'Limit', 'Analyst', 'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng', 'Last Updated', 'Updated By'], '#0A192F');
       }
-      if (colFid === -1) colFid = hasSlCol ? 2 : 1;
-      if (colCc === -1) colCc = hasSlCol ? 1 : 0;
+
+      // Ensure 'Limit' and 'Analyst' columns exist in header row if missing
+      var curLastCol = Math.max(1, fileSheet.getLastColumn());
+      var rawHdrRow = fileSheet.getRange(1, 1, 1, curLastCol).getValues()[0];
+      var lowerHdrRow = rawHdrRow.map(function(h) { return String(h || '').trim().toLowerCase(); });
+      var hasLimitHdr = lowerHdrRow.some(function(h) { return h.indexOf('limit') > -1 || h.indexOf('amount') > -1; });
+      var hasAnalystHdr = lowerHdrRow.some(function(h) { return h.indexOf('analyst') > -1; });
+
+      if (!hasLimitHdr) {
+        fileSheet.getRange(1, fileSheet.getLastColumn() + 1).setValue('Limit');
+      }
+      if (!hasAnalystHdr) {
+        fileSheet.getRange(1, fileSheet.getLastColumn() + 1).setValue('Analyst');
+      }
+
+      var fileExistingData = fileSheet.getDataRange().getValues();
+      var activeHeaders = fileExistingData.length > 0 ? fileExistingData[0] : [];
+      var colHeaderMap = {};
+      activeHeaders.forEach(function(h, idx) {
+        var clean = String(h || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (clean) colHeaderMap[clean] = idx;
+      });
+
+      var colFid = colHeaderMap['fileid'] !== undefined ? colHeaderMap['fileid'] : (colHeaderMap['customerid'] !== undefined ? colHeaderMap['customerid'] : -1);
+      var colCc = colHeaderMap['ccnumber'] !== undefined ? colHeaderMap['ccnumber'] : (colHeaderMap['cardnumber'] !== undefined ? colHeaderMap['cardnumber'] : (colHeaderMap['cc'] !== undefined ? colHeaderMap['cc'] : -1));
+      if (colFid === -1) colFid = colHeaderMap['sl'] !== undefined ? 2 : 1;
+      if (colCc === -1) colCc = colHeaderMap['sl'] !== undefined ? 1 : 0;
 
       var fileIdRowMap = {};
       for (var r = 1; r < fileExistingData.length; r++) {
@@ -2001,6 +2019,8 @@ function doPost(e) {
         }
       }
 
+      var totalCols = Math.max(activeHeaders.length, 22);
+
       filesToProcess.forEach(function(f, index) {
         var fId = String(f.fileId || '').trim();
         var cc = String(f.ccNumber || '').trim();
@@ -2014,36 +2034,52 @@ function doPost(e) {
                              (cc && fileIdRowMap[cc]) || (cc && fileIdRowMap[cc.toLowerCase()]) ||
                              (ccClean && fileIdRowMap[ccClean]) || (ccClean && fileIdRowMap[ccClean.toLowerCase()]);
 
-        var baseRow = [
-          f.ccNumber || '',
-          f.fileId || '',
-          f.customerName || '',
-          f.companyName || '',
-          f.officeAddress || '',
-          f.mobile || '',
-          f.email || '',
-          f.productType || '',
-          f.applicationStatus || 'Submitted',
-          f.activeStatus || 'N',
-          f.assignedRmCode || '',
-          f.pendingDocuments || '',
-          f.limit || '',
-          f.analyst || '',
-          f.cpvRemarks || f.remarks || '',
-          f.cpvStatus || 'Pending',
-          f.submissionAddress || '',
-          f.submissionLat || 0.0,
-          f.submissionLng || 0.0,
-          f.updatedAt || '',
-          f.updatedBy || 'App'
-        ];
+        var rowData = [];
+        if (targetRowIndex && targetRowIndex - 1 < fileExistingData.length) {
+          rowData = fileExistingData[targetRowIndex - 1].slice();
+        }
+        while (rowData.length < totalCols) {
+          rowData.push('');
+        }
 
-        var row = hasSlCol ? [sl || (index + 1)].concat(baseRow) : baseRow;
+        function setCell(keys, val) {
+          if (val === undefined || val === null) return;
+          for (var k = 0; k < keys.length; k++) {
+            var colIdx = colHeaderMap[keys[k]];
+            if (colIdx !== undefined) {
+              rowData[colIdx] = val;
+              return;
+            }
+          }
+        }
+
+        setCell(['sl', 'slno', 'serial', 'serialnumber'], sl || (index + 1));
+        setCell(['ccnumber', 'cc', 'ccno', 'cardnumber'], f.ccNumber || '');
+        setCell(['fileid', 'customerid', 'applicationid'], f.fileId || '');
+        setCell(['customername', 'name', 'clientname'], f.customerName || '');
+        setCell(['companyname', 'company', 'organization'], f.companyName || '');
+        setCell(['officeaddress', 'address'], f.officeAddress || '');
+        setCell(['mobile', 'phone', 'contact', 'mobileno', 'cell'], f.mobile || '');
+        setCell(['email', 'emailaddress'], f.email || '');
+        setCell(['producttype', 'product'], f.productType || '');
+        setCell(['applicationstatus', 'status', 'filestatus'], f.applicationStatus || 'Submitted');
+        setCell(['activestatus', 'active'], f.activeStatus || 'N');
+        setCell(['assignedrmcode', 'rmcode', 'rm', 'assignedrm'], f.assignedRmCode || '');
+        setCell(['pendingdocuments', 'pendingdocs', 'documents'], f.pendingDocuments || '');
+        setCell(['limit', 'loanamount', 'amount', 'cardlimit', 'creditlimit', 'sanctionlimit'], f.limit || f.loanAmount || '');
+        setCell(['analyst', 'analystname', 'creditanalyst', 'underwriter', 'ca'], f.analyst || f.analystName || '');
+        setCell(['cpvremarks', 'remarks', 'remark'], f.cpvRemarks || f.remarks || '');
+        setCell(['cpvstatus', 'cpv'], f.cpvStatus || 'Pending');
+        setCell(['gpssubmissionaddress', 'submissionaddress'], f.submissionAddress || '');
+        setCell(['gpslat', 'lat'], f.submissionLat || 0.0);
+        setCell(['gpslng', 'lng'], f.submissionLng || 0.0);
+        setCell(['lastupdated', 'updatedat'], f.updatedAt || '');
+        setCell(['updatedby'], f.updatedBy || 'App');
 
         if (targetRowIndex) {
-          fileSheet.getRange(targetRowIndex, 1, 1, row.length).setValues([row]);
+          fileSheet.getRange(targetRowIndex, 1, 1, rowData.length).setValues([rowData]);
         } else {
-          fileSheet.appendRow(row);
+          fileSheet.appendRow(rowData);
           var newRowIdx = fileSheet.getLastRow();
           if (fId) {
             fileIdRowMap[fId] = newRowIdx;

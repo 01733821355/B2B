@@ -120,6 +120,10 @@ fun MentorDashboardScreen(
   var newAppIconUrlInput by remember { mutableStateOf("") }
   var mentorTargetSettingRow by remember { mutableStateOf<com.example.ui.viewmodel.RmPerformanceRow?>(null) }
 
+  var showEditBannerUrlDialog by remember { mutableStateOf(false) }
+  var newBannerUrlInput by remember { mutableStateOf("") }
+  val bannerBackgroundUrl by viewModel.dashboardBannerBackgroundUrl.collectAsState()
+
   val iconPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickVisualMedia()
   ) { uri ->
@@ -135,6 +139,27 @@ fun MentorDashboardScreen(
             if (success) {
               Toast.makeText(context, "Universal App Icon updated successfully!", Toast.LENGTH_SHORT).show()
             }
+          }
+        }
+      }
+    }
+  }
+
+  val bannerPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      coroutineScope.launch {
+        val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+          context,
+          uri,
+          "banner_${System.currentTimeMillis()}.jpg"
+        )
+        if (saved != null) {
+          val localFile = java.io.File(saved.storagePath)
+          Toast.makeText(context, "Uploading banner photo to Drive...", Toast.LENGTH_SHORT).show()
+          viewModel.uploadAndSetDashboardBannerBackground(localFile, "banner_${System.currentTimeMillis()}.jpg", "image/jpeg") { ok, msg ->
+            Toast.makeText(context, if (ok) "Universal Banner Background updated!" else "Upload failed: $msg", Toast.LENGTH_LONG).show()
           }
         }
       }
@@ -168,6 +193,10 @@ fun MentorDashboardScreen(
         title = "Operations Mentor Console",
         subtitle = "Executive Oversight • Authority Level (${currentUser.rmCode})",
         badgeText = "Mentor Governance • Operational Command",
+        customBackgroundUrl = bannerBackgroundUrl,
+        onUploadBackground = {
+          bannerPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
       )
     }
@@ -559,6 +588,86 @@ fun MentorDashboardScreen(
               },
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.testTag("btn_mentor_edit_app_icon_url")
+            ) {
+              Text("URL", fontSize = 11.sp)
+            }
+          }
+        }
+      }
+    }
+
+    // Universal Dashboard Banner Background Photo Card
+    item {
+      Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) MaterialTheme.colorScheme.surface else Color.White),
+        border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 2.dp)
+          .testTag("mentor_banner_bg_card")
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(12.dp),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = Color(0xFF0284C7).copy(alpha = 0.15f),
+              modifier = Modifier.size(36.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = Icons.Default.AddPhotoAlternate,
+                  contentDescription = null,
+                  tint = Color(0xFF0284C7),
+                  modifier = Modifier.size(18.dp)
+                )
+              }
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+              Text(
+                text = "Dashboard Banner Photo",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
+              )
+              Text(
+                text = if (bannerBackgroundUrl.isNotBlank()) "Photo active • Uploaded to Drive" else "Default corporate artwork active",
+                fontSize = 10.sp,
+                color = if (bannerBackgroundUrl.isNotBlank()) Color(0xFF059669) else Color.Gray
+              )
+            }
+          }
+
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(
+              onClick = {
+                bannerPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+              },
+              colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7)),
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_mentor_pick_banner_photo")
+            ) {
+              Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(14.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text("Upload", fontSize = 11.sp)
+            }
+            OutlinedButton(
+              onClick = {
+                newBannerUrlInput = bannerBackgroundUrl
+                showEditBannerUrlDialog = true
+              },
+              shape = RoundedCornerShape(8.dp),
+              modifier = Modifier.testTag("btn_mentor_edit_banner_url")
             ) {
               Text("URL", fontSize = 11.sp)
             }
@@ -1277,6 +1386,38 @@ fun MentorDashboardScreen(
       onSaveAllTargetsUnified = { year, quarterlyMap, assignedList ->
         viewModel.saveAllQuarterTargetsUnified(row.rmCode, year, quarterlyMap, assignedList) { success ->
           if (success) mentorTargetSettingRow = null
+        }
+      }
+    )
+  }
+
+  if (showEditBannerUrlDialog) {
+    androidx.compose.material3.AlertDialog(
+      onDismissRequest = { showEditBannerUrlDialog = false },
+      title = { Text("Set Banner Background URL", fontWeight = FontWeight.Bold) },
+      text = {
+        androidx.compose.material3.OutlinedTextField(
+          value = newBannerUrlInput,
+          onValueChange = { newBannerUrlInput = it },
+          label = { Text("Banner Image URL") },
+          modifier = Modifier.fillMaxWidth().testTag("input_mentor_banner_url")
+        )
+      },
+      confirmButton = {
+        Button(
+          onClick = {
+            viewModel.setDashboardBannerBackground(newBannerUrlInput.trim()) { ok, msg ->
+              Toast.makeText(context, if (ok) "Banner URL updated!" else "Error: $msg", Toast.LENGTH_SHORT).show()
+              if (ok) showEditBannerUrlDialog = false
+            }
+          }
+        ) {
+          Text("Save")
+        }
+      },
+      dismissButton = {
+        androidx.compose.material3.TextButton(onClick = { showEditBannerUrlDialog = false }) {
+          Text("Cancel")
         }
       }
     )

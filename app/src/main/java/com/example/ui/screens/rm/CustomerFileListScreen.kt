@@ -460,6 +460,18 @@ fun CustomerFileListScreen(
                       color = EblNavyPrimary
                     )
                   }
+                  if (file.limit.isNotBlank() || file.analyst.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    val parts = mutableListOf<String>()
+                    if (file.limit.isNotBlank()) parts.add("Limit: ${file.limit}")
+                    if (file.analyst.isNotBlank()) parts.add("Analyst: ${file.analyst}")
+                    Text(
+                      text = parts.joinToString(" • "),
+                      fontSize = 11.sp,
+                      fontWeight = FontWeight.Bold,
+                      color = if (isDark) Color(0xFF67E8F9) else Color(0xFF0369A1)
+                    )
+                  }
                 }
                 if (isPrivileged) {
                   Text(

@@ -52,6 +52,9 @@ import com.example.ui.theme.LocalAppTheme
 import com.example.util.DateUtils
 import kotlinx.coroutines.delay
 
+import androidx.compose.material.icons.filled.PhotoCamera
+import coil.compose.AsyncImage
+
 /**
  * Dynamic theme-aware, time-dependent visual photo banner card.
  * Changes photographic artwork, illustration, greeting, and ambient styling based on:
@@ -64,6 +67,8 @@ fun ThemeVisualBanner(
   subtitle: String,
   badgeText: String? = null,
   showLiveClock: Boolean = true,
+  customBackgroundUrl: String? = null,
+  onUploadBackground: (() -> Unit)? = null,
   actionContent: (@Composable () -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
@@ -114,14 +119,24 @@ fun ThemeVisualBanner(
         .fillMaxWidth()
         .height(185.dp)
     ) {
-      // Background Corporate Photo with subtle gradient blend
-      Image(
-        painter = painterResource(id = R.drawable.img_corporate_team),
-        contentDescription = "Corporate Office",
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.fillMaxSize(),
-        alpha = 0.18f
-      )
+      // Background Image: Custom Drive/Web background if set by Mentor, otherwise default corporate asset
+      if (!customBackgroundUrl.isNullOrBlank()) {
+        AsyncImage(
+          model = customBackgroundUrl,
+          contentDescription = "Custom Banner Background",
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize(),
+          alpha = 0.40f
+        )
+      } else {
+        Image(
+          painter = painterResource(id = R.drawable.img_corporate_team),
+          contentDescription = "Corporate Office",
+          contentScale = ContentScale.Crop,
+          modifier = Modifier.fillMaxSize(),
+          alpha = 0.18f
+        )
+      }
 
       // Theme Art Artwork on Right Edge
       Box(
@@ -262,26 +277,58 @@ fun ThemeVisualBanner(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          if (showLiveClock) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier
-                .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-              Icon(
-                imageVector = Icons.Default.AccessTime,
-                contentDescription = "Time",
-                tint = currentTheme.tertiary,
-                modifier = Modifier.size(12.dp)
-              )
-              Spacer(modifier = Modifier.width(4.dp))
-              Text(
-                text = formattedTime,
-                fontSize = 10.sp,
-                color = Color.White.copy(alpha = 0.9f),
-                fontWeight = FontWeight.Medium
-              )
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            if (showLiveClock) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                  .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                  .padding(horizontal = 6.dp, vertical = 2.dp)
+              ) {
+                Icon(
+                  imageVector = Icons.Default.AccessTime,
+                  contentDescription = "Time",
+                  tint = currentTheme.tertiary,
+                  modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                  text = formattedTime,
+                  fontSize = 10.sp,
+                  color = Color.White.copy(alpha = 0.9f),
+                  fontWeight = FontWeight.Medium
+                )
+              }
+            }
+
+            if (onUploadBackground != null) {
+              Spacer(modifier = Modifier.width(8.dp))
+              Surface(
+                onClick = onUploadBackground,
+                shape = RoundedCornerShape(6.dp),
+                color = Color.Black.copy(alpha = 0.5f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.6f)),
+                modifier = Modifier.testTag("mentor_change_banner_btn")
+              ) {
+                Row(
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  verticalAlignment = Alignment.CenterVertically
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.PhotoCamera,
+                    contentDescription = "Change Background",
+                    tint = currentTheme.tertiary,
+                    modifier = Modifier.size(12.dp)
+                  )
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text(
+                    text = "Change Photo",
+                    fontSize = 10.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Medium
+                  )
+                }
+              }
             }
           }
 

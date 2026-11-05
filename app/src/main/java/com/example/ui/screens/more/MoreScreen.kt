@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -225,6 +226,23 @@ fun MoreScreen(
         fontWeight = FontWeight.Bold,
         color = primaryText,
         modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+      )
+    }
+
+    // Target vs Achievement Card
+    item {
+      ToolActionCard(
+        title = "Target vs Achievement",
+        subtitle = "Quarterly & annual quotas, production progress, and STC achievement metrics",
+        badge = "Goal Tracker",
+        icon = Icons.Default.TrendingUp,
+        iconTint = Color(0xFF0D9488),
+        iconBg = Color(0xFFCCFBF1),
+        cardBg = cardBg,
+        primaryText = primaryText,
+        secondaryText = secondaryText,
+        onClick = { onNavigate(Screen.TargetVsAchievement) },
+        testTag = "more_tool_target_vs_achievement"
       )
     }
 

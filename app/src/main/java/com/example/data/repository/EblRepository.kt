@@ -1030,6 +1030,10 @@ class EblRepository(
         put("applicationStatus", file.applicationStatus)
         put("activeStatus", file.activeStatus)
         put("assignedRmCode", file.assignedRmCode)
+        put("limit", file.limit)
+        put("loanAmount", file.limit)
+        put("analyst", file.analyst)
+        put("analystName", file.analyst)
         put("pendingDocuments", file.pendingDocuments)
         put("remarks", file.remarks)
         put("cpvRemarks", file.cpvRemarks)
@@ -3634,7 +3638,9 @@ class EblRepository(
             put("activeStatus", f.activeStatus)
             put("assignedRmCode", f.assignedRmCode)
             put("limit", f.limit)
+            put("loanAmount", f.limit)
             put("analyst", f.analyst)
+            put("analystName", f.analyst)
             put("pendingDocuments", f.pendingDocuments)
             put("remarks", f.remarks)
             put("cpvRemarks", f.cpvRemarks)
@@ -5366,8 +5372,23 @@ class EblRepository(
         val mob = obj.optString("mobile", existing.mobile)
         val em = obj.optString("email", existing.email)
         val prodType = obj.optString("productType", existing.productType)
-        val sheetLimit = obj.optString("limit", existing.limit).trim()
-        val sheetAnalyst = obj.optString("analyst", existing.analyst).trim()
+        val sheetLimit = (obj.optString("limit", "").ifBlank {
+          obj.optString("loanAmount", "").ifBlank {
+            obj.optString("cardLimit", "").ifBlank {
+              obj.optString("creditLimit", "").ifBlank {
+                obj.optString("sanctionLimit", "")
+              }
+            }
+          }
+        }).trim().ifBlank { existing.limit }
+
+        val sheetAnalyst = (obj.optString("analyst", "").ifBlank {
+          obj.optString("analystName", "").ifBlank {
+            obj.optString("creditAnalyst", "").ifBlank {
+              obj.optString("underwriter", "")
+            }
+          }
+        }).trim().ifBlank { existing.analyst }
 
         val sheetCpvRaw = listOf("cpvStatus", "cpv_status", "cpv", "CPV Status", "CPV", "verificationStatus", "cpv_stat", "cpvStat")
           .firstNotNullOfOrNull { key ->
@@ -5546,8 +5567,18 @@ class EblRepository(
           activeStatus = activeStatus,
           assignedRmCode = rmCode,
           ccNumber = ccNumber,
-          limit = obj.optString("limit", "").trim(),
-          analyst = obj.optString("analyst", "").trim(),
+          limit = (obj.optString("limit", "").ifBlank {
+            obj.optString("loanAmount", "").ifBlank {
+              obj.optString("cardLimit", "").ifBlank {
+                obj.optString("creditLimit", "")
+              }
+            }
+          }).trim(),
+          analyst = (obj.optString("analyst", "").ifBlank {
+            obj.optString("analystName", "").ifBlank {
+              obj.optString("creditAnalyst", "")
+            }
+          }).trim(),
           pendingDocuments = pendingDocs,
           remarks = remarks,
           cpvStatus = normalizedSheetCpv,
@@ -5857,6 +5888,18 @@ class EblRepository(
     applicationScope.launch {
       syncSettingUpsertToGoogleSheets("app_custom_icon_url", iconUrl)
     }
+  }
+
+  suspend fun setDashboardBannerBackground(bannerUrl: String): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("dashboard_banner_background_url", bannerUrl, currentUser?.rmCode ?: "MENTOR", now)
+    )
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("dashboard_banner_background_url", bannerUrl)
+    }
+    Result.success(Unit)
   }
 
   suspend fun deleteChatMessage(id: String): Result<Unit> = withContext(Dispatchers.IO) {

@@ -57,6 +57,7 @@ sealed class Screen {
   object ImportantDocuments : Screen()
   object CompanyProfile : Screen()
   object More : Screen()
+  object TargetVsAchievement : Screen()
   data class FieldRoutePlanner(val initialSelectedFileIds: List<String> = emptyList()) : Screen()
 }
 
@@ -104,6 +105,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, "RM File Management Suite")
 
   val appCustomIconUrl: StateFlow<String> = database.appSettingDao().getSettingFlow("app_custom_icon_url")
+    .map { it?.settingValue ?: "" }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+  val dashboardBannerBackgroundUrl: StateFlow<String> = database.appSettingDao().getSettingFlow("dashboard_banner_background_url")
     .map { it?.settingValue ?: "" }
     .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
@@ -856,6 +861,42 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
+      }
+    }
+  }
+
+  fun setDashboardBannerBackground(bannerUrl: String, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+    viewModelScope.launch {
+      val res = eblRepository.setDashboardBannerBackground(bannerUrl)
+      res.onSuccess {
+        _uiMessage.emit("Dashboard banner background updated.")
+        onResult(true, null)
+      }.onFailure { err ->
+        onResult(false, err.message)
+      }
+    }
+  }
+
+  fun uploadAndSetDashboardBannerBackground(
+    file: java.io.File,
+    fileName: String,
+    fileType: String,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.uploadFileToGoogleDrive(file, fileName, fileType)
+      res.onSuccess { driveUrl ->
+        if (driveUrl.isNotBlank()) {
+          viewModelScope.launch {
+            eblRepository.setDashboardBannerBackground(driveUrl)
+            _uiMessage.emit("Banner background uploaded and applied successfully.")
+            onResult(true, driveUrl)
+          }
+        } else {
+          onResult(false, "Drive upload succeeded but URL was empty")
+        }
+      }.onFailure { err ->
+        onResult(false, err.message ?: "Failed to upload banner background image")
       }
     }
   }

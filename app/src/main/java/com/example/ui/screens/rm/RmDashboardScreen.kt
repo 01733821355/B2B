@@ -105,6 +105,9 @@ fun RmDashboardScreen(
   onOpenImportantDocuments: () -> Unit = {},
   onOpenCompanyProfile: () -> Unit = {},
   onOpenRoutePlanner: () -> Unit = {},
+  onOpenTargetVsAchievement: () -> Unit = {},
+  bannerBackgroundUrl: String = "",
+  onUploadBannerBackground: (() -> Unit)? = null,
   onUpdateLocation: (Double, Double, String) -> Unit = { _, _, _ -> },
   isBiometricEnabled: Boolean = false,
   onToggleBiometric: ((Boolean) -> Unit)? = null,
@@ -238,7 +241,9 @@ fun RmDashboardScreen(
       com.example.ui.common.ThemeVisualBanner(
         title = "Welcome, ${user.name}",
         subtitle = "RM Code: ${user.rmCode} • ${user.officeAddress}",
-        badgeText = "Relationship Manager • Sales Suite",
+        badgeText = "Relationship Manager",
+        customBackgroundUrl = bannerBackgroundUrl,
+        onUploadBackground = if (user.role == "MENTOR" || user.role == "ADMIN") onUploadBannerBackground else null,
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
       )
     }
@@ -476,183 +481,35 @@ fun RmDashboardScreen(
               )
             }
           }
+          Spacer(modifier = Modifier.height(12.dp))
 
-          Spacer(modifier = Modifier.height(10.dp))
-
-          // Dynamic Target Cards for ONLY this RM's assigned criteria
-          if (activeRmCriteria.isEmpty()) {
-            Surface(
-              shape = RoundedCornerShape(10.dp),
-              color = if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
-              border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)),
-              modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = EblNavyPrimary,
+            modifier = Modifier
+              .fillMaxWidth()
+              .clickable { onOpenTargetVsAchievement() }
+              .testTag("rm_open_target_vs_achievement_btn")
+          ) {
+            Row(
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+              horizontalArrangement = Arrangement.SpaceBetween,
+              verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
-                text = "No active target assigned for this period.",
-                fontSize = 11.sp,
-                color = if (isDark) Color(0xFF94A3B8) else Color.Gray,
-                modifier = Modifier.padding(14.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                text = "📊 Open Target vs Achievement Page",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
               )
-            }
-          } else {
-            val chunks = if (activeRmCriteria.size <= 3) listOf(activeRmCriteria) else activeRmCriteria.chunked(2)
-            chunks.forEachIndexed { chunkIdx, chunk ->
-              if (chunkIdx > 0) Spacer(modifier = Modifier.height(8.dp))
-              Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-              ) {
-                chunk.forEach { crit ->
-                  val norm = crit.trim().lowercase()
-                  Box(modifier = Modifier.weight(1f)) {
-                    when {
-                      crit.equals("Credit Card", ignoreCase = true) -> {
-                        val ccAchieved = stats.stcCreditCardCount
-                        val ccProgress = (ccAchieved.toFloat() / ccTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
-                        Surface(
-                          shape = RoundedCornerShape(10.dp),
-                          color = if (isDark) Color(0xFF064E3B).copy(alpha = 0.35f) else Color(0xFFF0FDF4),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF059669) else Color(0xFFBBF7D0)),
-                          modifier = Modifier.fillMaxWidth()
-                        ) {
-                          Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.CreditCard, contentDescription = null, tint = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D), modifier = Modifier.size(14.dp))
-                              Spacer(modifier = Modifier.width(4.dp))
-                              Text("Credit Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF86EFAC) else Color(0xFF166534), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$ccAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D))
-                              Text(" / $ccTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                              progress = { ccProgress },
-                              modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = if (isDark) Color(0xFF22C55E) else Color(0xFF16A34A),
-                              trackColor = if (isDark) Color(0xFF064E3B) else Color(0xFFDCFCE7)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                              text = "${(ccProgress * 100).toInt()}% Done",
-                              fontSize = 10.sp,
-                              fontWeight = FontWeight.SemiBold,
-                              color = if (isDark) Color(0xFF86EFAC) else Color(0xFF15803D),
-                              maxLines = 1,
-                              softWrap = false
-                            )
-                          }
-                        }
-                      }
-                      crit.equals("Corporate Card", ignoreCase = true) -> {
-                        val corpAchieved = stats.stcCorporateCardCount
-                        val corpProgress = (corpAchieved.toFloat() / corpTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
-                        Surface(
-                          shape = RoundedCornerShape(10.dp),
-                          color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.35f) else Color(0xFFEFF6FF),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF2563EB) else Color(0xFFBFDBFE)),
-                          modifier = Modifier.fillMaxWidth()
-                        ) {
-                          Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Business, contentDescription = null, tint = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8), modifier = Modifier.size(14.dp))
-                              Spacer(modifier = Modifier.width(4.dp))
-                              Text("Corp Card", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$corpAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFF60A5FA) else Color(0xFF1D4ED8))
-                              Text(" / $corpTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                              progress = { corpProgress },
-                              modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = if (isDark) Color(0xFF3B82F6) else Color(0xFF2563EB),
-                              trackColor = if (isDark) Color(0xFF1E3A8A) else Color(0xFFDBEAFE)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                              text = "${(corpProgress * 100).toInt()}% Done",
-                              fontSize = 10.sp,
-                              fontWeight = FontWeight.SemiBold,
-                              color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
-                              maxLines = 1,
-                              softWrap = false
-                            )
-                          }
-                        }
-                      }
-                      crit.equals("B2B", ignoreCase = true) -> {
-                        val b2bAchieved = stats.stcB2bCount
-                        val b2bProgress = (b2bAchieved.toFloat() / b2bTarget.coerceAtLeast(1)).coerceIn(0f, 1f)
-                        Surface(
-                          shape = RoundedCornerShape(10.dp),
-                          color = if (isDark) Color(0xFF581C87).copy(alpha = 0.35f) else Color(0xFFFAF5FF),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF9333EA) else Color(0xFFE9D5FF)),
-                          modifier = Modifier.fillMaxWidth()
-                        ) {
-                          Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Handshake, contentDescription = null, tint = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE), modifier = Modifier.size(14.dp))
-                              Spacer(modifier = Modifier.width(4.dp))
-                              Text("B2B", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF6B21A8), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.Bottom) {
-                              Text("$b2bAchieved", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE))
-                              Text(" / $b2bTarget", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 2.dp), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LinearProgressIndicator(
-                              progress = { b2bProgress },
-                              modifier = Modifier.fillMaxWidth().height(6.dp),
-                              color = if (isDark) Color(0xFFA855F7) else Color(0xFF9333EA),
-                              trackColor = if (isDark) Color(0xFF581C87) else Color(0xFFF3E8FF)
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                              text = "${(b2bProgress * 100).toInt()}% Done",
-                              fontSize = 10.sp,
-                              fontWeight = FontWeight.SemiBold,
-                              color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF7E22CE),
-                              maxLines = 1,
-                              softWrap = false
-                            )
-                          }
-                        }
-                      }
-                      else -> {
-                        val targetVal = currentQuarterCustomTargets[crit]
-                          ?: currentQuarterCustomTargets.entries.firstOrNull { it.key.equals(crit.trim(), ignoreCase = true) }?.value
-                          ?: 0
-                        Surface(
-                          shape = RoundedCornerShape(10.dp),
-                          color = if (isDark) Color(0xFF78350F).copy(alpha = 0.35f) else Color(0xFFFFFBEB),
-                          border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFFD97706) else Color(0xFFFDE68A)),
-                          modifier = Modifier.fillMaxWidth()
-                        ) {
-                          Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                              Icon(Icons.Default.Stars, contentDescription = null, tint = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706), modifier = Modifier.size(14.dp))
-                              Spacer(modifier = Modifier.width(4.dp))
-                              Text(com.example.data.repository.EblRepository.normalizeCriteria(crit), fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFFDE68A) else Color(0xFF92400E), maxLines = 1, softWrap = false)
-                            }
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(verticalAlignment = Alignment.Bottom) {
-                              Text("Target:", fontSize = 11.sp, color = if (isDark) Color(0xFF94A3B8) else Color.Gray, modifier = Modifier.padding(bottom = 1.dp))
-                              Spacer(modifier = Modifier.width(4.dp))
-                              Text("$targetVal", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706))
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+              Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+              )
             }
           }
         }

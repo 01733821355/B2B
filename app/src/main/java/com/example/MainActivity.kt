@@ -10,7 +10,12 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.viewModels
+import android.widget.Toast
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -142,6 +147,29 @@ fun EblMainApp(viewModel: AppViewModel) {
   var showPasswordDialog by remember { mutableStateOf(false) }
   var showRmSmsInboxModal by remember { mutableStateOf(false) }
   val context = LocalContext.current
+  val bannerBackgroundUrl by viewModel.dashboardBannerBackgroundUrl.collectAsState()
+
+  val bannerPhotoPicker = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.PickVisualMedia()
+  ) { uri ->
+    if (uri != null) {
+      scope.launch {
+        val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
+          context,
+          uri,
+          "banner_${System.currentTimeMillis()}.jpg"
+        )
+        if (saved != null) {
+          val localFile = java.io.File(saved.storagePath)
+          val fileName = "banner_${System.currentTimeMillis()}.jpg"
+          Toast.makeText(context, "Uploading banner photo to Drive...", Toast.LENGTH_SHORT).show()
+          viewModel.uploadAndSetDashboardBannerBackground(localFile, fileName, "image/jpeg") { success, msg ->
+            Toast.makeText(context, if (success) "Banner background updated!" else "Upload failed: $msg", Toast.LENGTH_LONG).show()
+          }
+        }
+      }
+    }
+  }
 
   // Unified Permission Requester: Requests Location, SMS, and Notifications TOGETHER
   val unifiedPermissionLauncher = rememberLauncherForActivityResult(
@@ -339,10 +367,70 @@ fun EblMainApp(viewModel: AppViewModel) {
         )
       }
 
+      val currentTabs = remember(user.role) {
+        if (user.role == "ADMIN") {
+          listOf(
+            Screen.AdminDashboard,
+            Screen.GlobalDatabase,
+            Screen.RmMapping,
+            Screen.GoogleSheetsSync,
+            Screen.More
+          )
+        } else if (user.role == "MENTOR") {
+          listOf(
+            Screen.MentorDashboard,
+            Screen.GlobalDatabase,
+            Screen.RmMapping,
+            Screen.GoogleSheetsSync,
+            Screen.More
+          )
+        } else {
+          listOf(
+            Screen.RmDashboard,
+            Screen.CustomerForm(null),
+            Screen.CustomerList,
+            Screen.Reports,
+            Screen.More
+          )
+        }
+      }
+
+      val activeTabIndex = remember(currentScreen, currentTabs) {
+        currentTabs.indexOfFirst { tab ->
+          when (tab) {
+            is Screen.CustomerForm -> currentScreen is Screen.CustomerForm && (currentScreen as Screen.CustomerForm).editFileId == null
+            else -> tab::class == currentScreen::class
+          }
+        }
+      }
+
+      var totalDragX by remember { mutableFloatStateOf(0f) }
+
       Box(
         modifier = Modifier
           .fillMaxHeight()
           .weight(1f)
+          .then(
+            if (activeTabIndex != -1) {
+              Modifier.pointerInput(activeTabIndex) {
+                detectHorizontalDragGestures(
+                  onDragStart = { totalDragX = 0f },
+                  onDragEnd = {
+                    if (totalDragX < -90f && activeTabIndex < currentTabs.size - 1) {
+                      viewModel.navigateTo(currentTabs[activeTabIndex + 1])
+                    } else if (totalDragX > 90f && activeTabIndex > 0) {
+                      viewModel.navigateTo(currentTabs[activeTabIndex - 1])
+                    }
+                    totalDragX = 0f
+                  },
+                  onDragCancel = { totalDragX = 0f },
+                  onHorizontalDrag = { _, dragAmount ->
+                    totalDragX += dragAmount
+                  }
+                )
+              }
+            } else Modifier
+          )
       ) {
         when (val screen = currentScreen) {
           is Screen.Login -> {
@@ -394,6 +482,11 @@ fun EblMainApp(viewModel: AppViewModel) {
               },
               isBiometricEnabled = viewModel.isBiometricEnabled(user.rmCode),
               onToggleBiometric = { viewModel.setBiometricEnabled(user.rmCode, it) },
+              onOpenTargetVsAchievement = { viewModel.navigateTo(Screen.TargetVsAchievement) },
+              bannerBackgroundUrl = bannerBackgroundUrl,
+              onUploadBannerBackground = {
+                bannerPhotoPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+              },
               onRefresh = { viewModel.refreshData() }
             )
           }
@@ -545,6 +638,27 @@ fun EblMainApp(viewModel: AppViewModel) {
               initialSelectedFileIds = screen.initialSelectedFileIds,
               onBack = { viewModel.navigateBack() },
               onEditFile = { fileId -> viewModel.navigateTo(Screen.CustomerForm(fileId)) }
+            )
+          }
+
+          is Screen.TargetVsAchievement -> {
+            val stats by viewModel.kpiStats.collectAsState()
+            val allTargets by viewModel.allTargets.collectAsState()
+            val rmTarget = allTargets.find { it.rmCode == user.rmCode }
+            val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
+            val customTargets by viewModel.getRmCustomTargetsFlow(user.rmCode).collectAsState(initial = emptyMap())
+            val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(user.rmCode).collectAsState(initial = emptyMap())
+            val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(user.rmCode).collectAsState(initial = emptyList())
+
+            com.example.ui.screens.rm.TargetVsAchievementScreen(
+              user = user,
+              stats = stats,
+              target = rmTarget,
+              targetCriteria = targetCriteria,
+              assignedCriteria = assignedCriteria,
+              customTargets = customTargets,
+              allQuarterCustomTargets = allQuarterCustomTargets,
+              onBack = { viewModel.navigateBack() }
             )
           }
         }
