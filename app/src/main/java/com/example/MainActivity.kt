@@ -257,6 +257,23 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
+  // Near real-time foreground sync: poll latest updates from Google Sheets every 5 seconds
+  LaunchedEffect(currentUser?.rmCode) {
+    val userCode = currentUser?.rmCode
+    if (!userCode.isNullOrBlank()) {
+      // Immediate pull on screen load / user session restore
+      try {
+        viewModel.pullDataFromGoogleSheets()
+      } catch (_: Exception) {}
+      while (true) {
+        kotlinx.coroutines.delay(5_000)
+        try {
+          viewModel.pullDataFromGoogleSheets()
+        } catch (_: Exception) {}
+      }
+    }
+  }
+
   // Listen for uiMessages and show toast snackbar
   LaunchedEffect(Unit) {
     viewModel.uiMessage.collectLatest { msg ->

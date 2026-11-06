@@ -333,17 +333,17 @@ function extractAllSheetFiles(sheet) {
           'cpv result', 'cpvresult', 'cpv report', 'cpv_stat'
         ], '');
         if (!rawCpv) {
-          var hasSl = colMap.hasOwnProperty('sl') || colMap.hasOwnProperty('slno') || colMap.hasOwnProperty('serial') || colMap.hasOwnProperty('serialno');
-          var fallbackIdx = hasSl ? 14 : 13;
-          if (row[fallbackIdx] !== undefined && row[fallbackIdx] !== null && String(row[fallbackIdx]).trim() !== '') {
-            var fbVal = String(row[fallbackIdx]).trim();
-            var fbLow = fbVal.toLowerCase();
-            if (fbLow === 'pending' || fbLow === 'completed' || fbLow === 'failed' || fbLow === 'not required' || fbLow === 'in progress') {
-              rawCpv = fbVal;
+          for (var hk in colMap) {
+            if (hk.indexOf('cpv') > -1 || hk.indexOf('verif') > -1) {
+              var fv = row[colMap[hk]];
+              if (fv !== undefined && fv !== null && String(fv).trim() !== '') {
+                rawCpv = String(fv).trim();
+                break;
+              }
             }
           }
         }
-        if (!rawCpv) return 'Pending';
+        if (!rawCpv) return '';
         var low = rawCpv.toLowerCase();
         if (low === 'completed' || low === 'complete' || low === 'done' || low === 'passed' || low === 'verified' || low === 'positive') return 'Completed';
         if (low === 'failed' || low === 'fail' || low === 'rejected' || low === 'negative') return 'Failed';
@@ -2061,15 +2061,26 @@ function doPost(e) {
         setCell(['officeaddress', 'address'], f.officeAddress || '');
         setCell(['mobile', 'phone', 'contact', 'mobileno', 'cell'], f.mobile || '');
         setCell(['email', 'emailaddress'], f.email || '');
-        setCell(['producttype', 'product'], f.productType || '');
-        setCell(['applicationstatus', 'status', 'filestatus'], f.applicationStatus || 'Submitted');
-        setCell(['activestatus', 'active'], f.activeStatus || 'N');
+        if (f.applicationStatus !== undefined && f.applicationStatus !== null && String(f.applicationStatus).trim() !== '') {
+          setCell(['applicationstatus', 'status', 'filestatus'], f.applicationStatus);
+        } else if (!targetRowIndex) {
+          setCell(['applicationstatus', 'status', 'filestatus'], 'Submitted');
+        }
+        if (f.activeStatus !== undefined && f.activeStatus !== null && String(f.activeStatus).trim() !== '') {
+          setCell(['activestatus', 'active'], f.activeStatus);
+        } else if (!targetRowIndex) {
+          setCell(['activestatus', 'active'], 'N');
+        }
         setCell(['assignedrmcode', 'rmcode', 'rm', 'assignedrm'], f.assignedRmCode || '');
         setCell(['pendingdocuments', 'pendingdocs', 'documents'], f.pendingDocuments || '');
         setCell(['limit', 'loanamount', 'amount', 'cardlimit', 'creditlimit', 'sanctionlimit'], f.limit || f.loanAmount || '');
         setCell(['analyst', 'analystname', 'creditanalyst', 'underwriter', 'ca'], f.analyst || f.analystName || '');
         setCell(['cpvremarks', 'remarks', 'remark'], f.cpvRemarks || f.remarks || '');
-        setCell(['cpvstatus', 'cpv'], f.cpvStatus || 'Pending');
+        if (f.cpvStatus !== undefined && f.cpvStatus !== null && String(f.cpvStatus).trim() !== '') {
+          setCell(['cpvstatus', 'cpv', 'cpvstat', 'verificationstatus', 'verification', 'cpvverification', 'cpvstage', 'cpvresult', 'cpvreport'], f.cpvStatus);
+        } else if (!targetRowIndex) {
+          setCell(['cpvstatus', 'cpv', 'cpvstat', 'verificationstatus', 'verification'], 'Pending');
+        }
         setCell(['gpssubmissionaddress', 'submissionaddress'], f.submissionAddress || '');
         setCell(['gpslat', 'lat'], f.submissionLat || 0.0);
         setCell(['gpslng', 'lng'], f.submissionLng || 0.0);
@@ -2445,9 +2456,6 @@ function onEdit(e) {
     cleanStaleSheetSms(smsSheet);
 
     if (sheetName === 'Customer_Files' || sheetName === 'Files') {
-      sheet.getRange(row, 18).setValue(nowStr); // Last Updated
-      sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
-
       // Extract customer details to generate targeted notification for assigned RM
       var rowValues = sheet.getRange(row, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0];
       var headers = sheet.getRange(1, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
@@ -2456,6 +2464,10 @@ function onEdit(e) {
         var cleanH = headers[c].replace(/[^a-z0-9]/g, '');
         colMap[cleanH] = c;
       }
+      var colLastUpdated = colMap['lastupdated'] !== undefined ? colMap['lastupdated'] + 1 : (colMap['updatedat'] !== undefined ? colMap['updatedat'] + 1 : 0);
+      var colUpdatedBy = colMap['updatedby'] !== undefined ? colMap['updatedby'] + 1 : 0;
+      if (colLastUpdated > 0) sheet.getRange(row, colLastUpdated).setValue(nowStr);
+      if (colUpdatedBy > 0) sheet.getRange(row, colUpdatedBy).setValue('Manual_Sheet_Edit');
       function getEditVal(candidates, defaultVal) {
         for (var i = 0; i < candidates.length; i++) {
           var k = candidates[i].replace(/[^a-z0-9]/g, '');

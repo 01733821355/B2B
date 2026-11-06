@@ -1073,6 +1073,12 @@ class EblRepository(
               lastSyncMessage = "Customer file '${file.customerName}' synchronized with Google Sheets."
             )
           )
+          // Instantly reconcile latest sheet updates
+          kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            try {
+              pullDataFromGoogleSheets()
+            } catch (_: Exception) {}
+          }
         }
       }
     } catch (_: Exception) {}
@@ -3593,14 +3599,14 @@ class EblRepository(
       currentStatus.copy(
         appsScriptUrl = activeWebAppUrl,
         lastSyncStatus = "IN_PROGRESS",
-        lastSyncMessage = "Connecting 7-tab payload with Google Sheets..."
       )
     )
 
     try {
+      // User requirement: Only actively edited unsynced records should load to sheet.
+      // Existing data must NEVER load/push to sheet without explicit local edit, preventing multi-device overwrites.
       val unsyncedFiles = database.customerFileDao().getUnsyncedFiles()
-      val allFiles = database.customerFileDao().getAllActiveFiles()
-      val candidateFiles = if (unsyncedFiles.isNotEmpty()) unsyncedFiles else allFiles
+      val candidateFiles = unsyncedFiles
       val filesToPush = candidateFiles.filter {
         !it.isDeleted &&
         !it.fileId.startsWith("demo_", ignoreCase = true) &&
@@ -5359,10 +5365,10 @@ class EblRepository(
       if (existing != null) {
 
         val sheetUpdatedBy = obj.optString("updatedBy", "")
-        val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true)
-        // Protection: Only skip incoming sheet updates if this device made a local edit within the last 10 seconds that hasn't synced yet
-        val isVeryRecentLocalEdit = (!existing.isSynced && (now - existing.updatedAt < 10_000L)) ||
-                                    (now - existing.updatedAt < 5_000L && existing.updatedBy != "GoogleSheets_Sync")
+        val isManualSheetEdit = sheetUpdatedBy.contains("Manual", ignoreCase = true) ||
+                                sheetUpdatedBy.contains("Sheet", ignoreCase = true)
+        // Fast sync protection: Only skip if this local file has an in-flight un-synced edit within the last 6 seconds
+        val isVeryRecentLocalEdit = !existing.isSynced && (now - existing.updatedAt < 6_000L)
         if (isVeryRecentLocalEdit && !isManualSheetEdit) {
           continue
         }
@@ -5441,10 +5447,6 @@ class EblRepository(
                                 existing.mobile.trim() != mob.trim() || existing.email.trim() != em.trim() || existing.officeAddress.trim() != offAddr.trim() ||
                                 existing.productType.trim() != prodType.trim() || hasCpvChanged || hasLimitOrAnalystChanged
 
-        // Prevent stale Google Sheet read from overwriting recently locally-updated file and creating double notifications
-        if (existing.updatedBy != "GoogleSheets_Sync" && (now - existing.updatedAt < 180_000L)) {
-          continue
-        }
 
         if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged || hasCpvChanged) {
           val updated = existing.copy(

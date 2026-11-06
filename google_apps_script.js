@@ -263,6 +263,8 @@ function extractAllSheetFiles(sheet) {
       activeStatus: getVal(row, ['active status', 'activestatus', 'active'], 'N'),
       assignedRmCode: getVal(row, ['assigned rm code', 'assigned rm', 'rm code', 'rmcode', 'rm'], ''),
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
+      limit: getVal(row, ['limit', 'card limit', 'credit limit', 'loan limit', 'sanction limit', 'loan amount', 'loanamount', 'amount'], ''),
+      analyst: getVal(row, ['analyst', 'credit analyst', 'underwriter', 'ca', 'analyst name', 'analystname'], ''),
       cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks', 'cpv notes', 'cpv note'], ''),
       remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
       cpvStatus: (function() {
@@ -272,17 +274,17 @@ function extractAllSheetFiles(sheet) {
           'cpv result', 'cpvresult', 'cpv report', 'cpv_stat'
         ], '');
         if (!rawCpv) {
-          var hasSl = colMap.hasOwnProperty('sl') || colMap.hasOwnProperty('slno') || colMap.hasOwnProperty('serial') || colMap.hasOwnProperty('serialno');
-          var fallbackIdx = hasSl ? 14 : 13;
-          if (row[fallbackIdx] !== undefined && row[fallbackIdx] !== null && String(row[fallbackIdx]).trim() !== '') {
-            var fbVal = String(row[fallbackIdx]).trim();
-            var fbLow = fbVal.toLowerCase();
-            if (fbLow === 'pending' || fbLow === 'completed' || fbLow === 'failed' || fbLow === 'not required' || fbLow === 'in progress') {
-              rawCpv = fbVal;
+          for (var hk in colMap) {
+            if (hk.indexOf('cpv') > -1 || hk.indexOf('verif') > -1) {
+              var fv = row[colMap[hk]];
+              if (fv !== undefined && fv !== null && String(fv).trim() !== '') {
+                rawCpv = String(fv).trim();
+                break;
+              }
             }
           }
         }
-        if (!rawCpv) return 'Pending';
+        if (!rawCpv) return '';
         var low = rawCpv.toLowerCase();
         if (low === 'completed' || low === 'complete' || low === 'done' || low === 'passed' || low === 'verified' || low === 'positive') return 'Completed';
         if (low === 'failed' || low === 'fail' || low === 'rejected' || low === 'negative') return 'Failed';
@@ -1946,6 +1948,13 @@ function doPost(e) {
       if (colFid === -1) colFid = hasSlCol ? 2 : 1;
       if (colCc === -1) colCc = hasSlCol ? 1 : 0;
 
+      var colHeaderMap = {};
+      for (var h = 0; h < headers.length; h++) {
+        var cleanH = String(headers[h] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanH) colHeaderMap[cleanH] = h;
+      }
+      var totalCols = Math.max(headers.length, 22);
+
       var fileIdRowMap = {};
       for (var r = 1; r < fileExistingData.length; r++) {
         var rowVals = fileExistingData[r];
@@ -1978,60 +1987,64 @@ function doPost(e) {
                              (cc && fileIdRowMap[cc]) || (cc && fileIdRowMap[cc.toLowerCase()]) ||
                              (ccClean && fileIdRowMap[ccClean]) || (ccClean && fileIdRowMap[ccClean.toLowerCase()]);
 
-        var baseRow = [
-          f.ccNumber || '',
-          f.fileId || '',
-          f.customerName || '',
-          f.companyName || '',
-          f.officeAddress || '',
-          f.mobile || '',
-          f.email || '',
-          f.productType || '',
-          f.applicationStatus || 'Submitted',
-          f.activeStatus || 'N',
-          f.assignedRmCode || '',
-          f.pendingDocuments || '',
-          f.cpvRemarks || f.remarks || '',
-          f.cpvStatus || 'Pending',
-          f.submissionAddress || '',
-          f.submissionLat || 0.0,
-          f.submissionLng || 0.0,
-          f.updatedAt || '',
-          f.updatedBy || 'App'
-        ];
-
-        var row = hasSlCol ? [sl || (index + 1)].concat(baseRow) : baseRow;
-
+        var rowData = [];
         if (targetRowIndex) {
-          // PROTECTION: Prevent stale passive app data from overwriting newer sheet data or manual edits
-          var isExplicitCommand = data.action === 'UPSERT_CUSTOMER_FILE' || data.isExplicitCommand === true || data.isExplicitPushCommand === true;
-          var existingRow = fileExistingData[targetRowIndex - 1];
-          if (existingRow && !isExplicitCommand) {
-            var colLastUpdated = hasSlCol ? 18 : 17;
-            var existingTimeStr = String(existingRow[colLastUpdated] || '').trim();
-            var incomingTimeStr = String(f.updatedAt || '').trim();
-            var existingTime = 0;
-            if (existingTimeStr) {
-              try {
-                var ep = Date.parse(existingTimeStr.replace(/-/g, '/'));
-                if (!isNaN(ep)) existingTime = ep;
-              } catch (e) {}
-            }
-            var incomingTime = 0;
-            if (incomingTimeStr) {
-              try {
-                var ip = Date.parse(incomingTimeStr.replace(/-/g, '/'));
-                if (!isNaN(ip)) incomingTime = ip;
-              } catch (e) {}
-            }
-            // If Google Sheets row is newer than incoming app data during a batch push, preserve sheet row and skip overwrite!
-            if (existingTime > 0 && incomingTime > 0 && existingTime > incomingTime) {
+          rowData = fileExistingData[targetRowIndex - 1].slice();
+        }
+        while (rowData.length < totalCols) {
+          rowData.push('');
+        }
+
+        function setCell(keys, val) {
+          if (val === undefined || val === null) return;
+          for (var k = 0; k < keys.length; k++) {
+            var colIdx = colHeaderMap[keys[k]];
+            if (colIdx !== undefined) {
+              rowData[colIdx] = val;
               return;
             }
           }
-          fileSheet.getRange(targetRowIndex, 1, 1, row.length).setValues([row]);
+        }
+
+        setCell(['sl', 'slno', 'serial', 'serialnumber'], sl || (index + 1));
+        setCell(['ccnumber', 'cc', 'ccno', 'cardnumber'], f.ccNumber || '');
+        setCell(['fileid', 'customerid', 'applicationid'], f.fileId || '');
+        setCell(['customername', 'name', 'clientname'], f.customerName || '');
+        setCell(['companyname', 'company', 'organization'], f.companyName || '');
+        setCell(['officeaddress', 'address'], f.officeAddress || '');
+        setCell(['mobile', 'phone', 'contact', 'mobileno', 'cell'], f.mobile || '');
+        setCell(['email', 'emailaddress'], f.email || '');
+        setCell(['producttype', 'product'], f.productType || '');
+        if (f.applicationStatus !== undefined && f.applicationStatus !== null && String(f.applicationStatus).trim() !== '') {
+          setCell(['applicationstatus', 'status', 'filestatus'], f.applicationStatus);
+        } else if (!targetRowIndex) {
+          setCell(['applicationstatus', 'status', 'filestatus'], 'Submitted');
+        }
+        if (f.activeStatus !== undefined && f.activeStatus !== null && String(f.activeStatus).trim() !== '') {
+          setCell(['activestatus', 'active'], f.activeStatus);
+        } else if (!targetRowIndex) {
+          setCell(['activestatus', 'active'], 'N');
+        }
+        setCell(['assignedrmcode', 'rmcode', 'rm', 'assignedrm'], f.assignedRmCode || '');
+        setCell(['pendingdocuments', 'pendingdocs', 'documents'], f.pendingDocuments || '');
+        setCell(['limit', 'loanamount', 'amount', 'cardlimit', 'creditlimit', 'sanctionlimit'], f.limit || f.loanAmount || '');
+        setCell(['analyst', 'analystname', 'creditanalyst', 'underwriter', 'ca'], f.analyst || f.analystName || '');
+        setCell(['cpvremarks', 'remarks', 'remark'], f.cpvRemarks || f.remarks || '');
+        if (f.cpvStatus !== undefined && f.cpvStatus !== null && String(f.cpvStatus).trim() !== '') {
+          setCell(['cpvstatus', 'cpv', 'cpvstat', 'verificationstatus', 'verification', 'cpvverification', 'cpvstage', 'cpvresult', 'cpvreport'], f.cpvStatus);
+        } else if (!targetRowIndex) {
+          setCell(['cpvstatus', 'cpv', 'cpvstat', 'verificationstatus', 'verification'], 'Pending');
+        }
+        setCell(['gpssubmissionaddress', 'submissionaddress'], f.submissionAddress || '');
+        setCell(['gpslat', 'lat'], f.submissionLat || 0.0);
+        setCell(['gpslng', 'lng'], f.submissionLng || 0.0);
+        setCell(['lastupdated', 'updatedat'], f.updatedAt || '');
+        setCell(['updatedby'], f.updatedBy || 'App');
+
+        if (targetRowIndex) {
+          fileSheet.getRange(targetRowIndex, 1, 1, rowData.length).setValues([rowData]);
         } else {
-          fileSheet.appendRow(row);
+          fileSheet.appendRow(rowData);
           var newRowIdx = fileSheet.getLastRow();
           if (fId) {
             fileIdRowMap[fId] = newRowIdx;
@@ -2397,9 +2410,6 @@ function onEdit(e) {
     cleanStaleSheetSms(smsSheet);
 
     if (sheetName === 'Customer_Files' || sheetName === 'Files') {
-      sheet.getRange(row, 18).setValue(nowStr); // Last Updated
-      sheet.getRange(row, 19).setValue('Manual_Sheet_Edit'); // Updated By
-
       // Extract customer details to generate targeted notification for assigned RM
       var rowValues = sheet.getRange(row, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0];
       var headers = sheet.getRange(1, 1, 1, Math.min(sheet.getLastColumn(), 25)).getValues()[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
@@ -2408,6 +2418,10 @@ function onEdit(e) {
         var cleanH = headers[c].replace(/[^a-z0-9]/g, '');
         colMap[cleanH] = c;
       }
+      var colLastUpdated = colMap['lastupdated'] !== undefined ? colMap['lastupdated'] + 1 : (colMap['updatedat'] !== undefined ? colMap['updatedat'] + 1 : 0);
+      var colUpdatedBy = colMap['updatedby'] !== undefined ? colMap['updatedby'] + 1 : 0;
+      if (colLastUpdated > 0) sheet.getRange(row, colLastUpdated).setValue(nowStr);
+      if (colUpdatedBy > 0) sheet.getRange(row, colUpdatedBy).setValue('Manual_Sheet_Edit');
       function getEditVal(candidates, defaultVal) {
         for (var i = 0; i < candidates.length; i++) {
           var k = candidates[i].replace(/[^a-z0-9]/g, '');
