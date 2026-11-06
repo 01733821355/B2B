@@ -1532,7 +1532,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       _uiMessage.emit("Starting Google Sheets push...")
       val res = eblRepository.triggerGoogleSheetsSync(isExplicitPushCommand = true)
       res.onSuccess { msg ->
-        _uiMessage.emit(msg)
+        if (!msg.startsWith("Pulled from Google Sheets", ignoreCase = true)) {
+          _uiMessage.emit(msg)
+        }
       }.onFailure { err ->
         _uiMessage.emit("Sync Error: ${err.message}")
       }
@@ -1543,7 +1545,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = eblRepository.triggerGoogleSheetsSync(isExplicitPushCommand = true)
       res.onSuccess { msg ->
-        _uiMessage.emit(msg)
+        if (!msg.startsWith("Pulled from Google Sheets", ignoreCase = true)) {
+          _uiMessage.emit(msg)
+        }
         onResult(true, msg)
       }.onFailure { err ->
         _uiMessage.emit("Sync Error: ${err.message}")
@@ -1552,14 +1556,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun pullDataFromGoogleSheets(onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+  fun pullDataFromGoogleSheets(showNotification: Boolean = false, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     viewModelScope.launch {
       val res = eblRepository.pullDataFromGoogleSheets()
       res.onSuccess { msg ->
-        _uiMessage.emit(msg)
+        if (showNotification) {
+          _uiMessage.emit(msg)
+        }
         onResult(true, msg)
       }.onFailure { err ->
-        _uiMessage.emit("Pull Error: ${err.message}")
+        if (showNotification) {
+          _uiMessage.emit("Pull Error: ${err.message}")
+        }
         onResult(false, err.message)
       }
     }

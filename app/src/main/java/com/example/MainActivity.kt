@@ -274,10 +274,13 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
-  // Listen for uiMessages and show toast snackbar
+  // Listen for uiMessages and show toast snackbar (background sync messages run silently)
   LaunchedEffect(Unit) {
     viewModel.uiMessage.collectLatest { msg ->
-      snackbarHostState.showSnackbar(msg)
+      if (!msg.startsWith("Pulled from Google Sheets", ignoreCase = true) &&
+          !msg.contains("notification(s) updated", ignoreCase = true)) {
+        snackbarHostState.showSnackbar(msg)
+      }
     }
   }
 
