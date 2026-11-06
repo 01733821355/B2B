@@ -26,6 +26,242 @@ function runSetup() {
   return setupAllSheets();
 }
 
+function repairCustomerFiles() {
+  return repairAndStandardizeCustomerFiles(null, null);
+}
+
+var STANDARD_CUSTOMER_HEADERS = [
+  'SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name',
+  'Office Address', 'Mobile', 'Email', 'Product Type',
+  'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
+  'Limit', 'Analyst', 'Remarks', 'CPV Remarks', 'CPV Status',
+  'GPS Submission Address', 'GPS Lat', 'GPS Lng',
+  'Last Updated', 'Updated By'
+];
+
+function repairAndStandardizeCustomerFiles(targetSheet, ss) {
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  }
+  if (!ss) {
+    try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
+  }
+  if (!ss) return "Spreadsheet not found";
+
+  var sheet = targetSheet || ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files');
+  if (!sheet) {
+    sheet = ss.insertSheet('Customer_Files');
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    sheet.clear();
+    sheet.getRange(1, 1, 1, STANDARD_CUSTOMER_HEADERS.length).setValues([STANDARD_CUSTOMER_HEADERS]);
+    formatSheetHeader(sheet, STANDARD_CUSTOMER_HEADERS.length, '#0A192F');
+    sheet.setFrozenRows(1);
+    return "Headers standardized successfully.";
+  }
+
+  var oldHeaders = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+  var colMap = {};
+  for (var c = 0; c < oldHeaders.length; c++) {
+    var cleanH = oldHeaders[c].replace(/[^a-z0-9]/g, '');
+    colMap[cleanH] = c;
+  }
+
+  function getValFromRow(row, candidates, defaultVal) {
+    for (var i = 0; i < candidates.length; i++) {
+      var k = candidates[i].replace(/[^a-z0-9]/g, '');
+      if (colMap.hasOwnProperty(k)) {
+        var v = row[colMap[k]];
+        if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+      }
+    }
+    return defaultVal !== undefined ? defaultVal : '';
+  }
+
+  var cleanedRows = [];
+  for (var r = 1; r < data.length; r++) {
+    var row = data[r];
+    var hasContent = false;
+    for (var ci = 0; ci < row.length; ci++) {
+      if (row[ci] !== undefined && row[ci] !== null && String(row[ci]).trim() !== '') {
+        hasContent = true;
+        break;
+      }
+    }
+    if (!hasContent) continue;
+
+    var sl = getValFromRow(row, ['sl', 'slno', 'serial', 'serialnumber'], String(r));
+    var ccNumber = getValFromRow(row, ['ccnumber', 'cc', 'ccno', 'cardnumber'], '');
+    var fileId = getValFromRow(row, ['fileid', 'customerid', 'applicationid'], ccNumber);
+    if (!ccNumber && !fileId) {
+      if (row[1]) ccNumber = String(row[1]).trim();
+      if (row[2]) fileId = String(row[2]).trim();
+      if (!ccNumber && !fileId) continue;
+    }
+    if (!fileId) fileId = ccNumber;
+
+    var custName = getValFromRow(row, ['customername', 'ername', 'name', 'clientname', 'customer'], '');
+    if (!custName && row[2] && isNaN(Number(row[2]))) custName = String(row[2]).trim();
+
+    var compName = getValFromRow(row, ['companyname', 'company', 'organization'], '');
+    var offAddr = getValFromRow(row, ['officeaddress', 'address'], '');
+    var mobile = getValFromRow(row, ['mobile', 'phone', 'contact', 'mobileno', 'cell'], '');
+    var email = getValFromRow(row, ['email', 'emailaddress'], '');
+    var prodType = getValFromRow(row, ['producttype', 'product'], 'Credit Card');
+    var appStatus = getValFromRow(row, ['applicationstatus', 'status', 'filestatus'], 'Submitted');
+    var activeStatus = getValFromRow(row, ['activestatus', 'active'], 'N');
+    var rmCode = getValFromRow(row, ['assignedrmcode', 'rmcode', 'rm', 'assignedrm'], '');
+    var pendingDocs = getValFromRow(row, ['pendingdocuments', 'pendingdocs', 'documents'], '');
+
+    // Limit & Analyst
+    var limit = getValFromRow(row, ['limit', 'cardlimit', 'creditlimit', 'loanlimit', 'sanctionlimit', 'loanamount', 'amount'], '');
+    if (!limit) {
+      for (var colI = 15; colI < row.length; colI++) {
+        var cellVal = String(row[colI] || '').trim();
+        var numVal = Number(cellVal);
+        if (!isNaN(numVal) && numVal >= 10000 && cellVal.indexOf(':') === -1) {
+          limit = cellVal;
+          break;
+        }
+      }
+    }
+    var analyst = getValFromRow(row, ['analyst', 'analystname', 'creditanalyst', 'underwriter', 'ca'], '');
+    if (!analyst) {
+      for (var colI2 = 18; colI2 < row.length; colI2++) {
+        var cellVal2 = String(row[colI2] || '').trim();
+        if (cellVal2 && isNaN(Number(cellVal2)) && cellVal2 !== 'N/A' && cellVal2 !== 'GoogleSheets_Sync' && cellVal2.indexOf(':') === -1 && cellVal2.indexOf('1899') === -1) {
+          analyst = cellVal2;
+          break;
+        }
+      }
+    }
+
+    var remarks = getValFromRow(row, ['remarks', 'remark'], '');
+    var cpvRemarks = getValFromRow(row, ['cpvremarks', 'cpvnotes', 'cpvnote'], '');
+
+    // CPV Status: Intelligently extract from any cell in row
+    var cpvStatus = getValFromRow(row, ['cpvstatus', 'verificationstatus', 'verification'], '');
+    if (!cpvStatus) {
+      for (var ci3 = 0; ci3 < row.length; ci3++) {
+        var str = String(row[ci3] || '').trim().toLowerCase();
+        if (str === 'completed' || str === 'complete' || str === 'done' || str === 'verified' || str === 'positive') {
+          cpvStatus = 'Completed';
+          break;
+        } else if (str === 'failed' || str === 'fail' || str === 'rejected' || str === 'negative') {
+          cpvStatus = 'Failed';
+          break;
+        } else if (str === 'not required' || str === 'notrequired' || str === 'waived') {
+          cpvStatus = 'Not Required';
+          break;
+        } else if (str === 'pending' || str === 'in progress' || str === 'processing') {
+          cpvStatus = 'Pending';
+          break;
+        }
+      }
+    }
+    if (!cpvStatus) cpvStatus = 'Pending';
+
+    var gpsAddress = getValFromRow(row, ['gpssubmissionaddress', 'submissionaddress', 'gpslocationaddress', 'gpsaddress'], '');
+
+    // GPS Lat & Lng
+    var latVal = 0.0;
+    var lngVal = 0.0;
+    var parsedLat = parseFloat(getValFromRow(row, ['gpslat', 'lat', 'latitude'], ''));
+    if (!isNaN(parsedLat) && parsedLat > 15.0 && parsedLat < 35.0) latVal = parsedLat;
+    var parsedLng = parseFloat(getValFromRow(row, ['gpslng', 'lng', 'longitude'], ''));
+    if (!isNaN(parsedLng) && parsedLng > 75.0 && parsedLng < 105.0) lngVal = parsedLng;
+
+    if (latVal === 0.0 || lngVal === 0.0) {
+      for (var ci4 = 0; ci4 < row.length; ci4++) {
+        var n = parseFloat(row[ci4]);
+        if (!isNaN(n)) {
+          if (latVal === 0.0 && n > 20.0 && n < 27.5) {
+            latVal = n;
+          } else if (lngVal === 0.0 && n > 88.0 && n < 93.5) {
+            lngVal = n;
+          }
+        }
+      }
+    }
+
+    // Last Updated
+    var lastUpdated = getValFromRow(row, ['lastupdated', 'updatedat', 'timestamp'], '');
+    if (lastUpdated.indexOf('1899') > -1) lastUpdated = '';
+    if (!lastUpdated) {
+      lastUpdated = Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss");
+    }
+
+    // Updated By
+    var updatedBy = getValFromRow(row, ['updatedby', 'column21'], 'GoogleSheets_Sync');
+    if (!updatedBy || updatedBy === 'N/A' || updatedBy.indexOf('1899') > -1) {
+      updatedBy = 'GoogleSheets_Sync';
+    }
+
+    cleanedRows.push([
+      sl, ccNumber, fileId, custName, compName, offAddr, mobile, email, prodType,
+      appStatus, activeStatus, rmCode, pendingDocs, limit, analyst, remarks,
+      cpvRemarks, cpvStatus, gpsAddress,
+      latVal > 0.0 ? latVal : '',
+      lngVal > 0.0 ? lngVal : '',
+      lastUpdated, updatedBy
+    ]);
+  }
+
+  // WIPE sheet completely to delete bogus Column 1, Column 2, Column 20, Column 21 columns
+  sheet.clear();
+
+  // Set new standard headers
+  sheet.getRange(1, 1, 1, STANDARD_CUSTOMER_HEADERS.length).setValues([STANDARD_CUSTOMER_HEADERS]);
+  formatSheetHeader(sheet, STANDARD_CUSTOMER_HEADERS.length, '#0A192F');
+
+  // Write all cleaned, properly-mapped rows
+  if (cleanedRows.length > 0) {
+    sheet.getRange(2, 1, cleanedRows.length, STANDARD_CUSTOMER_HEADERS.length).setValues(cleanedRows);
+  }
+
+  sheet.setFrozenRows(1);
+
+  var widths = [50, 110, 110, 160, 180, 180, 110, 140, 110, 90, 60, 90, 130, 100, 110, 140, 130, 110, 160, 100, 100, 150, 120];
+  for (var w = 0; w < widths.length; w++) {
+    try { sheet.setColumnWidth(w + 1, widths[w]); } catch (we) {}
+  }
+
+  Logger.log("Customer_Files successfully repaired and aligned! Total rows: " + cleanedRows.length);
+  return "Customer_Files successfully repaired and aligned! Total rows: " + cleanedRows.length;
+}
+
+function checkAndRepairCustomerFilesSheet(sheet, ss) {
+  if (!sheet) return sheet;
+  try {
+    var data = sheet.getDataRange().getValues();
+    if (data.length === 0) {
+      repairAndStandardizeCustomerFiles(sheet, ss);
+      return sheet;
+    }
+    var headers = data[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+    var hJoined = headers.join(' ');
+    var needsRepair = hJoined.indexOf('column 1') > -1 ||
+                      hJoined.indexOf('column 20') > -1 ||
+                      hJoined.indexOf('cpv status') === -1 ||
+                      hJoined.indexOf('limit') === -1 ||
+                      hJoined.indexOf('analyst') === -1;
+    if (needsRepair) {
+      repairAndStandardizeCustomerFiles(sheet, ss);
+    }
+  } catch (errCheck) {}
+  return sheet;
+}
+
+function formatSheetHeader(sheet, numCols, color) {
+  var range = sheet.getRange(1, 1, 1, numCols);
+  range.setBackground(color || '#0A192F')
+       .setFontColor('#FFFFFF')
+       .setFontWeight('bold')
+       .setHorizontalAlignment('center');
+}
+
 function setupAllSheets() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   if (!ss) {
@@ -36,14 +272,8 @@ function setupAllSheets() {
     return "Spreadsheet not found";
   }
 
-  // 1. Customer_Files Tab
-  getOrCreateSheet(ss, 'Customer_Files', [
-    'SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name',
-    'Office Address', 'Mobile', 'Email', 'Product Type',
-    'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
-    'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng',
-    'Last Updated', 'Updated By'
-  ], '#0A192F');
+  // 1. Customer_Files Tab (Auto-repairs and aligns all 23 standard columns)
+  repairAndStandardizeCustomerFiles(null, ss);
 
   // 2. RM_Details Tab (supports 5 columns per criteria: Q1, Q2, Q3, Q4, Annual)
   getOrCreateSheet(ss, 'RM_Details', [
@@ -253,7 +483,7 @@ function extractAllSheetFiles(sheet) {
       sl: slVal,
       ccNumber: ccVal,
       fileId: fIdVal || ccVal,
-      customerName: getVal(row, ['customer name', 'customername', 'name', 'client name'], 'Customer'),
+      customerName: getVal(row, ['customer name', 'er name', 'ername', 'customername', 'name', 'client name', 'customer'], 'Customer'),
       companyName: getVal(row, ['company name', 'company', 'organization', 'companyname'], ''),
       officeAddress: getVal(row, ['office address', 'officeaddress', 'address'], ''),
       mobile: getVal(row, ['mobile', 'phone', 'contact', 'mobile no', 'cell'], ''),
@@ -265,8 +495,8 @@ function extractAllSheetFiles(sheet) {
       pendingDocuments: getVal(row, ['pending documents', 'pending docs', 'pendingdocuments', 'documents'], ''),
       limit: getVal(row, ['limit', 'card limit', 'credit limit', 'loan limit', 'sanction limit', 'loan amount', 'loanamount', 'amount'], ''),
       analyst: getVal(row, ['analyst', 'credit analyst', 'underwriter', 'ca', 'analyst name', 'analystname'], ''),
-      cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'remarks', 'cpv notes', 'cpv note'], ''),
-      remarks: getVal(row, ['remarks', 'cpv remarks', 'remark'], ''),
+      cpvRemarks: getVal(row, ['cpv remarks', 'cpvremarks', 'cpv notes', 'cpv note'], ''),
+      remarks: getVal(row, ['remarks', 'remark', 'general remarks'], ''),
       cpvStatus: (function() {
         var rawCpv = getVal(row, [
           'cpv status', 'cpvstatus', 'cpv', 'cpv_status', 'cpv stat', 'cpvstat',
@@ -755,6 +985,9 @@ function handleFetchAllData() {
       try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
     }
     var fileSheet = ss ? (ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files')) : null;
+    if (fileSheet) {
+      fileSheet = checkAndRepairCustomerFilesSheet(fileSheet, ss);
+    }
     var rmSheet = ss ? getRmSheet(ss) : null;
     var settingsSheet = ss ? (ss.getSheetByName('Universal_Settings') || ss.getSheetByName('Settings')) : null;
     var docSheet = ss ? ss.getSheetByName('Important_Documents') : null;
@@ -836,14 +1069,14 @@ function doPost(e) {
       try { ss = SpreadsheetApp.openById("1lb9Wou10ecl28EUgaXD2cA3YCNY7nNHp1BOFrrLezqI"); } catch (e) {}
     }
 
-    // 1. Auto-create & format 'Customer_Files' Tab
-    var fileSheet = getOrCreateSheet(ss, 'Customer_Files', [
-      'SL', 'CC-Number', 'File ID', 'Customer Name', 'Company Name',
-      'Office Address', 'Mobile', 'Email', 'Product Type',
-      'Application Status', 'Active Status', 'Assigned RM Code', 'Pending Documents',
-      'CPV Remarks', 'CPV Status', 'GPS Submission Address', 'GPS Lat', 'GPS Lng',
-      'Last Updated', 'Updated By'
-    ], '#0A192F');
+    // 1. Auto-create & format 'Customer_Files' Tab with all 23 standard columns
+    var fileSheet = ss.getSheetByName('Customer_Files') || ss.getSheetByName('Files');
+    if (!fileSheet) {
+      repairAndStandardizeCustomerFiles(null, ss);
+      fileSheet = ss.getSheetByName('Customer_Files');
+    } else {
+      fileSheet = checkAndRepairCustomerFilesSheet(fileSheet, ss);
+    }
 
     // 2. Auto-create & format 'RM_Details' Tab
     var rmSheet = getOrCreateSheet(ss, 'RM_Details', [
@@ -2029,7 +2262,8 @@ function doPost(e) {
         setCell(['pendingdocuments', 'pendingdocs', 'documents'], f.pendingDocuments || '');
         setCell(['limit', 'loanamount', 'amount', 'cardlimit', 'creditlimit', 'sanctionlimit'], f.limit || f.loanAmount || '');
         setCell(['analyst', 'analystname', 'creditanalyst', 'underwriter', 'ca'], f.analyst || f.analystName || '');
-        setCell(['cpvremarks', 'remarks', 'remark'], f.cpvRemarks || f.remarks || '');
+        setCell(['remarks', 'remark'], f.remarks || '');
+        setCell(['cpvremarks', 'cpvnotes', 'cpvnote'], f.cpvRemarks || '');
         if (f.cpvStatus !== undefined && f.cpvStatus !== null && String(f.cpvStatus).trim() !== '') {
           setCell(['cpvstatus', 'cpv', 'cpvstat', 'verificationstatus', 'verification', 'cpvverification', 'cpvstage', 'cpvresult', 'cpvreport'], f.cpvStatus);
         } else if (!targetRowIndex) {

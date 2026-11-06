@@ -1073,12 +1073,7 @@ class EblRepository(
               lastSyncMessage = "Customer file '${file.customerName}' synchronized with Google Sheets."
             )
           )
-          // Instantly reconcile latest sheet updates
-          kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
-            try {
-              pullDataFromGoogleSheets()
-            } catch (_: Exception) {}
-          }
+          // Synced successfully; local edit is now marked synced without triggering immediate race condition pull
         }
       }
     } catch (_: Exception) {}
@@ -5365,11 +5360,28 @@ class EblRepository(
       if (existing != null) {
 
         val sheetUpdatedBy = obj.optString("updatedBy", "")
-        val isManualSheetEdit = sheetUpdatedBy.contains("Manual", ignoreCase = true) ||
-                                sheetUpdatedBy.contains("Sheet", ignoreCase = true)
-        // Fast sync protection: Only skip if this local file has an in-flight un-synced edit within the last 6 seconds
-        val isVeryRecentLocalEdit = !existing.isSynced && (now - existing.updatedAt < 6_000L)
-        if (isVeryRecentLocalEdit && !isManualSheetEdit) {
+        val isManualSheetEdit = sheetUpdatedBy.equals("Manual_Sheet_Edit", ignoreCase = true) ||
+                                sheetUpdatedBy.equals("Manual", ignoreCase = true) ||
+                                sheetUpdatedBy.equals("Sheet_Manual", ignoreCase = true)
+
+        // Parse sheet's updatedAt timestamp
+        val sheetUpdatedAtStr = obj.optString("updatedAt", "").trim()
+        val sheetUpdatedAtMillis = DateUtils.parseDateTime(sheetUpdatedAtStr)
+
+        // Protection 1: If record was modified locally and has unsynced changes, preserve local edits!
+        if (!existing.isSynced && !isManualSheetEdit) {
+          continue
+        }
+
+        // Protection 2: If this customer record was edited locally in the app within the last 60 seconds,
+        // protect it from being overwritten by lagging or stale sheet pulls, unless it's an explicit manual sheet edit.
+        val isRecentLocalEdit = (now - existing.updatedAt < 60_000L) && !isManualSheetEdit
+        if (isRecentLocalEdit) {
+          continue
+        }
+
+        // Protection 3: If sheet timestamp is older than local record's updatedAt, don't overwrite!
+        if (sheetUpdatedAtMillis != null && sheetUpdatedAtMillis > 0L && sheetUpdatedAtMillis < existing.updatedAt && !isManualSheetEdit) {
           continue
         }
 
@@ -5412,7 +5424,18 @@ class EblRepository(
           }
         } else ""
 
-        val cpvStatus = if (normalizedSheetCpv.isNotBlank()) normalizedSheetCpv else existing.cpvStatus
+        // If local status is already Completed / Failed / Not Required, never revert back to "Pending" from automated sync
+        val cpvStatus = when {
+          normalizedSheetCpv.isNotBlank() && !isManualSheetEdit &&
+            normalizedSheetCpv.equals("Pending", ignoreCase = true) &&
+            (existing.cpvStatus.equals("Completed", ignoreCase = true) ||
+             existing.cpvStatus.equals("Failed", ignoreCase = true) ||
+             existing.cpvStatus.equals("Not Required", ignoreCase = true)) -> {
+            existing.cpvStatus
+          }
+          normalizedSheetCpv.isNotBlank() -> normalizedSheetCpv
+          else -> existing.cpvStatus
+        }
 
         val sheetCpvRemarks = listOf("cpvRemarks", "cpv_remarks", "cpvNotes", "cpv_notes")
           .firstNotNullOfOrNull { key ->
