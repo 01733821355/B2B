@@ -899,9 +899,9 @@ class EblRepository(
       val fileType = entity.productType.ifBlank { "Credit Card" }
 
       val smsMessage = if (hasRmChanged) {
-        "Dear $rmName your $fileType file customer name '$customerName' is change by $changePerson from 'Assigned to ${existing.assignedRmCode}' to 'Reassigned to $resolvedRmCode' time is $formattedTime"
+        "Dear $rmName, your $fileType file customer name '$customerName' is reassigned to $resolvedRmCode by $changePerson. Time: $formattedTime"
       } else {
-        "Dear $rmName your $fileType file customer name '$customerName' is change by $changePerson from '$prevStatus' to '$presStatus' time is $formattedTime"
+        "Dear $rmName, your $fileType file customer name '$customerName' is updated to '$presStatus' by $changePerson. Time: $formattedTime"
       }
 
       var smsStatus = "DELIVERED"
@@ -3519,7 +3519,7 @@ class EblRepository(
     }
     val changePerson = "${currentUser.name.ifBlank { currentUser.rmCode }} (${currentUser.role})"
     val fileType = updated.productType.ifBlank { "Credit Card" }
-    val smsMessage = "Dear $rmName your $fileType file customer name '${updated.customerName}' is change by $changePerson from '$prevStatus' to '$presStatus' time is $formattedTime"
+    val smsMessage = "Dear $rmName, your $fileType file customer name '${updated.customerName}' is updated to '$presStatus' by $changePerson. Time: $formattedTime"
 
     var smsStatus = "DELIVERED"
     if (context != null && rmMobile.isNotBlank()) {
@@ -5441,6 +5441,11 @@ class EblRepository(
                                 existing.mobile.trim() != mob.trim() || existing.email.trim() != em.trim() || existing.officeAddress.trim() != offAddr.trim() ||
                                 existing.productType.trim() != prodType.trim() || hasCpvChanged || hasLimitOrAnalystChanged
 
+        // Prevent stale Google Sheet read from overwriting recently locally-updated file and creating double notifications
+        if (existing.updatedBy != "GoogleSheets_Sync" && (now - existing.updatedAt < 180_000L)) {
+          continue
+        }
+
         if (hasStatusChanged || hasActiveChanged || hasRemarksChanged || hasDocsChanged || hasCcChanged || hasRmChanged || hasDetailsChanged || hasSlChanged || hasCpvChanged) {
           val updated = existing.copy(
             customerName = custName,
@@ -5475,10 +5480,10 @@ class EblRepository(
 
           // Save Google Sheet update notification to Room local storage so it persists
           val changeDesc = buildString {
-            if (hasStatusChanged) append("স্ট্যাটাস: '${existing.applicationStatus}' ➔ '${updated.applicationStatus}'")
+            if (hasStatusChanged) append("স্ট্যাটাস: '${updated.applicationStatus}'")
             if (hasCpvChanged) {
               if (isNotEmpty()) append(" | ")
-              append("CPV: '${existing.cpvStatus}' ➔ '${updated.cpvStatus}'")
+              append("CPV: '${updated.cpvStatus}'")
             }
             if (hasRemarksChanged && remarksVal.isNotBlank()) {
               if (isNotEmpty()) append(" | ")
@@ -5490,7 +5495,7 @@ class EblRepository(
             }
             if (hasRmChanged) {
               if (isNotEmpty()) append(" | ")
-              append("RM পরিবর্তন: '${existing.assignedRmCode}' ➔ '$rmCode'")
+              append("RM: '$rmCode'")
             }
             if (isEmpty()) append("ফাইল তথ্য আপডেট")
           }
@@ -5898,6 +5903,19 @@ class EblRepository(
     )
     applicationScope.launch {
       syncSettingUpsertToGoogleSheets("dashboard_banner_background_url", bannerUrl)
+    }
+    Result.success(Unit)
+  }
+
+  suspend fun setUniversalExecutiveUiMode(enabled: Boolean): Result<Unit> = withContext(Dispatchers.IO) {
+    val currentUser = authRepository.currentUser.value
+    val now = DateUtils.currentDhakaMillis()
+    val valueStr = if (enabled) "true" else "false"
+    database.appSettingDao().insertOrUpdateSetting(
+      AppSettingEntity("universal_executive_ui_mode", valueStr, currentUser?.rmCode ?: "MENTOR", now)
+    )
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("universal_executive_ui_mode", valueStr)
     }
     Result.success(Unit)
   }

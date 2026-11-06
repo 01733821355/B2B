@@ -325,6 +325,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     list.find { it.settingKey == "UI_FONT_COLOR" }?.settingValue ?: "#0A192F"
   }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "#0A192F")
 
+  val universalExecutiveUiMode: StateFlow<Boolean> = appSettings.map { list ->
+    val v = list.find { it.settingKey == "universal_executive_ui_mode" }?.settingValue
+    v.equals("true", ignoreCase = true) || v == "1"
+  }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
   val activeThemeConfig: StateFlow<AppThemeConfig> = combine(
     selectedThemeMode,
     appSettings,
@@ -898,6 +903,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
       }.onFailure { err ->
         onResult(false, err.message ?: "Failed to upload banner background image")
       }
+    }
+  }
+
+  fun setUniversalExecutiveUiMode(enabled: Boolean) {
+    viewModelScope.launch {
+      eblRepository.setUniversalExecutiveUiMode(enabled)
+      _uiMessage.emit("Executive Deluxe UI mode ${if (enabled) "enabled" else "disabled"} universally.")
     }
   }
 

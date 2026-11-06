@@ -126,7 +126,7 @@ fun ThemeVisualBanner(
           contentDescription = "Custom Banner Background",
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize(),
-          alpha = 0.40f
+          alpha = 0.92f
         )
       } else {
         Image(
@@ -134,7 +134,7 @@ fun ThemeVisualBanner(
           contentDescription = "Corporate Office",
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize(),
-          alpha = 0.18f
+          alpha = 0.82f
         )
       }
 
@@ -156,16 +156,16 @@ fun ThemeVisualBanner(
         )
       }
 
-      // Layered Gradient Scrim to ensure crisp contrast for text
+      // Layered Gradient Scrim to keep photo vividly visible while ensuring text contrast
       Box(
         modifier = Modifier
           .fillMaxSize()
           .background(
             Brush.horizontalGradient(
               listOf(
-                currentTheme.primary.copy(alpha = 0.96f),
-                currentTheme.primary.copy(alpha = 0.88f),
-                currentTheme.secondary.copy(alpha = 0.60f),
+                Color.Black.copy(alpha = 0.65f),
+                Color.Black.copy(alpha = 0.38f),
+                Color.Black.copy(alpha = 0.12f),
                 Color.Transparent
               )
             )

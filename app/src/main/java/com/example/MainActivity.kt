@@ -13,6 +13,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.viewModels
 import android.widget.Toast
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
@@ -432,7 +439,37 @@ fun EblMainApp(viewModel: AppViewModel) {
             } else Modifier
           )
       ) {
-        when (val screen = currentScreen) {
+        AnimatedContent(
+          targetState = currentScreen,
+          transitionSpec = {
+            val fromIndex = currentTabs.indexOfFirst { tab ->
+              when (tab) {
+                is Screen.CustomerForm -> initialState is Screen.CustomerForm && (initialState as Screen.CustomerForm).editFileId == null
+                else -> tab::class == initialState::class
+              }
+            }
+            val toIndex = currentTabs.indexOfFirst { tab ->
+              when (tab) {
+                is Screen.CustomerForm -> targetState is Screen.CustomerForm && (targetState as Screen.CustomerForm).editFileId == null
+                else -> tab::class == targetState::class
+              }
+            }
+            if (fromIndex != -1 && toIndex != -1 && fromIndex != toIndex) {
+              if (toIndex > fromIndex) {
+                (slideInHorizontally(animationSpec = tween(280)) { width -> width } + fadeIn(animationSpec = tween(280)))
+                  .togetherWith(slideOutHorizontally(animationSpec = tween(280)) { width -> -width } + fadeOut(animationSpec = tween(200)))
+              } else {
+                (slideInHorizontally(animationSpec = tween(280)) { width -> -width } + fadeIn(animationSpec = tween(280)))
+                  .togetherWith(slideOutHorizontally(animationSpec = tween(280)) { width -> width } + fadeOut(animationSpec = tween(200)))
+              }
+            } else {
+              fadeIn(animationSpec = tween(200)).togetherWith(fadeOut(animationSpec = tween(160)))
+            }
+          },
+          label = "ScreenSwipeTransition",
+          modifier = Modifier.fillMaxSize()
+        ) { targetScreen ->
+          when (val screen = targetScreen) {
           is Screen.Login -> {
             // Already handled above
           }
@@ -662,6 +699,7 @@ fun EblMainApp(viewModel: AppViewModel) {
             )
           }
         }
+      }
       }
     }
   }

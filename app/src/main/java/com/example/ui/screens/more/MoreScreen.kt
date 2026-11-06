@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Assessment
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -41,6 +42,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -432,6 +435,74 @@ fun MoreScreen(
 
     // Admin & Mentor exclusive tools
     if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+      item {
+        val executiveMode by viewModel.universalExecutiveUiMode.collectAsState()
+        Card(
+          shape = RoundedCornerShape(12.dp),
+          colors = CardDefaults.cardColors(containerColor = cardBg),
+          elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("more_executive_ui_card")
+        ) {
+          Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            Surface(
+              shape = CircleShape,
+              color = Color(0xFFF59E0B).copy(alpha = 0.2f),
+              modifier = Modifier.size(40.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  Icons.Default.AutoAwesome,
+                  contentDescription = null,
+                  tint = Color(0xFFD97706),
+                  modifier = Modifier.size(20.dp)
+                )
+              }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                  text = "Executive Deluxe UI (Universal)",
+                  fontSize = 14.sp,
+                  fontWeight = FontWeight.SemiBold,
+                  color = primaryText
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Surface(
+                  shape = RoundedCornerShape(4.dp),
+                  color = Color(0xFFFEF3C7)
+                ) {
+                  Text(
+                    text = "Universal",
+                    fontSize = 9.sp,
+                    color = Color(0xFF92400E),
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                  )
+                }
+              }
+              Text(
+                text = "Apply sleek executive metallic card styling, enhanced contrast & premium UI universally for all users",
+                fontSize = 11.sp,
+                color = secondaryText
+              )
+            }
+            Switch(
+              checked = executiveMode,
+              onCheckedChange = { enabled ->
+                viewModel.setUniversalExecutiveUiMode(enabled)
+              },
+              modifier = Modifier.testTag("universal_executive_ui_switch")
+            )
+          }
+        }
+      }
+
       item {
         ToolActionCard(
           title = "Live Location Radar",
