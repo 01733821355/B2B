@@ -335,10 +335,15 @@ function setupAllSheets() {
     'Response ID', 'Event ID', 'RM Code', 'RM Name', 'Files Count', 'Requested Date', 'Location', 'Remarks', 'Customer Entries JSON', 'Submitted At'
   ], '#B45309');
 
+  // 12. FCM_Tokens Tab (Multi-device push notification tokens for each RM and Admin)
+  getOrCreateSheet(ss, 'FCM_Tokens', [
+    'RM Code', 'Full Name', 'Role', 'FCM Token', 'Device Model', 'Android OS', 'Last Updated', 'Is Active'
+  ], '#0F172A');
+
   try { authorizeDrivePermissions(); } catch (e) {}
 
-  Logger.log("All 11 Sheets & Drive configured successfully!");
-  return "All 11 Sheets & Drive configured successfully!";
+  Logger.log("All 12 Sheets & Drive configured successfully!");
+  return "All 12 Sheets & Drive configured successfully!";
 }
 
 function getRmSheet(ss) {
@@ -2161,6 +2166,66 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (data.action === 'REGISTER_FCM_TOKEN') {
+      var fcmSheet = getOrCreateSheet(ss, 'FCM_Tokens', [
+        'RM Code', 'Full Name', 'Role', 'FCM Token', 'Device Model', 'Android OS', 'Last Updated', 'Is Active'
+      ], '#0F172A');
+      var token = String(data.token || '').trim();
+      if (token) {
+        var tokenData = fcmSheet.getDataRange().getValues();
+        var tokenRowIdx = -1;
+        for (var tr = 1; tr < tokenData.length; tr++) {
+          if (String(tokenData[tr][3] || '').trim() === token) {
+            tokenRowIdx = tr + 1;
+            break;
+          }
+        }
+        var rmC = String(data.rmCode || 'GUEST').trim().toUpperCase();
+        var uName = String(data.userName || data.name || '').trim();
+        var uRole = String(data.role || 'RM').trim().toUpperCase();
+        var devMod = String(data.deviceModel || '').trim();
+        var andrVer = String(data.androidVersion || '').trim();
+        var timeNow = Utilities.formatDate(new Date(), "GMT+6", "dd MMM yyyy, hh:mm:ss a");
+
+        if (tokenRowIdx > 0) {
+          fcmSheet.getRange(tokenRowIdx, 1, 1, 8).setValues([[
+            rmC, uName, uRole, token, devMod, andrVer, timeNow, 'ACTIVE'
+          ]]);
+        } else {
+          fcmSheet.appendRow([
+            rmC, uName, uRole, token, devMod, andrVer, timeNow, 'ACTIVE'
+          ]);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "SUCCESS",
+        message: "FCM Token registered successfully."
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (data.action === 'SEND_FCM_PUSH') {
+      var pushTitle = data.title || 'B2B Sales Alert';
+      var pushBody = data.body || data.message || '';
+      var targetRm = data.targetRmCode || (data.targetType === 'USER' ? data.targetValue : null);
+      if (targetRm) targetRm = String(targetRm).trim().toUpperCase();
+
+      var targetRole = data.targetRole || (data.targetType === 'ROLE' ? data.targetValue : null);
+      if (targetRole) targetRole = String(targetRole).trim().toUpperCase();
+
+      var pushData = {
+        title: pushTitle,
+        body: pushBody,
+        targetScreen: data.targetScreen || '',
+        targetFileId: data.targetFileId || '',
+        targetRmCode: targetRm || '',
+        category: data.category || 'INSTANT_ALERT'
+      };
+
+      var pushResult = sendFcmPushNotificationToTarget(ss, targetRm, targetRole, pushTitle, pushBody, pushData);
+      return ContentService.createTextOutput(JSON.stringify(pushResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (data.action === 'FETCH_SHEET_DATA' || data.action === 'GET_ALL_DATA' || data.isAutoPullOnly === true || data.isPullOnly === true) {
       return handleFetchAllData();
     }
@@ -2745,3 +2810,188 @@ function onEdit(e) {
     }
   } catch (err) {}
 }
+
+/**
+ * Dispatches Instant Push Notifications via Firebase Cloud Messaging (FCM).
+ * Targets specific RM, Role, or All Active Devices.
+ */
+function sendFcmPushNotificationToTarget(ss, targetRmCode, targetRole, title, body, dataPayload) {
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  }
+  if (!ss) return { status: "ERROR", message: "Spreadsheet not found" };
+
+  var fcmSheet = ss.getSheetByName('FCM_Tokens');
+  if (!fcmSheet) {
+    return { status: "WARNING", message: "FCM_Tokens sheet not found. Register devices first." };
+  }
+
+  var tokenData = fcmSheet.getDataRange().getValues();
+  var targetTokens = [];
+  for (var r = 1; r < tokenData.length; r++) {
+    var row = tokenData[r];
+    var rRm = String(row[0] || '').trim().toUpperCase();
+    var rRole = String(row[2] || '').trim().toUpperCase();
+    var rToken = String(row[3] || '').trim();
+    var rActive = String(row[7] || 'ACTIVE').trim().toUpperCase();
+
+    if (!rToken || rActive !== 'ACTIVE') continue;
+
+    if (targetRmCode && targetRmCode !== 'ALL' && targetRmCode !== 'BROADCAST') {
+      if (rRm === targetRmCode) {
+        targetTokens.push(rToken);
+      }
+    } else if (targetRole && targetRole !== 'ALL') {
+      if (rRole === targetRole) {
+        targetTokens.push(rToken);
+      }
+    } else {
+      // Broadcast to all active devices
+      targetTokens.push(rToken);
+    }
+  }
+
+  if (targetTokens.length === 0) {
+    return { status: "WARNING", message: "No active FCM tokens found for target: " + (targetRmCode || targetRole || "ALL") };
+  }
+
+  return sendFcmHttpPush(targetTokens, title, body, dataPayload);
+}
+
+var FIREBASE_SERVICE_ACCOUNT = {
+  "type": "service_account",
+  "project_id": "gen-lang-client-0246999405",
+  "private_key_id": "01dfadcfb3930125e8cc00d0106488dfaa19bf56",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCUiPNRudm7eU0Z\n8Ilgy4sCgLUyayWLdAs7WceAfimXxdNDfJCC0DFUqH4iD+G8Oo5sjjaxDMd+e8gM\nRPpO+UMGe8tb3quuhxDIm/T6MmUOtWWNRliLG1pEPHubo7Vqo8/7VUfhHS0FbZe4\nlY5hyaNzgPahfypQn0i0NVI7Gd5khHkasLOhZSmHxXMWCVGu13VMefD3n0fP7czE\nIfHhtN8fvOKCcsHSr6c/PqfgzEnIQDLvpzvR8LiEmKFsbDdFkFyVrl4UzKxH5CIJ\nY2+TbInazaDQzxOvobdm0DF/nSQVk6zHHb6mmYgJ2KDFiJxgjhf63P/8FITTfEku\ni7yhBpyfAgMBAAECggEAB/Ia4Lx/lxr3kr4pKITq7vDXVexLv13Z+0xOXaN3cneH\nhCeF4YGP9Kvox3CwY4MsZZvmoBUDbP2OfN2JwwTBiaIWBa2ajdpgKE3IzpjjNWS4\ncH9wCCJSngOFnJSm2p61vF0FBy1U4GKgSE8JJVZbMzgVuXDrNhHh7/Ce8VYXwqpg\npOzQqKt3gNQ/3NSdDfRCMT39Hpc3ZHf6ygkeHBR2gqIfeCokSqOsQbsHwJHegLG1\n6dAxi6JJrLmbaTMb13mYgoEqiC9/Yo0VM1b9yI9+CD69SNxCQdKcxhyJ5M9G+ZCa\nZfqMu24s3AvkazMmGMxl6guzAYMQUScGKcqT4lZnVQKBgQDE84GfwU6zsbXSzNx5\nCHbsEhD6abYorPceuuQCAo4kef4tQgiePHyyqDxzBNZNFzcsFFal63l0PSOQRbNT\nAWpQaDF5a97ztDm4nz1+M92KIbkkoTlCDlVbg5nISC8SwWUmP2X4SCEie19rFrgH\nDGHuhPhYz1ryBOUExFAMZg6tQwKBgQDBEWC88dv1LPZMUV4SKUsX+OizClzivypJ\ndeRdrlsN6KvZULPO8mQOvQ5XZzDyROyNh8I0YYTKI11Ajly2K+weWkYD4AVZscbu\nuGzQJRXDzc90HzaQ/PxhrSdw98Rxb6sjiCXKSg4z6QmvQaGMVsDBs5mVYO4QVsM6\nLl/uO0OPdQKBgEEj+P+JxCoS4Pxz3Yf6kLrLzunEBQe3DZUQY1F23uSZpMP7TzZm\n8yd0FWpFc0vUHd9qaq4+D9GuVxDkvMb7dNpbW+G5F+iq91xk7sXLCb8iIEZJPNLo\nQrsd78MafNdLN9VKqsNPuAXboFefEAbkxY9KU4msK3xYuha1h3RSXRBZAoGAKlqO\nl0STlUiEy585/M/0OlEPc199mvyG4VCshWSfcwCs2mKa33ZLPvR4dfIcSbmXD0FN\n+EHAaLuzVFsmuYwPI2V4YJc/dTrLwkjRDiRkjuzSas4CIXJuR1s+AMlJ3fy6VXQj\nnin6zaZ8ymaicvABHz0wHxYBg7IU5+mOf+ueWZUCgYEAk5jayS9TWXRVgzxSg8dt\n/bybYv2J8QIcHGm5QXk9uq5AFkK9kB2+OkyFwMhBRxExeY8LV2UwZDYiRSjzshPU\nQCjuNUzfbEJ5z1OX3s+vtt9DHOoErf74IiDKTLO7ieKR2xjqzSMtz1ab2Pw+kUXF\n0xiz12eCrT/LfarNYMSfUAU=\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@gen-lang-client-0246999405.iam.gserviceaccount.com"
+};
+
+/**
+ * Generates OAuth2 Access Token for Firebase Cloud Messaging API v1.
+ */
+function getFcmV1AccessToken(sa) {
+  var serviceAccount = sa || FIREBASE_SERVICE_ACCOUNT;
+  try {
+    var scriptProps = PropertiesService.getScriptProperties();
+    var customSaJson = scriptProps.getProperty('FIREBASE_SERVICE_ACCOUNT');
+    if (customSaJson) {
+      serviceAccount = JSON.parse(customSaJson);
+    }
+  } catch (eProps) {}
+
+  var now = Math.floor(Date.now() / 1000);
+  var header = Utilities.base64EncodeWebSafe(JSON.stringify({ alg: "RS256", typ: "JWT" }));
+  var claimSet = Utilities.base64EncodeWebSafe(JSON.stringify({
+    iss: serviceAccount.client_email,
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now
+  }));
+  var toSign = header + "." + claimSet;
+  var signature = Utilities.base64EncodeWebSafe(Utilities.computeRsaSha256Signature(toSign, serviceAccount.private_key));
+  var jwt = toSign + "." + signature;
+
+  var response = UrlFetchApp.fetch("https://oauth2.googleapis.com/token", {
+    method: "post",
+    payload: {
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion: jwt
+    },
+    muteHttpExceptions: true
+  });
+  var json = JSON.parse(response.getContentText());
+  return json.access_token || null;
+}
+
+/**
+ * Sends high priority network push to devices via modern FCM HTTP v1 protocol.
+ */
+function sendFcmHttpPush(tokens, title, body, dataPayload) {
+  try {
+    var accessToken = getFcmV1AccessToken();
+    if (!accessToken) {
+      return {
+        status: "ERROR",
+        message: "Failed to generate FCM v1 OAuth2 access token. Please verify service account credentials."
+      };
+    }
+
+    var projectId = FIREBASE_SERVICE_ACCOUNT.project_id;
+    var strData = {};
+    if (dataPayload) {
+      for (var k in dataPayload) {
+        strData[k] = String(dataPayload[k] != null ? dataPayload[k] : "");
+      }
+    }
+    strData["title"] = String(title || "Alert");
+    strData["body"] = String(body || "");
+
+    var successCount = 0;
+    var failureCount = 0;
+
+    for (var i = 0; i < tokens.length; i++) {
+      var tok = tokens[i];
+      if (!tok) continue;
+
+      var fcmUrl = "https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send";
+      var msgPayload = {
+        message: {
+          token: tok,
+          notification: {
+            title: title,
+            body: body
+          },
+          data: strData,
+          android: {
+            priority: "HIGH",
+            notification: {
+              channel_id: "b2b_alerts_channel_v2",
+              notification_priority: "PRIORITY_MAX",
+              visibility: "PUBLIC",
+              default_sound: true,
+              default_vibrate_timings: true
+            }
+          }
+        }
+      };
+
+      var options = {
+        method: "post",
+        contentType: "application/json",
+        headers: {
+          "Authorization": "Bearer " + accessToken
+        },
+        payload: JSON.stringify(msgPayload),
+        muteHttpExceptions: true
+      };
+
+      try {
+        var resp = UrlFetchApp.fetch(fcmUrl, options);
+        if (resp.getResponseCode() === 200) {
+          successCount++;
+        } else {
+          failureCount++;
+          Logger.log("FCM V1 send error for token " + tok.take(10) + ": " + resp.getContentText());
+        }
+      } catch (errOne) {
+        failureCount++;
+        Logger.log("FCM send exception: " + errOne.toString());
+      }
+    }
+
+    return {
+      status: "SUCCESS",
+      successCount: successCount,
+      failureCount: failureCount,
+      message: "Push sent via FCM V1. Success: " + successCount + ", Failed: " + failureCount
+    };
+  } catch (err) {
+    Logger.log("FCM V1 error: " + err.toString());
+    return {
+      status: "ERROR",
+      message: err.toString()
+    };
+  }
+}
+

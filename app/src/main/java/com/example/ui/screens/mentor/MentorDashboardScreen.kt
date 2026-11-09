@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForwardIos
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.Calculate
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Security
@@ -42,6 +45,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -199,6 +203,60 @@ fun MentorDashboardScreen(
         },
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
       )
+    }
+
+    // Primary Mentor Action: Add New Customer File
+    item {
+      Card(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 16.dp, vertical = 4.dp)
+          .clickable { onNavigate(Screen.CustomerForm(null)) }
+          .testTag("mentor_btn_add_customer"),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0F766E).copy(alpha = 0.25f) else Color(0xFFCCFBF1)),
+        border = BorderStroke(1.5.dp, if (isDark) Color(0xFF0D9488) else Color(0xFF5EEAD4))
+      ) {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Surface(
+              shape = CircleShape,
+              color = Color(0xFF0F766E),
+              modifier = Modifier.size(38.dp)
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+              }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+              Text(
+                text = "+ Add New Customer File",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = if (isDark) Color.White else Color(0xFF0F766E)
+              )
+              Text(
+                text = "Register customer file & assign directly to RM officer",
+                fontSize = 11.sp,
+                color = if (isDark) Color(0xFF99F6E4) else Color(0xFF115E59)
+              )
+            }
+          }
+          Icon(
+            Icons.Default.ArrowForwardIos,
+            contentDescription = null,
+            tint = if (isDark) Color(0xFF99F6E4) else Color(0xFF0F766E),
+            modifier = Modifier.size(14.dp)
+          )
+        }
+      }
     }
 
     item {
@@ -959,11 +1017,27 @@ fun MentorDashboardScreen(
       }
     }
 
-    item {
-      Spacer(modifier = Modifier.height(28.dp))
+    }
+
+    FloatingActionButton(
+      onClick = { onNavigate(Screen.CustomerForm(null)) },
+      containerColor = Color(0xFF0F766E),
+      contentColor = Color.White,
+      modifier = Modifier
+        .align(Alignment.BottomEnd)
+        .padding(16.dp)
+        .testTag("mentor_fab_add_customer")
+    ) {
+      Row(
+        modifier = Modifier.padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+      ) {
+        Icon(Icons.Default.Add, contentDescription = "Add Customer")
+        Spacer(modifier = Modifier.width(4.dp))
+        Text("New File", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+      }
     }
   }
-}
 
   // Universal App Name Edit Dialog
   if (showEditAppNameDialog) {

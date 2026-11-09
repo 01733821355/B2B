@@ -44,9 +44,10 @@ import com.example.data.model.UserLocationLogEntity
     ChatMessageEntity::class,
     TeamEventEntity::class,
     EventResponseEntity::class,
-    ImportantDocumentEntity::class
+    ImportantDocumentEntity::class,
+    com.example.data.model.FcmTokenEntity::class
   ],
-  version = 13,
+  version = 14,
   exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -60,6 +61,7 @@ abstract class AppDatabase : RoomDatabase() {
   abstract fun smsNotificationDao(): SmsNotificationDao
   abstract fun communicationDao(): CommunicationDao
   abstract fun importantDocumentDao(): ImportantDocumentDao
+  abstract fun fcmTokenDao(): com.example.data.dao.FcmTokenDao
 
   companion object {
     @Volatile
@@ -215,6 +217,26 @@ abstract class AppDatabase : RoomDatabase() {
       }
     }
 
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS `fcm_tokens` (
+            `token` TEXT NOT NULL,
+            `rmCode` TEXT NOT NULL,
+            `userName` TEXT NOT NULL,
+            `role` TEXT NOT NULL,
+            `deviceModel` TEXT NOT NULL,
+            `androidVersion` TEXT NOT NULL,
+            `updatedAt` INTEGER NOT NULL,
+            `isSynced` INTEGER NOT NULL,
+            PRIMARY KEY(`token`)
+          )
+          """.trimIndent()
+        )
+      }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
       return INSTANCE ?: synchronized(this) {
         val instance = Room.databaseBuilder(
@@ -222,7 +244,7 @@ abstract class AppDatabase : RoomDatabase() {
           AppDatabase::class.java,
           "ebl_rm_database.db"
         )
-          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+          .addMigrations(MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
           .fallbackToDestructiveMigration()
           .addCallback(object : RoomDatabase.Callback() {
             override fun onOpen(db: SupportSQLiteDatabase) {

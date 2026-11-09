@@ -396,4 +396,58 @@ object NotificationHelper {
       NotificationManagerCompat.from(context).notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }
+
+  fun showFcmPushNotification(
+    context: Context,
+    title: String,
+    body: String,
+    targetScreen: String? = null,
+    targetFileId: String? = null,
+    extras: Map<String, String>? = null
+  ) {
+    try {
+      createNotificationChannels(context)
+
+      val intent = Intent(context, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        if (!targetScreen.isNullOrBlank()) {
+          putExtra("TARGET_SCREEN", targetScreen)
+        }
+        if (!targetFileId.isNullOrBlank()) {
+          putExtra("TARGET_FILE_ID", targetFileId)
+        }
+        extras?.forEach { (k, v) ->
+          putExtra(k, v)
+        }
+      }
+
+      val reqCode = (System.currentTimeMillis() % 100000).toInt()
+      val pendingIntent = PendingIntent.getActivity(
+        context,
+        reqCode,
+        intent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+
+      val defaultSoundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
+      val vibrationPattern = longArrayOf(0, 250, 150, 250)
+
+      val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        .setSmallIcon(android.R.drawable.stat_notify_chat)
+        .setContentTitle(title)
+        .setContentText(body)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        .setPriority(NotificationCompat.PRIORITY_MAX)
+        .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+        .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+        .setSound(defaultSoundUri)
+        .setVibrate(vibrationPattern)
+        .setAutoCancel(true)
+        .setContentIntent(pendingIntent)
+
+      val notificationId = (System.currentTimeMillis() % 1000000).toInt() + 10
+      NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+    } catch (_: Exception) {}
+  }
 }
+

@@ -108,6 +108,16 @@ fun AppSettingsScreen(
   var weekStartInput by remember(weekStartSetting) { mutableStateOf(weekStartSetting) }
   var fileStatusesInput by remember(fileStatusesSetting) { mutableStateOf(fileStatusesSetting) }
 
+  val scope = rememberCoroutineScope()
+  var fcmTargetType by remember { mutableStateOf("ALL") }
+  var fcmRoleTarget by remember { mutableStateOf("RM") }
+  var fcmRmTarget by remember { mutableStateOf("") }
+  var fcmTitleInput by remember { mutableStateOf("Important Announcement") }
+  var fcmBodyInput by remember { mutableStateOf("") }
+  var fcmTargetScreen by remember { mutableStateOf("CustomerList") }
+  var fcmTargetFileId by remember { mutableStateOf("") }
+  var isSendingFcmPush by remember { mutableStateOf(false) }
+
   Column(
     modifier = modifier
       .fillMaxSize()
@@ -235,6 +245,181 @@ fun AppSettingsScreen(
           }
         }
       }
+    }
+
+    Spacer(modifier = Modifier.height(16.dp))
+
+    // FCM Instant Push Notification Control Center (Admin & Mentor)
+    if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
+      Card(
+        modifier = Modifier.fillMaxWidth().testTag("card_fcm_push_control"),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+      ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+              imageVector = Icons.Default.NotificationsActive,
+              contentDescription = null,
+              tint = Color(0xFFD97706),
+              modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+              Text(
+                "Instant Push Notification Control Center (FCM)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
+              )
+              Text(
+                "Send WhatsApp-style alerts directly to phones even when app is closed",
+                fontSize = 11.sp,
+                color = Color.Gray
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(12.dp))
+
+          // Target Selection
+          Text("Target Audience:", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+          Spacer(modifier = Modifier.height(6.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+              selected = fcmTargetType == "ALL",
+              onClick = { fcmTargetType = "ALL" },
+              label = { Text("All Users", fontSize = 11.sp) }
+            )
+            FilterChip(
+              selected = fcmTargetType == "ROLE",
+              onClick = { fcmTargetType = "ROLE" },
+              label = { Text("By Role", fontSize = 11.sp) }
+            )
+            FilterChip(
+              selected = fcmTargetType == "USER",
+              onClick = { fcmTargetType = "USER" },
+              label = { Text("Specific RM", fontSize = 11.sp) }
+            )
+          }
+
+          if (fcmTargetType == "ROLE") {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              listOf("RM", "ADMIN", "MENTOR", "GENERAL").forEach { r ->
+                FilterChip(
+                  selected = fcmRoleTarget.equals(r, true),
+                  onClick = { fcmRoleTarget = r },
+                  label = { Text(r, fontSize = 10.sp) }
+                )
+              }
+            }
+          } else if (fcmTargetType == "USER") {
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+              value = fcmRmTarget,
+              onValueChange = { fcmRmTarget = it },
+              label = { Text("Enter Target RM Code (e.g. 104393)", fontSize = 11.sp) },
+              modifier = Modifier.fillMaxWidth(),
+              singleLine = true
+            )
+          }
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          OutlinedTextField(
+            value = fcmTitleInput,
+            onValueChange = { fcmTitleInput = it },
+            label = { Text("Notification Title", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+          )
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          OutlinedTextField(
+            value = fcmBodyInput,
+            onValueChange = { fcmBodyInput = it },
+            label = { Text("Notification Message", fontSize = 11.sp) },
+            placeholder = { Text("Enter message for team members...", fontSize = 11.sp) },
+            modifier = Modifier.fillMaxWidth(),
+            maxLines = 3
+          )
+
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // Target Destination Screen
+          Text("Target Destination Screen (When Clicked):", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+          Spacer(modifier = Modifier.height(4.dp))
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("CustomerList" to "Files", "CommunicationHub" to "Chat Hub", "GlobalDatabase" to "Global DB", "Reports" to "Reports").forEach { (scr, lbl) ->
+              FilterChip(
+                selected = fcmTargetScreen == scr,
+                onClick = { fcmTargetScreen = scr },
+                label = { Text(lbl, fontSize = 10.sp) }
+              )
+            }
+          }
+
+          Spacer(modifier = Modifier.height(14.dp))
+
+          Button(
+            onClick = {
+              if (fcmBodyInput.isBlank()) {
+                Toast.makeText(context, "Please enter notification message", Toast.LENGTH_SHORT).show()
+                return@Button
+              }
+              isSendingFcmPush = true
+              scope.launch {
+                val targetVal = when (fcmTargetType) {
+                  "ROLE" -> fcmRoleTarget
+                  "USER" -> fcmRmTarget.trim()
+                  else -> "ALL"
+                }
+                val res = com.example.fcm.FcmTokenManager.sendInstantPush(
+                  context = context,
+                  title = fcmTitleInput.trim().ifBlank { "EBL RM Alert" },
+                  body = fcmBodyInput.trim(),
+                  targetType = fcmTargetType,
+                  targetValue = targetVal,
+                  targetScreen = fcmTargetScreen,
+                  targetFileId = fcmTargetFileId.trim().ifBlank { null }
+                )
+                isSendingFcmPush = false
+                res.onSuccess {
+                  Toast.makeText(context, "✓ Instant Push dispatched to $fcmTargetType ($targetVal)!", Toast.LENGTH_LONG).show()
+                  fcmBodyInput = ""
+                }.onFailure { err ->
+                  Toast.makeText(context, "FCM Push error: ${err.message}", Toast.LENGTH_LONG).show()
+                }
+              }
+            },
+            enabled = !isSendingFcmPush,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706)),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().testTag("btn_send_fcm_push")
+          ) {
+            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(if (isSendingFcmPush) "Sending Push Alert..." else "Send Instant Push (FCM)", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+          }
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          val currentDevToken = remember { com.example.fcm.FcmTokenManager.getCurrentToken(context) }
+          Text(
+            text = if (currentDevToken.isNotBlank())
+              "✓ Device FCM Token Active (${currentDevToken.take(12)}...${currentDevToken.takeLast(6)})"
+            else
+              "• FCM Initializing... Token will register automatically on startup.",
+            fontSize = 10.sp,
+            color = if (currentDevToken.isNotBlank()) Color(0xFF059669) else Color.Gray
+          )
+        }
+      }
+
+      Spacer(modifier = Modifier.height(16.dp))
     }
 
     // Product Types

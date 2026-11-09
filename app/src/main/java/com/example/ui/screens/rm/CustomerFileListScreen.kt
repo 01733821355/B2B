@@ -117,6 +117,7 @@ fun CustomerFileListScreen(
   var viewingFile by remember { mutableStateOf<CustomerFileEntity?>(null) }
   var fileToDelete by remember { mutableStateOf<CustomerFileEntity?>(null) }
   var showFiltersDialog by remember { mutableStateOf(false) }
+  var fileForQuickCpvChange by remember { mutableStateOf<CustomerFileEntity?>(null) }
 
   val context = LocalContext.current
   val appCustomName by viewModel.appCustomName.collectAsState()
@@ -236,7 +237,7 @@ fun CustomerFileListScreen(
         }
 
         IconButton(
-          onClick = { viewModel.resetFilters() },
+          onClick = { viewModel.refreshData() },
           modifier = Modifier.size(34.dp).testTag("btn_refresh_files")
         ) {
           Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
@@ -281,15 +282,22 @@ fun CustomerFileListScreen(
         onClick = { showFiltersDialog = true },
         modifier = Modifier.testTag("btn_open_filters")
       ) {
+        val hasActiveFilter = selectedProduct != "All" || selectedAppStatus != "All" ||
+          selectedActiveStatus != "All" || selectedCpvStatus != "All" ||
+          (isPrivileged && selectedRmCode != "All") || pendingDocsOnly || searchQuery.isNotBlank()
         Icon(
           Icons.Default.FilterList,
           contentDescription = "Filters",
-          tint = if (selectedProduct != "All" || selectedAppStatus != "All" || selectedActiveStatus != "All") EblNavyPrimary else Color.Gray
+          tint = if (hasActiveFilter) EblNavyPrimary else Color.Gray
         )
       }
     }
 
-    // Active Filter Chips indicator
+    // Active Filter Chips indicator (filters stay preserved across file updates and screen switches until manually cleared)
+    val hasAnyFilter = selectedProduct != "All" || selectedAppStatus != "All" ||
+      selectedActiveStatus != "All" || selectedCpvStatus != "All" ||
+      (isPrivileged && selectedRmCode != "All") || pendingDocsOnly || searchQuery.isNotBlank()
+
     val scrollState = rememberScrollState()
     Row(
       modifier = Modifier
@@ -299,6 +307,19 @@ fun CustomerFileListScreen(
       horizontalArrangement = Arrangement.spacedBy(6.dp),
       verticalAlignment = Alignment.CenterVertically
     ) {
+      if (hasAnyFilter) {
+        FilterChip(
+          selected = true,
+          onClick = { viewModel.resetFilters() },
+          label = { Text("Clear All ✕", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+          colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = Color(0xFFEF4444),
+            selectedLabelColor = Color.White
+          ),
+          modifier = Modifier.testTag("chip_clear_all_filters")
+        )
+      }
+
       FilterChip(
         selected = pendingDocsOnly,
         onClick = { viewModel.pendingDocsOnlyFilter.value = !pendingDocsOnly },
@@ -549,7 +570,11 @@ fun CustomerFileListScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
               ) {
-                Box(modifier = Modifier.weight(1f, fill = false)) {
+                Box(
+                  modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clickable { fileForQuickCpvChange = file }
+                ) {
                   CpvStatusBadge(file.cpvStatus)
                 }
 
@@ -891,6 +916,90 @@ fun CustomerFileListScreen(
       dismissButton = {
         OutlinedButton(onClick = { showExcelSuccessDialog = false }) {
           Text("Done")
+        }
+      }
+    )
+  }
+
+  // Quick CPV Status Selector Dialog
+  if (fileForQuickCpvChange != null) {
+    val targetFile = fileForQuickCpvChange!!
+    var isUpdatingQuickCpv by remember { mutableStateOf(false) }
+
+    AlertDialog(
+      onDismissRequest = { if (!isUpdatingQuickCpv) fileForQuickCpvChange = null },
+      title = {
+        Text("Update CPV Verification Status", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+      },
+      text = {
+        Column {
+          Text(
+            text = "Customer: ${targetFile.customerName} (${targetFile.productType})",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold
+          )
+          Text(
+            text = "Current CPV Status: ${targetFile.cpvStatus}",
+            fontSize = 11.sp,
+            color = Color.Gray
+          )
+          Spacer(modifier = Modifier.height(12.dp))
+          Text("Select New Status:", fontSize = 12.sp, fontWeight = FontWeight.Medium)
+          Spacer(modifier = Modifier.height(6.dp))
+
+          listOf("Completed", "Pending", "Failed", "Not Required").forEach { opt ->
+            val isSelected = targetFile.cpvStatus.equals(opt, ignoreCase = true)
+            Surface(
+              shape = RoundedCornerShape(8.dp),
+              color = if (isSelected) EblNavyPrimary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface,
+              border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                if (isSelected) EblNavyPrimary else Color.LightGray.copy(alpha = 0.5f)
+              ),
+              modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp)
+                .clickable(enabled = !isUpdatingQuickCpv) {
+                  isUpdatingQuickCpv = true
+                  viewModel.updateFileStatus(
+                    fileId = targetFile.fileId,
+                    newStatus = targetFile.applicationStatus,
+                    newCpvStatus = opt
+                  ) { success, err ->
+                    isUpdatingQuickCpv = false
+                    fileForQuickCpvChange = null
+                    if (success) {
+                      Toast.makeText(context, "✓ CPV status set to '$opt' and synced!", Toast.LENGTH_SHORT).show()
+                    } else {
+                      Toast.makeText(context, err ?: "Failed to update CPV status", Toast.LENGTH_SHORT).show()
+                    }
+                  }
+                }
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+              ) {
+                Text(
+                  text = opt,
+                  fontSize = 13.sp,
+                  fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                  color = if (isSelected) EblNavyPrimary else MaterialTheme.colorScheme.onSurface
+                )
+                CpvStatusBadge(opt)
+              }
+            }
+          }
+        }
+      },
+      confirmButton = {},
+      dismissButton = {
+        OutlinedButton(
+          onClick = { fileForQuickCpvChange = null },
+          enabled = !isUpdatingQuickCpv
+        ) {
+          Text("Cancel")
         }
       }
     )

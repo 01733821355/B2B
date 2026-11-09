@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -122,6 +123,45 @@ class MainActivity : FragmentActivity() {
         textScale = universalTextScale
       ) {
         EblMainApp(viewModel = viewModel)
+      }
+    }
+    handleNotificationDeepLink(intent)
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    handleNotificationDeepLink(intent)
+  }
+
+  private fun handleNotificationDeepLink(intent: Intent?) {
+    if (intent == null) return
+    val targetScreen = intent.getStringExtra("TARGET_SCREEN") ?: return
+    val targetFileId = intent.getStringExtra("TARGET_FILE_ID")
+
+    when (targetScreen.lowercase()) {
+      "customerlist", "customer_list", "files" -> {
+        viewModel.navigateTo(Screen.CustomerList)
+      }
+      "globaldatabase", "global_database", "database" -> {
+        viewModel.navigateTo(Screen.GlobalDatabase)
+      }
+      "communicationhub", "communication_hub", "chat" -> {
+        viewModel.navigateTo(Screen.CommunicationHub)
+      }
+      "customerform", "customer_form", "new_file" -> {
+        viewModel.navigateTo(Screen.CustomerForm(targetFileId))
+      }
+      "reports" -> {
+        viewModel.navigateTo(Screen.Reports)
+      }
+      "googlesheetssync", "sync" -> {
+        viewModel.navigateTo(Screen.GoogleSheetsSync)
+      }
+      else -> {
+        if (!targetFileId.isNullOrBlank()) {
+          viewModel.navigateTo(Screen.CustomerList)
+        }
       }
     }
   }
@@ -274,11 +314,19 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
+  // Initialize FCM Push Notifications (generates token, registers to backend, subscribes to topics)
+  LaunchedEffect(currentUser?.rmCode) {
+    com.example.fcm.FcmTokenManager.initFcm(context, currentUser)
+  }
+
   // Listen for uiMessages and show toast snackbar (background sync messages run silently)
   LaunchedEffect(Unit) {
     viewModel.uiMessage.collectLatest { msg ->
       if (!msg.startsWith("Pulled from Google Sheets", ignoreCase = true) &&
-          !msg.contains("notification(s) updated", ignoreCase = true)) {
+          !msg.contains("notification(s) updated", ignoreCase = true) &&
+          !msg.contains("file(s)", ignoreCase = true) &&
+          !msg.contains("document(s)", ignoreCase = true) &&
+          !msg.contains("attachment(s)", ignoreCase = true)) {
         snackbarHostState.showSnackbar(msg)
       }
     }
@@ -398,16 +446,16 @@ fun EblMainApp(viewModel: AppViewModel) {
         if (user.role == "ADMIN") {
           listOf(
             Screen.AdminDashboard,
+            Screen.CustomerForm(null),
             Screen.GlobalDatabase,
-            Screen.RmMapping,
-            Screen.GoogleSheetsSync,
+            Screen.Reports,
             Screen.More
           )
         } else if (user.role == "MENTOR") {
           listOf(
             Screen.MentorDashboard,
+            Screen.CustomerForm(null),
             Screen.GlobalDatabase,
-            Screen.RmMapping,
             Screen.GoogleSheetsSync,
             Screen.More
           )
@@ -809,17 +857,17 @@ fun EblBottomNav(
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
+        selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
+        onClick = { onSelectScreen(Screen.CustomerForm(null)) },
+        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
+        label = { Text("New File", fontSize = 9.sp) },
+        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
+      )
+      NavigationBarItem(
         selected = currentScreen is Screen.GlobalDatabase,
         onClick = { onSelectScreen(Screen.GlobalDatabase) },
         icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
         label = { Text("Database", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.RmMapping,
-        onClick = { onSelectScreen(Screen.RmMapping) },
-        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping", modifier = Modifier.size(20.dp)) },
-        label = { Text("RM Mapping", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
@@ -845,17 +893,17 @@ fun EblBottomNav(
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(
+        selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
+        onClick = { onSelectScreen(Screen.CustomerForm(null)) },
+        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
+        label = { Text("New File", fontSize = 9.sp) },
+        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
+      )
+      NavigationBarItem(
         selected = currentScreen is Screen.GlobalDatabase,
         onClick = { onSelectScreen(Screen.GlobalDatabase) },
         icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
         label = { Text("Database", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.RmMapping,
-        onClick = { onSelectScreen(Screen.RmMapping) },
-        icon = { Icon(Icons.Default.Group, contentDescription = "RM Mapping", modifier = Modifier.size(20.dp)) },
-        label = { Text("RM Mapping", fontSize = 9.sp) },
         colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
       )
       NavigationBarItem(

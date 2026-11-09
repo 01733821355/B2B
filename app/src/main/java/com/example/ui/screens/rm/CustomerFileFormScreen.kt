@@ -597,7 +597,7 @@ fun CustomerFileFormScreen(
       ) { success, targetId ->
         isSaving = false
         if (success && targetId != null) {
-          viewModel.resetFilters()
+          // Do NOT reset filters automatically; maintain user's active filter criteria
           onSaveSuccess(targetId)
         } else {
           errorMessage = targetId ?: "Failed to save customer file. Please check permissions."
@@ -703,48 +703,119 @@ fun CustomerFileFormScreen(
         // Admin & Mentor RM Reassignment Control
         if (currentUser.role == "ADMIN" || currentUser.role == "MENTOR") {
           Spacer(modifier = Modifier.height(10.dp))
-          ExposedDropdownMenuBox(
-            expanded = rmDropdownExpanded,
-            onExpandedChange = { rmDropdownExpanded = !rmDropdownExpanded }
+          var isManualRmMode by remember { mutableStateOf(false) }
+
+          Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(10.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFEFF6FF)),
+            border = BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFBFDBFE))
           ) {
-            val assignedRmUser = allRms.find { it.rmCode.equals(assignedRmCode, ignoreCase = true) }
-            val rmDisplayName = if (assignedRmUser != null) {
-              "${assignedRmUser.name} (${assignedRmUser.rmCode})"
-            } else {
-              "RM: $assignedRmCode"
-            }
+            Column(modifier = Modifier.padding(12.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+              ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  Icon(Icons.Default.Group, contentDescription = null, tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
+                  Spacer(modifier = Modifier.width(6.dp))
+                  Text(
+                    text = "Assigned RM Officer * (Admin/Mentor Control)",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isDark) Color.White else EblNavyDark
+                  )
+                }
+                TextButton(
+                  onClick = { isManualRmMode = !isManualRmMode },
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                  Text(
+                    text = if (isManualRmMode) "Pick from List" else "Type RM Code",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = EblNavyPrimary
+                  )
+                }
+              }
 
-            OutlinedTextField(
-              value = rmDisplayName,
-              onValueChange = {},
-              readOnly = true,
-              label = { Text("Assigned RM Officer * (Admin/Mentor Control)") },
-              leadingIcon = { Icon(Icons.Default.Group, contentDescription = null, tint = EblNavyPrimary) },
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = rmDropdownExpanded) },
-              modifier = Modifier.fillMaxWidth().menuAnchor().testTag("dropdown_assigned_rm"),
-              colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = EblNavyPrimary,
-                focusedContainerColor = Color(0xFFEFF6FF)
-              )
-            )
+              Spacer(modifier = Modifier.height(6.dp))
 
-            ExposedDropdownMenu(
-              expanded = rmDropdownExpanded,
-              onDismissRequest = { rmDropdownExpanded = false }
-            ) {
-              allRms.forEach { rm ->
-                DropdownMenuItem(
-                  text = {
-                    Column {
-                      Text(text = "${rm.name} (${rm.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                      Text(text = "Mobile: ${rm.mobile.ifBlank { "N/A" }} • ${rm.accountStatus}", fontSize = 11.sp, color = Color.Gray)
-                    }
-                  },
-                  onClick = {
-                    assignedRmCode = rm.rmCode
-                    rmDropdownExpanded = false
-                  }
+              if (isManualRmMode) {
+                OutlinedTextField(
+                  value = assignedRmCode,
+                  onValueChange = { assignedRmCode = it.trim().uppercase() },
+                  label = { Text("Enter RM Officer Code (e.g. 104393)") },
+                  placeholder = { Text("e.g. 104393") },
+                  leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = EblNavyPrimary) },
+                  singleLine = true,
+                  modifier = Modifier.fillMaxWidth().testTag("input_manual_rm_code"),
+                  colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = EblNavyPrimary,
+                    focusedContainerColor = Color.White
+                  )
                 )
+              } else {
+                ExposedDropdownMenuBox(
+                  expanded = rmDropdownExpanded,
+                  onExpandedChange = { rmDropdownExpanded = !rmDropdownExpanded }
+                ) {
+                  val assignedRmUser = allRms.find { it.rmCode.equals(assignedRmCode, ignoreCase = true) }
+                  val rmDisplayName = if (assignedRmUser != null) {
+                    "${assignedRmUser.name} (${assignedRmUser.rmCode})"
+                  } else if (assignedRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
+                    "Self / ${currentUser.name} (${currentUser.rmCode})"
+                  } else {
+                    "RM Code: $assignedRmCode"
+                  }
+
+                  OutlinedTextField(
+                    value = rmDisplayName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Select RM Officer") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EblNavyPrimary) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = rmDropdownExpanded) },
+                    modifier = Modifier.fillMaxWidth().menuAnchor().testTag("dropdown_assigned_rm"),
+                    colors = OutlinedTextFieldDefaults.colors(
+                      focusedBorderColor = EblNavyPrimary,
+                      focusedContainerColor = Color.White
+                    )
+                  )
+
+                  ExposedDropdownMenu(
+                    expanded = rmDropdownExpanded,
+                    onDismissRequest = { rmDropdownExpanded = false }
+                  ) {
+                    DropdownMenuItem(
+                      text = {
+                        Column {
+                          Text(text = "Self: ${currentUser.name} (${currentUser.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                          Text(text = "Role: ${currentUser.role} • Retain under Admin", fontSize = 11.sp, color = Color.Gray)
+                        }
+                      },
+                      onClick = {
+                        assignedRmCode = currentUser.rmCode
+                        rmDropdownExpanded = false
+                      }
+                    )
+                    allRms.forEach { rm ->
+                      DropdownMenuItem(
+                        text = {
+                          Column {
+                            Text(text = "${rm.name} (${rm.rmCode})", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(text = "Mobile: ${rm.mobile.ifBlank { "N/A" }} • ${rm.accountStatus}", fontSize = 11.sp, color = Color.Gray)
+                          }
+                        },
+                        onClick = {
+                          assignedRmCode = rm.rmCode
+                          rmDropdownExpanded = false
+                        }
+                      )
+                    }
+                  }
+                }
               }
             }
           }

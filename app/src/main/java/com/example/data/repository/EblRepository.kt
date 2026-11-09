@@ -873,6 +873,38 @@ class EblRepository(
           )
         }
       }
+
+      // Dispatch Instant Push to Admin and Mentor roles
+      applicationScope.launch {
+        try {
+          com.example.fcm.FcmTokenManager.sendInstantPush(
+            title = "New Customer File: $customerName",
+            body = "Registered by ${currentUser.name} (${currentUser.role}). Product: $productType, RM: $resolvedRmCode.",
+            targetType = "ROLE",
+            targetValue = "ADMIN",
+            targetScreen = "CustomerList",
+            targetFileId = targetFileId
+          )
+          com.example.fcm.FcmTokenManager.sendInstantPush(
+            title = "New Customer File: $customerName",
+            body = "Registered by ${currentUser.name} (${currentUser.role}). Product: $productType, RM: $resolvedRmCode.",
+            targetType = "ROLE",
+            targetValue = "MENTOR",
+            targetScreen = "CustomerList",
+            targetFileId = targetFileId
+          )
+          if (!resolvedRmCode.equals(currentUser.rmCode, ignoreCase = true)) {
+            com.example.fcm.FcmTokenManager.sendInstantPush(
+              title = "New File Assigned: $customerName",
+              body = "Assigned to your code by ${currentUser.name} (${currentUser.role}). Product: $productType.",
+              targetType = "USER",
+              targetValue = resolvedRmCode,
+              targetScreen = "CustomerList",
+              targetFileId = targetFileId
+            )
+          }
+        } catch (_: Exception) {}
+      }
     } else {
       database.customerFileDao().updateFile(entity)
 
@@ -971,6 +1003,20 @@ class EblRepository(
           customMessage = smsMessage,
           dedupeKey = "rm_update_${targetFileId}_${presStatus}_${now / 15000}"
         )
+      }
+
+      // Dispatch Instant Push to assigned RM
+      applicationScope.launch {
+        try {
+          com.example.fcm.FcmTokenManager.sendInstantPush(
+            title = if (hasRmChanged) "File Reassigned: $customerName" else "File Update: $customerName",
+            body = smsMessage,
+            targetType = "USER",
+            targetValue = resolvedRmCode,
+            targetScreen = "CustomerList",
+            targetFileId = targetFileId
+          )
+        } catch (_: Exception) {}
       }
     }
 
@@ -3563,6 +3609,16 @@ class EblRepository(
     applicationScope.launch {
       try {
         syncCustomerFileUpsertToGoogleSheets(updated)
+      } catch (_: Exception) {}
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "File Update: ${updated.customerName}",
+          body = smsMessage,
+          targetType = "USER",
+          targetValue = updated.assignedRmCode,
+          targetScreen = "CustomerList",
+          targetFileId = updated.fileId
+        )
       } catch (_: Exception) {}
     }
 
