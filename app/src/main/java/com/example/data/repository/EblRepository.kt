@@ -1411,7 +1411,11 @@ class EblRepository(
           val returnedStorage = rj.optString("storagePath")
           if (returnedUri.startsWith("http")) {
             database.importantDocumentDao().updateDocument(
-              doc.copy(fileUri = returnedUri, storagePath = returnedStorage.ifBlank { returnedUri })
+              doc.copy(fileUri = returnedUri, storagePath = returnedStorage.ifBlank { returnedUri }, isSynced = true)
+            )
+          } else {
+            database.importantDocumentDao().updateDocument(
+              doc.copy(isSynced = true)
             )
           }
         } catch (_: Exception) {}
@@ -3822,17 +3826,6 @@ class EblRepository(
             put("fileUri", att.fileUri)
             put("storagePath", att.storagePath)
           }
-          // If attachment file is not yet saved to Google Drive, upload base64 via Apps Script connector
-          if (!att.fileUri.startsWith("http")) {
-            val f = if (att.storagePath.isNotBlank()) java.io.File(att.storagePath) else null
-            if (f != null && f.exists() && f.length() > 0 && f.length() < 12 * 1024 * 1024) {
-              val b64 = com.example.util.AttachmentHelper.fileToBase64(f)
-              if (b64 != null) {
-                aObj.put("fileBase64", b64)
-                aObj.put("fileType", att.fileType)
-              }
-            }
-          }
           attachmentsArray.put(aObj)
         }
 
@@ -3952,16 +3945,6 @@ class EblRepository(
             put("uploaderRole", doc.uploaderRole)
             put("createdAt", DateUtils.formatDateTime(doc.createdAt))
             put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
-          }
-          if (!doc.fileUri.startsWith("http")) {
-            val f = if (doc.storagePath.isNotBlank()) java.io.File(doc.storagePath) else null
-            if (f != null && f.exists() && f.length() > 0 && f.length() < 12 * 1024 * 1024) {
-              val b64 = com.example.util.AttachmentHelper.fileToBase64(f)
-              if (b64 != null) {
-                dObj.put("fileBase64", b64)
-                dObj.put("fileType", doc.fileType)
-              }
-            }
           }
           docsArray.put(dObj)
         }
@@ -4989,8 +4972,9 @@ class EblRepository(
         continue
       }
 
-      // Check if duplicate in local database
-      val matchCount = if (sentTime > 0L) database.smsNotificationDao().countMatchingSms(recipientRm, sentTime, messageText) else 0
+      // Check if duplicate in local database within recent window
+      val dedupeAfter = if (sentTime > 0L) (sentTime - 10 * 60 * 1000L) else (now - 30 * 60 * 1000L)
+      val matchCount = database.smsNotificationDao().countRecentMatchingSms(recipientRm, messageText, dedupeAfter)
       val recipientName = obj.optString("recipientName", "").trim()
       val recipientMobile = obj.optString("recipientMobile", "").trim()
       val triggeredRole = obj.optString("triggeredByRole", "SYSTEM").trim()
@@ -5584,32 +5568,48 @@ class EblRepository(
 
           val alertMsg = "Google Sheet আপডেট: '${updated.customerName}' (CC: ${updated.ccNumber.ifBlank { updated.fileId }}) - $changeDesc"
 
-          val notifEntity = SmsNotificationEntity(
-            recipientRmCode = updated.assignedRmCode,
-            recipientMobile = updated.mobile,
-            recipientName = updated.customerName,
-            triggeredByRole = "Google Sheets",
-            triggeredByCode = "SHEET_SYNC",
-            actionType = "SHEET_UPDATE",
-            targetType = "CUSTOMER_FILE",
-            fileId = updated.fileId,
-            customerName = updated.customerName,
+          // Deduplication: prevent duplicate notifications within 15 minutes for the same RM, file, and message
+          val recentDedupeWindow = now - (15 * 60 * 1000L)
+          val alreadyNotified = database.smsNotificationDao().countRecentMatchingSms(
+            rmCode = updated.assignedRmCode,
             messageText = alertMsg,
-            sentTimestamp = now,
-            status = "DELIVERED",
-            isRead = false
-          )
-          database.smsNotificationDao().insertSms(notifEntity)
+            afterTimestamp = recentDedupeWindow
+          ) > 0 || database.smsNotificationDao().countRecentFileActionSms(
+            rmCode = updated.assignedRmCode,
+            fileId = updated.fileId,
+            actionType = "SHEET_UPDATE",
+            afterTimestamp = recentDedupeWindow
+          ) > 0
 
-          context?.let { ctx ->
-            NotificationHelper.sendRmFileUpdateNotification(
-              context = ctx,
-              targetRmCode = updated.assignedRmCode,
-              ccNumber = updated.ccNumber.ifBlank { updated.fileId },
+          if (!alreadyNotified) {
+            val notifEntity = SmsNotificationEntity(
+              recipientRmCode = updated.assignedRmCode,
+              recipientMobile = updated.mobile,
+              recipientName = updated.customerName,
+              triggeredByRole = "Google Sheets",
+              triggeredByCode = "SHEET_SYNC",
+              actionType = "SHEET_UPDATE",
+              targetType = "CUSTOMER_FILE",
+              fileId = updated.fileId,
               customerName = updated.customerName,
-              changeDetails = changeDesc,
-              updatedByRole = "Google Sheets"
+              messageText = alertMsg,
+              sentTimestamp = now,
+              status = "DELIVERED",
+              isRead = false
             )
+            database.smsNotificationDao().insertSms(notifEntity)
+
+            context?.let { ctx ->
+              NotificationHelper.sendRmFileUpdateNotification(
+                context = ctx,
+                targetRmCode = updated.assignedRmCode,
+                ccNumber = updated.ccNumber.ifBlank { updated.fileId },
+                customerName = updated.customerName,
+                changeDetails = changeDesc,
+                updatedByRole = "Google Sheets",
+                dedupeKey = "sheet_update_${updated.fileId}_${now / 60000}"
+              )
+            }
           }
         }
       } else {
@@ -5963,6 +5963,17 @@ class EblRepository(
     database.communicationDao().insertMessage(msg)
     applicationScope.launch {
       syncChatUpsertToGoogleSheets(msg)
+      try {
+        val targetType = if (recipientRmCode.isNullOrBlank()) "ALL" else "USER"
+        val targetVal = recipientRmCode ?: ""
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = if (recipientRmCode.isNullOrBlank()) "Team Hub: ${user.name}" else "${user.name} (${user.role})",
+          body = if (finalType == "PHOTO") "📷 Sent a photo" else messageText.trim(),
+          targetType = targetType,
+          targetValue = targetVal,
+          targetScreen = "CommunicationHub"
+        )
+      } catch (_: Exception) {}
     }
     Result.success(msg)
   }
@@ -6182,6 +6193,15 @@ class EblRepository(
     database.communicationDao().insertOrUpdateResponse(resp)
     applicationScope.launch {
       syncEventResponseUpsertToGoogleSheets(resp)
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "Event Submission: ${user.name}",
+          body = "${user.name} submitted for Event $eventId: ${resp.filesCount} files.",
+          targetType = "ROLE",
+          targetValue = "ADMIN",
+          targetScreen = "CommunicationHub"
+        )
+      } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -6354,6 +6374,17 @@ class EblRepository(
 
     // Direct synchronization of Document upsert to Google Sheets
     syncDocumentUpsertToGoogleSheets(entity)
+
+    applicationScope.launch {
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "New Document: ${entity.title}",
+          body = "Uploaded by ${currentUser.name} (${currentUser.role}). Category: ${entity.category}.",
+          targetType = "ALL",
+          targetScreen = "ImportantDocuments"
+        )
+      } catch (_: Exception) {}
+    }
 
     Result.success(entity)
   }

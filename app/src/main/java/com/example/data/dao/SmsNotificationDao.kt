@@ -50,4 +50,10 @@ interface SmsNotificationDao {
 
   @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND sentTimestamp = :timestamp AND messageText = :message")
   suspend fun countMatchingSms(rmCode: String, timestamp: Long, message: String): Int
+
+  @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND messageText = :messageText AND (sentTimestamp >= :afterTimestamp)")
+  suspend fun countRecentMatchingSms(rmCode: String, messageText: String, afterTimestamp: Long): Int
+
+  @Query("SELECT COUNT(*) FROM sms_notifications WHERE recipientRmCode = :rmCode AND fileId = :fileId AND actionType = :actionType AND (sentTimestamp >= :afterTimestamp)")
+  suspend fun countRecentFileActionSms(rmCode: String, fileId: String, actionType: String, afterTimestamp: Long): Int
 }

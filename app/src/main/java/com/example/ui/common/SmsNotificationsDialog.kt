@@ -90,15 +90,23 @@ fun SmsNotificationsDialog(
   val context = LocalContext.current
   val isDark = com.example.ui.theme.LocalAppTheme.current.isDark
 
-  val unreadCount = smsList.count { !it.isRead }
+  // Deduplicate identical alerts sent to the same recipient with same text within a 2-minute window
+  val dedupedSmsList = remember(smsList) {
+    smsList.distinctBy {
+      val bucket = it.sentTimestamp / (2 * 60 * 1000L)
+      "${it.recipientRmCode.trim().uppercase()}_${it.actionType.trim().uppercase()}_${it.fileId.orEmpty().trim().uppercase()}_${it.messageText.trim()}_$bucket"
+    }
+  }
 
-  val filteredList = smsList.filter { sms ->
+  val unreadCount = dedupedSmsList.count { !it.isRead }
+
+  val filteredList = dedupedSmsList.filter { sms ->
     // Category Filter
     val matchesCategory = when (selectedCategoryFilter) {
       "Unread" -> !sms.isRead
       "Transfers" -> sms.actionType.equals("TRANSFER", ignoreCase = true)
       "Deletions" -> sms.actionType.contains("DELETE", ignoreCase = true)
-      "Updates" -> sms.actionType.equals("UPDATE", ignoreCase = true)
+      "Updates" -> sms.actionType.equals("UPDATE", ignoreCase = true) || sms.actionType.contains("SHEET_UPDATE", ignoreCase = true)
       else -> true
     }
 
@@ -219,7 +227,7 @@ fun SmsNotificationsDialog(
             FilterChip(
               selected = selectedCategoryFilter == "All",
               onClick = { selectedCategoryFilter = "All" },
-              label = { Text("All (${smsList.size})", fontSize = 11.sp) },
+              label = { Text("All (${dedupedSmsList.size})", fontSize = 11.sp) },
               colors = FilterChipDefaults.filterChipColors(selectedContainerColor = EblNavyPrimary, selectedLabelColor = Color.White)
             )
           }
@@ -264,14 +272,14 @@ fun SmsNotificationsDialog(
         Spacer(modifier = Modifier.height(6.dp))
 
         // Action Toolbar: Mark Read / Clear SMS
-        if (smsList.isNotEmpty()) {
+        if (dedupedSmsList.isNotEmpty()) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
           ) {
             Text(
-              text = "Showing ${filteredList.size} of ${smsList.size} alerts",
+              text = "Showing ${filteredList.size} of ${dedupedSmsList.size} alerts",
               fontSize = 11.sp,
               color = Color.Gray
             )

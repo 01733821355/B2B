@@ -60,22 +60,32 @@ class EblFirebaseMessagingService : FirebaseMessagingService() {
         val now = DateUtils.currentDhakaMillis()
         val lastRm = db.appSettingDao().getSetting("last_logged_rm_code")?.settingValue?.trim() ?: "ALL"
 
-        val entity = SmsNotificationEntity(
-          recipientRmCode = data["recipientRmCode"] ?: lastRm,
-          recipientMobile = data["recipientMobile"] ?: "",
-          recipientName = data["recipientName"] ?: "Officer",
-          triggeredByRole = triggeredByRole,
-          triggeredByCode = triggeredByCode,
-          actionType = actionType,
-          targetType = if (!targetFileId.isNullOrBlank()) "CUSTOMER_FILE" else "SYSTEM_ALERT",
-          fileId = targetFileId ?: "",
-          customerName = data["customerName"] ?: "",
+        val targetRm = data["recipientRmCode"] ?: lastRm
+        val dedupeWindow = now - 10 * 60 * 1000L // 10 minutes
+        val alreadyExists = db.smsNotificationDao().countRecentMatchingSms(
+          rmCode = targetRm,
           messageText = body,
-          sentTimestamp = now,
-          status = "DELIVERED",
-          isRead = false
-        )
-        db.smsNotificationDao().insertSms(entity)
+          afterTimestamp = dedupeWindow
+        ) > 0
+
+        if (!alreadyExists) {
+          val entity = SmsNotificationEntity(
+            recipientRmCode = targetRm,
+            recipientMobile = data["recipientMobile"] ?: "",
+            recipientName = data["recipientName"] ?: "Officer",
+            triggeredByRole = triggeredByRole,
+            triggeredByCode = triggeredByCode,
+            actionType = actionType,
+            targetType = if (!targetFileId.isNullOrBlank()) "CUSTOMER_FILE" else "SYSTEM_ALERT",
+            fileId = targetFileId ?: "",
+            customerName = data["customerName"] ?: "",
+            messageText = body,
+            sentTimestamp = now,
+            status = "DELIVERED",
+            isRead = false
+          )
+          db.smsNotificationDao().insertSms(entity)
+        }
       } catch (e: Exception) {
         Log.e(TAG, "Error saving incoming push to SMS history", e)
       }

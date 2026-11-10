@@ -160,8 +160,12 @@ object FcmTokenManager {
     targetFileId: String? = null,
     extras: Map<String, String>? = null
   ): Result<String> = withContext(Dispatchers.IO) {
-    try {
-      val webAppUrl = "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      val dbUrl = if (context != null) {
+        try {
+          AppDatabase.getDatabase(context).appSettingDao().getSyncStatus()?.appsScriptUrl?.ifBlank { null }
+        } catch (_: Exception) { null }
+      } else null
+      val webAppUrl = dbUrl ?: "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
 
       val payload = JSONObject().apply {
         put("action", "SEND_FCM_PUSH")
