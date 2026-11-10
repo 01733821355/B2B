@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import java.io.File
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -748,7 +749,7 @@ fun CustomerFileFormScreen(
                   onValueChange = { assignedRmCode = it.trim().uppercase() },
                   label = { Text("Enter RM Officer Code (e.g. 104393)") },
                   placeholder = { Text("e.g. 104393") },
-                  leadingIcon = { Icon(Icons.Default.Badge, contentDescription = null, tint = EblNavyPrimary) },
+                  leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = EblNavyPrimary) },
                   singleLine = true,
                   modifier = Modifier.fillMaxWidth().testTag("input_manual_rm_code"),
                   colors = OutlinedTextFieldDefaults.colors(

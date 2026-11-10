@@ -1,6 +1,6 @@
 package com.example.ui.common
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -13,7 +13,7 @@ fun EblPullRefreshBox(
   isRefreshing: Boolean,
   onRefresh: () -> Unit,
   modifier: Modifier = Modifier,
-  content: @Composable () -> Unit
+  content: @Composable BoxScope.() -> Unit
 ) {
   PullToRefreshBox(
     isRefreshing = isRefreshing,

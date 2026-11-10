@@ -64,6 +64,53 @@ jobs:
             fi
           fi
 
+          # Pre-seed app/google-services.json if missing on GitHub runner
+          if [ ! -f "app/google-services.json" ]; then
+            echo "Pre-seeding app/google-services.json on runner..."
+            mkdir -p app
+            cat << 'EOF' > app/google-services.json
+{
+  "project_info": {
+    "project_number": "801351587399",
+    "project_id": "gen-lang-client-0246999405",
+    "storage_bucket": "gen-lang-client-0246999405.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:801351587399:android:d50acfb4b59a41d1684362",
+        "android_client_info": {
+          "package_name": "com.example"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "801351587399-mn7anb1ufddcnvem919g9tp6cfkm3un0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjR0KehFE9ewrZwwIeyXcOWpsSUAR22g4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "801351587399-mn7anb1ufddcnvem919g9tp6cfkm3un0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
+EOF
+          fi
+
           # Pre-seed ALL accepted license hashes in all standard locations
           mkdir -p "$SDK_ROOT/licenses" "$HOME/.android/licenses"
           printf "8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n24333f8a63b6825ea9c5514f83c2829b004d1fee\nc084f74853edd93da6433e3d173829a86a38a3a1\n" | tee "$SDK_ROOT/licenses/android-sdk-license" > "$HOME/.android/licenses/android-sdk-license"
@@ -144,11 +191,12 @@ jobs:
           export KEYSTORE_PATH="$(pwd)/my-upload-key.jks"
           export STORE_PASSWORD="android"
           export KEY_PASSWORD="android"
+          export GRADLE_OPTS="-Djava.awt.headless=true -Dfile.encoding=UTF-8"
 
           if command -v gradle >/dev/null 2>&1; then
-            gradle :app:assembleDebug --stacktrace --no-daemon
+            gradle :app:assembleDebug --stacktrace --no-daemon -Djava.awt.headless=true
           else
-            ./gradlew :app:assembleDebug --stacktrace --no-daemon
+            ./gradlew :app:assembleDebug --stacktrace --no-daemon -Djava.awt.headless=true
           fi
 
       - name: Verify APK Output

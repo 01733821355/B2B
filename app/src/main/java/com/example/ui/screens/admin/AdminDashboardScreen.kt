@@ -426,25 +426,30 @@ fun AdminDashboardScreen(
       }
     }
 
-    FloatingActionButton(
-      onClick = { onNavigate(Screen.CustomerForm(null)) },
-      containerColor = EblNavyPrimary,
-      contentColor = Color.White,
-      modifier = Modifier
-        .align(Alignment.BottomEnd)
-        .padding(16.dp)
-        .testTag("admin_fab_add_customer")
-    ) {
-      Row(
-        modifier = Modifier.padding(horizontal = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Icon(Icons.Default.Add, contentDescription = "Add Customer")
-        Spacer(modifier = Modifier.width(4.dp))
-        Text("New File", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-      }
+    item {
+      Spacer(modifier = Modifier.height(28.dp))
     }
   }
+
+  FloatingActionButton(
+    onClick = { onNavigate(Screen.CustomerForm(null)) },
+    containerColor = EblNavyPrimary,
+    contentColor = Color.White,
+    modifier = Modifier
+      .align(Alignment.BottomEnd)
+      .padding(16.dp)
+      .testTag("admin_fab_add_customer")
+  ) {
+    Row(
+      modifier = Modifier.padding(horizontal = 12.dp),
+      verticalAlignment = Alignment.CenterVertically
+    ) {
+      Icon(Icons.Default.Add, contentDescription = "Add Customer")
+      Spacer(modifier = Modifier.width(4.dp))
+      Text("New File", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+    }
+  }
+}
 
   // Set RM Targets Dialog for Admin
   if (targetSettingRow != null) {
