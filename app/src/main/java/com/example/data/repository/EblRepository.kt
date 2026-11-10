@@ -4314,13 +4314,14 @@ class EblRepository(
         val lastLocalPassChangeTime = database.appSettingDao().getSetting("RM_PASS_UPDATED_AT_$code")?.updatedAt ?: 0L
         val isRecentLocalPassChange = (now - lastLocalPassChangeTime) < 300_000L // 5 minutes immunity window
 
-        val hashToUse = if (isRecentLocalPassChange) existing.passwordHash
+        val isBogusSheetHash = sheetHash.isBlank() || sheetHash.matches(Regex("^[0-9]{1,3}$")) || sheetHash == ccTarget.toString() || sheetHash == corpTarget.toString() || sheetHash == b2bTarget.toString()
+        val hashToUse = if (isRecentLocalPassChange || isBogusSheetHash) existing.passwordHash
                         else if (sheetHash.isNotBlank() && sheetSalt.isNotBlank()) sheetHash
                         else if (sheetHash.isNotBlank()) SecurityUtils.hashPassword(sheetHash, existing.salt.ifBlank { "salt_$code" })
                         else existing.passwordHash
 
-        val saltToUse = if (isRecentLocalPassChange) existing.salt
-                        else if (sheetSalt.isNotBlank()) sheetSalt
+        val saltToUse = if (isRecentLocalPassChange || isBogusSheetHash) existing.salt
+                        else if (sheetSalt.isNotBlank() && !sheetSalt.matches(Regex("^[0-9]{1,3}$"))) sheetSalt
                         else existing.salt
 
         val sheetLat = if (obj.has("lastLatitude")) obj.optDouble("lastLatitude", 0.0) else obj.optDouble("latitude", 0.0)
@@ -5816,8 +5817,9 @@ class EblRepository(
     return sb.toString()
   }
 
-  private fun escapeCsv(value: String): String {
-    val escaped = value.replace("\"", "\"\"")
+  private fun escapeCsv(value: String?): String {
+    val safe = value ?: ""
+    val escaped = safe.replace("\"", "\"\"")
     return if (escaped.contains(",") || escaped.contains("\n") || escaped.contains("\"")) {
       "\"$escaped\""
     } else {

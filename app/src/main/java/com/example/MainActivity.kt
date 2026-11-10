@@ -646,7 +646,8 @@ fun EblMainApp(viewModel: AppViewModel) {
           is Screen.RmMapping -> {
             RmMappingScreen(
               viewModel = viewModel,
-              currentUser = user
+              currentUser = user,
+              onNavigateBack = { viewModel.navigateBack() }
             )
           }
 

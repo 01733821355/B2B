@@ -1,5 +1,6 @@
 package com.example.ui.screens.admin
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
@@ -75,8 +77,11 @@ import com.example.util.SecurityUtils
 fun RmMappingScreen(
   viewModel: AppViewModel,
   currentUser: UserEntity,
+  onNavigateBack: () -> Unit = { viewModel.navigateBack() },
   modifier: Modifier = Modifier
 ) {
+  BackHandler { onNavigateBack() }
+
   val allOfficers by viewModel.allOfficers.collectAsState()
   val allMentors by viewModel.allMentors.collectAsState()
   val allRms by viewModel.allRms.collectAsState()
@@ -96,19 +101,26 @@ fun RmMappingScreen(
 
   val sourceStaffList = remember(allOfficers, allRms, selectedRoleTab) {
     val base = if (allOfficers.isNotEmpty()) allOfficers else allRms
-    when (selectedRoleTab) {
+    val filtered = when (selectedRoleTab) {
       "RM" -> base.filter { it.role.equals("RM", true) }
       "MENTOR" -> base.filter { it.role.equals("MENTOR", true) }
       "ADMIN" -> base.filter { it.role.equals("ADMIN", true) }
       else -> base
     }
+    filtered.distinctBy { it.rmCode.trim().uppercase() }
   }
 
-  val filteredRms = sourceStaffList.filter { rm ->
-    if (searchRmQuery.isBlank()) true
-    else {
+  val filteredRms = remember(sourceStaffList, searchRmQuery) {
+    if (searchRmQuery.isBlank()) {
+      sourceStaffList
+    } else {
       val q = searchRmQuery.lowercase()
-      rm.name.lowercase().contains(q) || rm.rmCode.lowercase().contains(q) || rm.mobile.contains(q) || rm.role.lowercase().contains(q)
+      sourceStaffList.filter { rm ->
+        rm.name.lowercase().contains(q) ||
+        rm.rmCode.lowercase().contains(q) ||
+        rm.mobile.contains(q) ||
+        rm.role.lowercase().contains(q)
+      }
     }
   }
 
@@ -132,20 +144,36 @@ fun RmMappingScreen(
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
-          Column(modifier = Modifier.weight(1f)) {
-            Text(
-              text = "RM & Mentor Management",
-              fontSize = 18.sp,
-              fontWeight = FontWeight.Bold,
-              color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis
-            )
-            Text(
-              text = "${allRms.size} RMs • ${allMentors.size} Mentors registered",
-              fontSize = 11.sp,
-              color = Color.Gray
-            )
+          Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+          ) {
+            IconButton(
+              onClick = onNavigateBack,
+              modifier = Modifier.size(36.dp).testTag("btn_rm_mapping_back")
+            ) {
+              Icon(
+                Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
+              )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            Column {
+              Text(
+                text = "RM & Mentor Management",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+              )
+              Text(
+                text = "${allRms.size} RMs • ${allMentors.size} Mentors registered",
+                fontSize = 11.sp,
+                color = Color.Gray
+              )
+            }
           }
 
           OutlinedButton(
@@ -223,13 +251,16 @@ fun RmMappingScreen(
 
     Spacer(modifier = Modifier.height(10.dp))
 
-    // List of RMs
+    // List of RMs with unique distinct key to prevent Compose key collision crashes
     LazyColumn(
       modifier = Modifier
         .fillMaxSize()
         .padding(horizontal = 16.dp)
     ) {
-      items(filteredRms, key = { it.rmCode }) { rm ->
+      items(
+        items = filteredRms,
+        key = { rm -> "staff_${rm.role}_${rm.rmCode.trim().uppercase()}" }
+      ) { rm ->
         Card(
           modifier = Modifier
             .fillMaxWidth()
@@ -796,21 +827,25 @@ fun RmMappingScreen(
   }
 
   // Set RM Targets Dialog
-  if (settingTargetsRm != null) {
-    val existingTarget = allTargets.find { it.rmCode == settingTargetsRm!!.rmCode }
-    var ccTargetInput by remember { mutableStateOf((existingTarget?.creditCardTarget ?: 20).toString()) }
-    var corpTargetInput by remember { mutableStateOf((existingTarget?.corporateCardTarget ?: 10).toString()) }
-    var b2bTargetInput by remember { mutableStateOf((existingTarget?.b2bTarget ?: 15).toString()) }
-
-    val dialogRmPerf = rmPerformanceList.find { it.rmCode == settingTargetsRm!!.rmCode }
+  val targetRm = settingTargetsRm
+  if (targetRm != null) {
+    val targetCode = targetRm.rmCode
+    val existingTarget = allTargets.find { it.rmCode.equals(targetCode, ignoreCase = true) }
+    val dialogRmPerf = rmPerformanceList.find { it.rmCode.equals(targetCode, ignoreCase = true) }
     val targetCriteria by viewModel.targetCriteriaOptions.collectAsState()
-    val customTargets by viewModel.getRmCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets?.get("ALL") ?: emptyMap())
-    val allQuarterCustomTargets by viewModel.getRmAllQuarterCustomTargetsFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets ?: emptyMap())
-    val assignedCriteria by viewModel.getRmAssignedCriteriaFlow(settingTargetsRm!!.rmCode).collectAsState(initial = dialogRmPerf?.assignedCriteria ?: emptyList())
+
+    val customTargetsFlow = remember(targetCode) { viewModel.getRmCustomTargetsFlow(targetCode) }
+    val customTargets by customTargetsFlow.collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets?.get("ALL") ?: emptyMap())
+
+    val allQuarterCustomTargetsFlow = remember(targetCode) { viewModel.getRmAllQuarterCustomTargetsFlow(targetCode) }
+    val allQuarterCustomTargets by allQuarterCustomTargetsFlow.collectAsState(initial = dialogRmPerf?.allQuarterCustomTargets ?: emptyMap())
+
+    val assignedCriteriaFlow = remember(targetCode) { viewModel.getRmAssignedCriteriaFlow(targetCode) }
+    val assignedCriteria by assignedCriteriaFlow.collectAsState(initial = dialogRmPerf?.assignedCriteria ?: emptyList())
 
     com.example.ui.common.QuarterTargetSettingDialog(
-      rmCode = settingTargetsRm!!.rmCode,
-      rmName = settingTargetsRm!!.name,
+      rmCode = targetCode,
+      rmName = targetRm.name,
       currentTarget = existingTarget,
       allCriteria = targetCriteria,
       assignedCriteria = if (assignedCriteria.isNotEmpty()) assignedCriteria else (dialogRmPerf?.assignedCriteria ?: emptyList()),
@@ -820,13 +855,13 @@ fun RmMappingScreen(
       allQuarterCustomTargets = if (allQuarterCustomTargets.isNotEmpty()) allQuarterCustomTargets else (dialogRmPerf?.allQuarterCustomTargets ?: emptyMap()),
       onDismiss = { settingTargetsRm = null },
       onSave = { quarter, year, cc, corp, b2b ->
-        viewModel.setRmQuarterTargets(settingTargetsRm!!.rmCode, quarter, year, cc, corp, b2b) { success, _ ->
+        viewModel.setRmQuarterTargets(targetCode, quarter, year, cc, corp, b2b) { success, _ ->
           if (success) settingTargetsRm = null
         }
       },
       onSaveAllQuarters = { year, q1Cc, q1Corp, q1B2b, q2Cc, q2Corp, q2B2b, q3Cc, q3Corp, q3B2b, q4Cc, q4Corp, q4B2b ->
         viewModel.setRmAllQuarterTargets(
-          rmCode = settingTargetsRm!!.rmCode,
+          rmCode = targetCode,
           year = year,
           q1Cc = q1Cc, q1Corp = q1Corp, q1B2b = q1B2b,
           q2Cc = q2Cc, q2Corp = q2Corp, q2B2b = q2B2b,
@@ -837,16 +872,16 @@ fun RmMappingScreen(
         }
       },
       onSaveCustomTargets = { quarter, customMap ->
-        viewModel.saveRmCustomTargets(settingTargetsRm!!.rmCode, customMap, quarter)
+        viewModel.saveRmCustomTargets(targetCode, customMap, quarter)
       },
       onSaveAllQuarterCustomTargets = { quarterlyMap ->
-        viewModel.saveRmCustomTargetsAllQuarters(settingTargetsRm!!.rmCode, quarterlyMap)
+        viewModel.saveRmCustomTargetsAllQuarters(targetCode, quarterlyMap)
       },
       onSaveAssignedCriteria = { assignedList ->
-        viewModel.saveRmAssignedCriteria(settingTargetsRm!!.rmCode, assignedList)
+        viewModel.saveRmAssignedCriteria(targetCode, assignedList)
       },
       onSaveAllTargetsUnified = { year, quarterlyMap, assignedList ->
-        viewModel.saveAllQuarterTargetsUnified(settingTargetsRm!!.rmCode, year, quarterlyMap, assignedList) { success ->
+        viewModel.saveAllQuarterTargetsUnified(targetCode, year, quarterlyMap, assignedList) { success ->
           if (success) settingTargetsRm = null
         }
       }
