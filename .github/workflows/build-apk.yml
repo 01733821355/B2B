@@ -68,47 +68,7 @@ jobs:
           if [ ! -f "app/google-services.json" ]; then
             echo "Pre-seeding app/google-services.json on runner..."
             mkdir -p app
-            cat << 'EOF' > app/google-services.json
-{
-  "project_info": {
-    "project_number": "801351587399",
-    "project_id": "gen-lang-client-0246999405",
-    "storage_bucket": "gen-lang-client-0246999405.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:801351587399:android:d50acfb4b59a41d1684362",
-        "android_client_info": {
-          "package_name": "com.example"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "801351587399-mn7anb1ufddcnvem919g9tp6cfkm3un0.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyCjR0KehFE9ewrZwwIeyXcOWpsSUAR22g4"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "801351587399-mn7anb1ufddcnvem919g9tp6cfkm3un0.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
-EOF
+            echo "ewogICJwcm9qZWN0X2luZm8iOiB7CiAgICAicHJvamVjdF9udW1iZXIiOiAiODAxMzUxNTg3Mzk5IiwKICAgICJwcm9qZWN0X2lkIjogImdlbi1sYW5nLWNsaWVudC0wMjQ2OTk5NDA1IiwKICAgICJzdG9yYWdlX2J1Y2tldCI6ICJnZW4tbGFuZy1jbGllbnQtMDI0Njk5OTQwNS5maXJlYmFzZXN0b3JhZ2UuYXBwIgogIH0sCiAgImNsaWVudCI6IFsKICAgIHsKICAgICAgImNsaWVudF9pbmZvIjogewogICAgICAgICJtb2JpbGVzZGtfYXBwX2lkIjogIjE6ODAxMzUxNTg3Mzk5OmFuZHJvaWQ6ZDUwYWNmYjRiNTlhNDFkMTY4NDM2MiIsCiAgICAgICAgImFuZHJvaWRfY2xpZW50X2luZm8iOiB7CiAgICAgICAgICAicGFja2FnZV9uYW1lIjogImNvbS5leGFtcGxlIgogICAgICAgIH0KICAgICAgfSwKICAgICAgIm9hdXRoX2NsaWVudCI6IFsKICAgICAgICB7CiAgICAgICAgICAiY2xpZW50X2lkIjogIjgwMTM1MTU4NzM5OS1tbjdhbmIxdWZkZGNudmVtOTE5Zzl0cDZjZmttM3VuMC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAiY2xpZW50X3R5cGUiOiAzCiAgICAgICAgfQogICAgICBdLAogICAgICAiYXBpX2tleSI6IFsKICAgICAgICB7CiAgICAgICAgICAiY3VycmVudF9rZXkiOiAiQUl6YVN5Q2pSMEtlaEZFOWV3clp3d0lleVhjT1dwc1NVQVIyMmc0IgogICAgICAgIH0KICAgICAgXSwKICAgICAgInNlcnZpY2VzIjogewogICAgICAgICJhcHBpbnZpdGVfc2VydmljZSI6IHsKICAgICAgICAgICJvdGhlcl9wbGF0Zm9ybV9vYXV0aF9jbGllbnQiOiBbCiAgICAgICAgICAgIHsKICAgICAgICAgICAgICAiY2xpZW50X2lkIjogIjgwMTM1MTU4NzM5OS1tbjdhbmIxdWZkZGNudmVtOTE5Zzl0cDZjZmttM3VuMC5hcHBzLmdvb2dsZXVzZXJjb250ZW50LmNvbSIsCiAgICAgICAgICAgICAgImNsaWVudF90eXBlIjogMwogICAgICAgICAgICB9CiAgICAgICAgICBdCiAgICAgICAgfQogICAgICB9CiAgICB9CiAgXSwKICAiY29uZmlndXJhdGlvbl92ZXJzaW9uIjogIjEiCn0K" | base64 -d > app/google-services.json
           fi
 
           # Pre-seed ALL accepted license hashes in all standard locations
