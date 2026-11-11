@@ -491,14 +491,17 @@ function saveFileToDrive(base64Data, fileName, mimeType) {
     if (cleanBase64.indexOf(',') > -1) {
       cleanBase64 = cleanBase64.split(',')[1];
     }
+    // Clean all whitespace, newlines, and carriage returns so base64Decode succeeds 100%
+    cleanBase64 = cleanBase64.replace(/\s+/g, '');
     var decoded = Utilities.base64Decode(cleanBase64);
     var mType = mimeType || 'image/jpeg';
-    var fName = fileName || ('file_' + new Date().getTime() + '.jpg');
+    var fName = fileName || ('file_' + new Date().getTime() + (mType.indexOf('image') > -1 ? '.jpg' : '.pdf'));
     var blob = Utilities.newBlob(decoded, mType, fName);
     var file = targetFolder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    // Safe sharing: do not throw error if domain policy limits public sharing
+    try { file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (se) {}
     var fileId = file.getId();
-    var directUrl = "https://lh3.googleusercontent.com/d/" + fileId;
+    var directUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w1200";
     var downloadUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
     var viewUrl = file.getUrl();
     var preferredUrl = (mType.indexOf('image') > -1) ? directUrl : downloadUrl;
@@ -1664,6 +1667,13 @@ function doPost(e) {
             break;
           }
         }
+        var chatAttachUrl = msgU.attachmentUrl || '';
+        if (msgU.fileBase64 && (!chatAttachUrl || chatAttachUrl.indexOf('http') !== 0)) {
+          var cResU = saveFileToDrive(msgU.fileBase64, msgU.fileName || ('chat_' + msgIdU + '.jpg'), msgU.fileType || 'image/jpeg');
+          if (cResU && cResU.success) {
+            chatAttachUrl = cResU.url;
+          }
+        }
         var msgRowU = [
           msgIdU,
           msgU.senderRmCode || '',
@@ -1671,10 +1681,10 @@ function doPost(e) {
           msgU.senderRole || '',
           msgU.recipientRmCode || '',
           msgU.messageText || '',
-          msgU.messageType || 'TEXT',
+          msgU.messageType || (chatAttachUrl ? 'IMAGE' : 'TEXT'),
           msgU.eventId || '',
           msgU.timestamp || Utilities.formatDate(new Date(), "GMT+6", "yyyy-MM-dd HH:mm:ss"),
-          msgU.attachmentUrl || '',
+          chatAttachUrl,
           msgU.replyToMessageId || '',
           msgU.replyToSenderName || '',
           msgU.replyToText || ''

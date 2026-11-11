@@ -1679,7 +1679,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       isRefreshing.value = true
       try {
-        eblRepository.pullDataFromGoogleSheets()
+        eblRepository.pullDataFromGoogleSheets(force = true)
       } catch (_: Exception) {} finally {
         isRefreshing.value = false
         onComplete?.invoke()

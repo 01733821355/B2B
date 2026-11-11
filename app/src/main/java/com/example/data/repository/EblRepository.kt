@@ -1005,17 +1005,71 @@ class EblRepository(
         )
       }
 
-      // Dispatch Instant Push to assigned RM
+      // Dispatch Instant Push Notifications & Alerts based on user roles:
+      // 1. When an RM updates a file: Admin and Mentor receive instant push notifications with sound!
+      // 2. When Admin or Mentor updates an RM's file: The assigned RM receives instant push notification with sound!
       applicationScope.launch {
         try {
-          com.example.fcm.FcmTokenManager.sendInstantPush(
-            title = if (hasRmChanged) "File Reassigned: $customerName" else "File Update: $customerName",
-            body = smsMessage,
-            targetType = "USER",
-            targetValue = resolvedRmCode,
-            targetScreen = "CustomerList",
-            targetFileId = targetFileId
-          )
+          if (currentUser.role == "RM") {
+            // RM updated customer file: notify Admin & Mentor
+            com.example.fcm.FcmTokenManager.sendInstantPush(
+              title = "RM File Updated: $customerName",
+              body = "${currentUser.name} (RM: ${currentUser.rmCode}) updated file to '$presStatus'.",
+              targetType = "ROLE",
+              targetValue = "ADMIN",
+              targetScreen = "CustomerList",
+              targetFileId = targetFileId
+            )
+            com.example.fcm.FcmTokenManager.sendInstantPush(
+              title = "RM File Updated: $customerName",
+              body = "${currentUser.name} (RM: ${currentUser.rmCode}) updated file to '$presStatus'.",
+              targetType = "ROLE",
+              targetValue = "MENTOR",
+              targetScreen = "CustomerList",
+              targetFileId = targetFileId
+            )
+            // Save in-app notification for Admin & Mentor
+            val managers = database.userDao().getAllUsers().filter { it.role == "ADMIN" || it.role == "MENTOR" }
+            for (mgr in managers) {
+              database.smsNotificationDao().insertSms(
+                SmsNotificationEntity(
+                  recipientRmCode = mgr.rmCode,
+                  recipientMobile = mgr.mobile,
+                  recipientName = mgr.name,
+                  triggeredByRole = currentUser.role,
+                  triggeredByCode = currentUser.rmCode,
+                  actionType = "UPDATE",
+                  targetType = "CUSTOMER_FILE",
+                  fileId = targetFileId,
+                  customerName = customerName,
+                  messageText = "RM ${currentUser.name} (${currentUser.rmCode}) updated file '$customerName' to '$presStatus'. Time: $formattedTime",
+                  sentTimestamp = now,
+                  status = "DELIVERED",
+                  isRead = false
+                )
+              )
+            }
+          } else {
+            // Admin or Mentor updated RM file: notify assigned RM
+            com.example.fcm.FcmTokenManager.sendInstantPush(
+              title = if (hasRmChanged) "File Reassigned: $customerName" else "File Update: $customerName",
+              body = smsMessage,
+              targetType = "USER",
+              targetValue = resolvedRmCode,
+              targetScreen = "CustomerList",
+              targetFileId = targetFileId
+            )
+            if (hasRmChanged && existing.assignedRmCode.isNotBlank() && !existing.assignedRmCode.equals(resolvedRmCode, ignoreCase = true)) {
+              com.example.fcm.FcmTokenManager.sendInstantPush(
+                title = "File Transferred: $customerName",
+                body = "Your file '$customerName' was transferred to $resolvedRmCode by ${currentUser.name} (${currentUser.role}).",
+                targetType = "USER",
+                targetValue = existing.assignedRmCode,
+                targetScreen = "CustomerList",
+                targetFileId = targetFileId
+              )
+            }
+          }
         } catch (_: Exception) {}
       }
     }
@@ -1384,13 +1438,12 @@ class EblRepository(
         put("createdAt", DateUtils.formatDateTime(doc.createdAt))
         put("updatedAt", DateUtils.formatDateTime(doc.updatedAt))
 
-        if (doc.storagePath.isNotBlank()) {
-          val localF = java.io.File(doc.storagePath)
-          if (localF.exists() && localF.length() > 0) {
-            val b64 = com.example.util.AttachmentHelper.fileToBase64(localF)
-            if (b64 != null) {
-              put("fileBase64", b64)
-            }
+        val localDocFile = (if (doc.storagePath.isNotBlank() && !doc.storagePath.startsWith("http")) java.io.File(doc.storagePath) else null)
+          ?: (if (doc.fileUri.isNotBlank() && !doc.fileUri.startsWith("http")) java.io.File(doc.fileUri) else null)
+        if (localDocFile != null && localDocFile.exists() && localDocFile.length() > 0) {
+          val b64 = com.example.util.AttachmentHelper.fileToBase64(localDocFile)
+          if (b64 != null) {
+            put("fileBase64", b64)
           }
         }
       }
@@ -1445,8 +1498,13 @@ class EblRepository(
         put("storagePath", att.storagePath)
         put("uploadedBy", att.uploadedBy)
         put("uploadedAt", DateUtils.formatDateTime(att.uploadedAt))
-        if (!fileBase64.isNullOrBlank()) {
-          put("fileBase64", fileBase64)
+        val effectiveB64 = fileBase64 ?: run {
+          val f = (if (att.storagePath.isNotBlank() && !att.storagePath.startsWith("http")) java.io.File(att.storagePath) else null)
+            ?: (if (att.fileUri.isNotBlank() && !att.fileUri.startsWith("http")) java.io.File(att.fileUri) else null)
+          if (f != null && f.exists() && f.length() > 0) com.example.util.AttachmentHelper.fileToBase64(f) else null
+        }
+        if (!effectiveB64.isNullOrBlank()) {
+          put("fileBase64", effectiveB64)
         }
       }
 
@@ -1854,6 +1912,18 @@ class EblRepository(
         changeDetails = "File DELETED by ${currentUser.name} (${currentUser.role})",
         updatedByRole = currentUser.role
       )
+    }
+
+    applicationScope.launch {
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "File Deleted: ${file.customerName}",
+          body = "File $fileId was deleted by ${currentUser.name} (${currentUser.role}).",
+          targetType = "USER",
+          targetValue = file.assignedRmCode,
+          targetScreen = "CustomerList"
+        )
+      } catch (_: Exception) {}
     }
 
     updatePendingSyncCount()
@@ -2899,6 +2969,21 @@ class EblRepository(
     }
     applicationScope.launch {
       syncSettingUpsertToGoogleSheets(key, value)
+      try {
+        val friendlyTitle = when (key) {
+          "PRODUCT_TYPES" -> "Product Types Updated"
+          "PENDING_DOCS_LIST" -> "Pending Documents List Updated"
+          "FILE_STATUSES_LIST" -> "Application Status Categories Updated"
+          "TARGET_CRITERIA_LIST" -> "Target Criteria Updated"
+          else -> "App Settings Updated: $key"
+        }
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = friendlyTitle,
+          body = "Updated by ${currentUser.name} (${currentUser.role}). Changes applied universally.",
+          targetType = "ALL",
+          targetScreen = "AppSettings"
+        )
+      } catch (_: Exception) {}
     }
     Result.success(Unit)
   }
@@ -3004,7 +3089,17 @@ class EblRepository(
         updatedAt = now
       )
     )
-    applicationScope.launch { syncSettingUpsertToGoogleSheets("FILE_STATUSES_LIST", finalVal) }
+    applicationScope.launch {
+      syncSettingUpsertToGoogleSheets("FILE_STATUSES_LIST", finalVal)
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "Application Statuses Updated",
+          body = "Status categories updated universally by ${currentUser.name} (${currentUser.role}).",
+          targetType = "ALL",
+          targetScreen = "AppSettings"
+        )
+      } catch (_: Exception) {}
+    }
     Result.success(Unit)
   }
 
@@ -3749,9 +3844,12 @@ class EblRepository(
         val hasFtrKey = allSettings.any { it.settingKey == "Checklist Footer" }
 
         for (s in allSettings) {
-          // Requirement 3: Kono button ba command chara app thake data sheet a jabe na.
-          // Never push default pre-set SYSTEM settings or GoogleSheets_Universal pulled settings back to sheet!
-          if (s.updatedBy == "SYSTEM" || s.updatedBy == "GoogleSheets_Universal") continue
+          // Essential settings (product types, pending docs, file statuses, target criteria) must always be synced to Universal_Settings
+          val isEssentialUniversalSetting = s.settingKey in listOf(
+            "PRODUCT_TYPES", "PENDING_DOCS_LIST", "FILE_STATUSES_LIST", "TARGET_CRITERIA_LIST",
+            "Checklist Header", "Checklist Footer", "CHECKLIST_CUSTOM_PRESETS_LIST"
+          )
+          if (!isEssentialUniversalSetting && (s.updatedBy == "SYSTEM" || s.updatedBy == "GoogleSheets_Universal")) continue
           if (s.settingKey.uppercase() in delPresetSet) continue
           // Filter internal password update sync state and duplicate legacy template keys
           if (s.settingKey.startsWith("RM_PASS_UPDATED_AT_")) continue
@@ -4985,9 +5083,10 @@ class EblRepository(
         continue
       }
 
-      // Check if duplicate in local database within recent window
-      val dedupeAfter = if (sentTime > 0L) (sentTime - 10 * 60 * 1000L) else (now - 30 * 60 * 1000L)
+      // Check if duplicate in local database within recent window (prevent duplicate notifications)
+      val dedupeAfter = if (sentTime > 0L) (sentTime - 15 * 60 * 1000L) else (now - 30 * 60 * 1000L)
       val matchCount = database.smsNotificationDao().countRecentMatchingSms(recipientRm, messageText, dedupeAfter)
+      val globalMatch = database.smsNotificationDao().countRecentGlobalMatchingSms(messageText, dedupeAfter)
       val recipientName = obj.optString("recipientName", "").trim()
       val recipientMobile = obj.optString("recipientMobile", "").trim()
       val triggeredRole = obj.optString("triggeredByRole", "SYSTEM").trim()
@@ -4995,7 +5094,7 @@ class EblRepository(
       val actionType = obj.optString("actionType", "UPDATE").trim()
       val status = obj.optString("status", "DELIVERED").trim()
 
-      if (matchCount == 0) {
+      if (matchCount == 0 && globalMatch == 0) {
         val entity = SmsNotificationEntity(
           recipientRmCode = recipientRm,
           recipientMobile = recipientMobile,
@@ -5581,18 +5680,16 @@ class EblRepository(
 
           val alertMsg = "Google Sheet আপডেট: '${updated.customerName}' (CC: ${updated.ccNumber.ifBlank { updated.fileId }}) - $changeDesc"
 
-          // Deduplication: prevent duplicate notifications within 15 minutes for the same RM, file, and message
-          val recentDedupeWindow = now - (15 * 60 * 1000L)
-          val alreadyNotified = database.smsNotificationDao().countRecentMatchingSms(
-            rmCode = updated.assignedRmCode,
+          // Deduplication: prevent duplicate notifications within 30 minutes for the same RM, file, and message
+          val recentDedupeWindow = now - (30 * 60 * 1000L)
+          val alreadyNotified = database.smsNotificationDao().countRecentGlobalMatchingSms(
             messageText = alertMsg,
             afterTimestamp = recentDedupeWindow
-          ) > 0 || database.smsNotificationDao().countRecentFileActionSms(
-            rmCode = updated.assignedRmCode,
+          ) > 0 || (updated.fileId.isNotBlank() && database.smsNotificationDao().countRecentGlobalFileActionSms(
             fileId = updated.fileId,
             actionType = "SHEET_UPDATE",
             afterTimestamp = recentDedupeWindow
-          ) > 0
+          ) > 0)
 
           if (!alreadyNotified) {
             val notifEntity = SmsNotificationEntity(
@@ -6104,6 +6201,14 @@ class EblRepository(
     )
     applicationScope.launch {
       syncEventUpsertToGoogleSheets(event)
+      try {
+        com.example.fcm.FcmTokenManager.sendInstantPush(
+          title = "New Team Event: ${event.title}",
+          body = "${event.description.take(120)}. Target: ${event.targetDate}.",
+          targetType = "ALL",
+          targetScreen = "CommunicationHub"
+        )
+      } catch (_: Exception) {}
     }
     context?.let { ctx ->
       NotificationHelper.sendNewEventNotification(

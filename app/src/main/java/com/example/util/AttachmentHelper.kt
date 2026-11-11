@@ -211,7 +211,7 @@ object AttachmentHelper {
     if (!url.startsWith("http")) return url
     val fileId = extractGoogleDriveFileId(url)
     return if (fileId != null) {
-      "https://lh3.googleusercontent.com/d/$fileId"
+      "https://drive.google.com/thumbnail?id=$fileId&sz=w1200"
     } else {
       url
     }
