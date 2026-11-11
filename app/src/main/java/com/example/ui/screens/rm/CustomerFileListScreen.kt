@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -389,7 +390,7 @@ fun CustomerFileListScreen(
           .fillMaxSize()
           .padding(horizontal = 16.dp)
       ) {
-        items(files, key = { it.fileId }) { file ->
+        itemsIndexed(files, key = { index, file -> "${file.fileId}_$index" }) { _, file ->
           Card(
             modifier = Modifier
               .fillMaxWidth()

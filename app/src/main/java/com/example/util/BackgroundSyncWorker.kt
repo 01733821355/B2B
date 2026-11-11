@@ -38,8 +38,7 @@ class BackgroundSyncWorker(
       val eblRepository = EblRepository(database, authRepository, appContext)
 
       // 2. Pull latest cloud updates from Google Sheets even if app is completely closed/killed!
-      // This retrieves new files, updates, SMS alerts, and team events and fires high-importance device notifications.
-      eblRepository.pullDataFromGoogleSheets()
+      eblRepository.pullDataFromGoogleSheets(force = false)
 
       // 3. Location beacon update if location permission is active
       val lastRm = database.appSettingDao().getSetting("last_logged_rm_code")?.settingValue ?: cachedRm
@@ -50,19 +49,14 @@ class BackgroundSyncWorker(
         } catch (_: Exception) {}
       }
 
-      // Schedule next fast check so that when app is closed, sheet SMS notifications are caught promptly
-      scheduleNextFastSync(appContext)
-
       Result.success()
     } catch (_: Exception) {
-      scheduleNextFastSync(appContext)
       Result.retry()
     }
   }
 
   companion object {
     private const val WORK_NAME = "EblBackgroundSyncWorker"
-    private const val FAST_WORK_NAME = "EblFastBackgroundSync"
 
     fun schedulePeriodicSync(context: Context) {
       try {
@@ -82,28 +76,6 @@ class BackgroundSyncWorker(
           ExistingPeriodicWorkPolicy.UPDATE,
           workRequest
         )
-
-        scheduleNextFastSync(context)
-      } catch (_: Exception) {}
-    }
-
-    fun scheduleNextFastSync(context: Context) {
-      try {
-        val constraints = Constraints.Builder()
-          .setRequiredNetworkType(NetworkType.CONNECTED)
-          .build()
-
-        val fastWork = OneTimeWorkRequestBuilder<BackgroundSyncWorker>()
-          .setConstraints(constraints)
-          .setInitialDelay(20, TimeUnit.SECONDS)
-          .build()
-
-        WorkManager.getInstance(context).enqueueUniqueWork(
-          FAST_WORK_NAME,
-          ExistingWorkPolicy.KEEP,
-          fastWork
-        )
-        SyncAlarmReceiver.scheduleNextAlarm(context, 10_000L)
       } catch (_: Exception) {}
     }
 

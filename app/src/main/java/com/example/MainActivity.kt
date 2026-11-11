@@ -112,7 +112,7 @@ class MainActivity : FragmentActivity() {
     enableEdgeToEdge()
     NotificationHelper.createNotificationChannels(applicationContext)
     com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
-    com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 10_000L)
+    com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 15 * 60 * 1000L)
     setContent {
       val activeThemeConfig by viewModel.activeThemeConfig.collectAsState()
       val universalFontStyle by viewModel.universalFontStyle.collectAsState()
@@ -169,9 +169,8 @@ class MainActivity : FragmentActivity() {
   override fun onStop() {
     super.onStop()
     try {
-      com.example.util.BackgroundSyncWorker.triggerImmediateSync(applicationContext)
       com.example.util.BackgroundSyncWorker.schedulePeriodicSync(applicationContext)
-      com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 10_000L)
+      com.example.util.SyncAlarmReceiver.scheduleNextAlarm(applicationContext, 15 * 60 * 1000L)
     } catch (_: Exception) {}
   }
 }
@@ -297,20 +296,13 @@ fun EblMainApp(viewModel: AppViewModel) {
     }
   }
 
-  // Near real-time foreground sync: poll latest updates from Google Sheets every 5 seconds
+  // Initial sync when user session is active (periodic auto-sync is managed gracefully by ViewModel)
   LaunchedEffect(currentUser?.rmCode) {
     val userCode = currentUser?.rmCode
     if (!userCode.isNullOrBlank()) {
-      // Immediate pull on screen load / user session restore
       try {
-        viewModel.pullDataFromGoogleSheets()
+        viewModel.pullDataFromGoogleSheets(force = false)
       } catch (_: Exception) {}
-      while (true) {
-        kotlinx.coroutines.delay(5_000)
-        try {
-          viewModel.pullDataFromGoogleSheets()
-        } catch (_: Exception) {}
-      }
     }
   }
 

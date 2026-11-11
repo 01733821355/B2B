@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -257,10 +258,10 @@ fun RmMappingScreen(
         .fillMaxSize()
         .padding(horizontal = 16.dp)
     ) {
-      items(
+      itemsIndexed(
         items = filteredRms,
-        key = { rm -> "staff_${rm.role}_${rm.rmCode.trim().uppercase()}" }
-      ) { rm ->
+        key = { index, rm -> "staff_${rm.role}_${rm.rmCode.trim().uppercase()}_$index" }
+      ) { _, rm ->
         Card(
           modifier = Modifier
             .fillMaxWidth()

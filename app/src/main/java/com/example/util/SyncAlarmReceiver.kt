@@ -34,14 +34,11 @@ class SyncAlarmReceiver : BroadcastReceiver() {
         val eblRepository = EblRepository(database, authRepository, appContext)
 
         // Direct poll Google Sheets for updates, chat messages, and SMS
-        eblRepository.pullDataFromGoogleSheets()
-
-        // Also trigger background worker as backup
-        BackgroundSyncWorker.triggerImmediateSync(appContext)
+        eblRepository.pullDataFromGoogleSheets(force = false)
       } catch (_: Exception) {
       } finally {
-        // 3. Reschedule the next alarm to keep polling continuously even if app process is closed (8-second interval)
-        scheduleNextAlarm(appContext, 8_000L)
+        // Reschedule next background sync at a battery-friendly 15-minute interval
+        scheduleNextAlarm(appContext, 15 * 60 * 1000L)
         try {
           pendingResult.finish()
         } catch (_: Exception) {}
@@ -52,7 +49,7 @@ class SyncAlarmReceiver : BroadcastReceiver() {
   companion object {
     private const val REQUEST_CODE = 8842
 
-    fun scheduleNextAlarm(context: Context, delayMillis: Long = 8_000L) {
+    fun scheduleNextAlarm(context: Context, delayMillis: Long = 15 * 60 * 1000L) {
       try {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
         val intent = Intent(context, SyncAlarmReceiver::class.java)

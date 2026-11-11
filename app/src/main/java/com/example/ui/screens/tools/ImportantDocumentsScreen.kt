@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -361,7 +362,7 @@ fun ImportantDocumentsScreen(
           .weight(1f),
         verticalArrangement = Arrangement.spacedBy(6.dp)
       ) {
-        items(filteredDocs, key = { it.docId }) { doc ->
+        itemsIndexed(filteredDocs, key = { index, doc -> "${doc.docId}_$index" }) { _, doc ->
           ImportantDocCard(
             doc = doc,
             isPrivileged = isPrivileged,

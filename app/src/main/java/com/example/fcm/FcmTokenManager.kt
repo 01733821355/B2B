@@ -160,6 +160,7 @@ object FcmTokenManager {
     targetFileId: String? = null,
     extras: Map<String, String>? = null
   ): Result<String> = withContext(Dispatchers.IO) {
+    try {
       val dbUrl = if (context != null) {
         try {
           AppDatabase.getDatabase(context).appSettingDao().getSyncStatus()?.appsScriptUrl?.ifBlank { null }

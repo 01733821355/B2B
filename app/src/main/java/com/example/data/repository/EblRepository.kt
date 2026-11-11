@@ -4138,13 +4138,24 @@ class EblRepository(
     }
   }
 
-  suspend fun pullDataFromGoogleSheets(): Result<String> = withContext(Dispatchers.IO) {
-    val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
-    val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
-      "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
-    }
+  private val pullDataMutex = kotlinx.coroutines.sync.Mutex()
+  private var lastPullTimestamp = 0L
 
+  suspend fun pullDataFromGoogleSheets(force: Boolean = false): Result<String> = withContext(Dispatchers.IO) {
+    val nowMillis = System.currentTimeMillis()
+    if (!force && (nowMillis - lastPullTimestamp) < 10_000L) {
+      return@withContext Result.success("Sync recently completed")
+    }
+    if (!pullDataMutex.tryLock()) {
+      return@withContext Result.success("Sync already in progress")
+    }
     try {
+      lastPullTimestamp = nowMillis
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: SyncStatusEntity()
+      val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
+        "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
+      }
+
       var respStr = ""
       var fetchException: Exception? = null
 
@@ -4239,6 +4250,8 @@ class EblRepository(
       Result.success(msg)
     } catch (e: Exception) {
       Result.failure(e)
+    } finally {
+      pullDataMutex.unlock()
     }
   }
 

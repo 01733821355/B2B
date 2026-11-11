@@ -549,15 +549,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // Periodic Auto-Pull Loop (Data flows from Google Sheets to App)
-    // Only pulls external changes from Google Sheets at a steady, reliable interval.
-    // Does NOT push local preset data to Google Sheets unless explicitly requested by the user via button.
+    // Runs at a smooth, battery-friendly 30-second interval. Instant updates are pushed via FCM!
     viewModelScope.launch {
       while (true) {
-        delay(1_500) // 1.5-second ultra-fast cross-device background pull interval
+        delay(30_000) // 30-second smooth cross-device background pull interval
         if (isRealtimeAutoSyncEnabled.value && !isSyncingInProgress.value) {
           try {
             isSyncingInProgress.value = true
-            eblRepository.pullDataFromGoogleSheets()
+            eblRepository.pullDataFromGoogleSheets(force = false)
           } catch (_: Exception) {
           } finally {
             isSyncingInProgress.value = false
@@ -1556,9 +1555,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
   }
 
-  fun pullDataFromGoogleSheets(showNotification: Boolean = false, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
+  fun pullDataFromGoogleSheets(force: Boolean = false, showNotification: Boolean = false, onResult: (Boolean, String?) -> Unit = { _, _ -> }) {
     viewModelScope.launch {
-      val res = eblRepository.pullDataFromGoogleSheets()
+      val res = eblRepository.pullDataFromGoogleSheets(force = force)
       res.onSuccess { msg ->
         if (showNotification) {
           _uiMessage.emit(msg)
