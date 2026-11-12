@@ -37,6 +37,15 @@ class EblFirebaseMessagingService : FirebaseMessagingService() {
       ?: data["message"]
       ?: "New high priority notification"
 
+    val cleanTitle = title.removePrefix("SMS / Team Hub: ").removePrefix("SMS: ").trim()
+    val dedupeKey = data["notifKey"]
+      ?: "notif_${cleanTitle.take(30)}_${body.trim().take(40).hashCode()}"
+
+    if (NotificationHelper.hasNotificationBeenShown(applicationContext, dedupeKey)) {
+      Log.d(TAG, "Notification already shown, skipping duplicate FCM push: $dedupeKey")
+      return
+    }
+
     val targetScreen = data["targetScreen"] ?: data["screen"]
     val targetFileId = data["targetFileId"] ?: data["fileId"]
     val actionType = data["actionType"] ?: "PUSH_ALERT"
@@ -46,7 +55,7 @@ class EblFirebaseMessagingService : FirebaseMessagingService() {
     // 1. Show Instant Heads-Up Push Notification (Wakes device, plays sound, vibrates)
     NotificationHelper.showFcmPushNotification(
       context = applicationContext,
-      title = title,
+      title = cleanTitle,
       body = body,
       targetScreen = targetScreen,
       targetFileId = targetFileId,

@@ -3013,34 +3013,75 @@ function sendFcmHttpPush(tokens, topic, title, body, dataPayload) {
         strData[k] = String(dataPayload[k] != null ? dataPayload[k] : "");
       }
     }
-    strData["title"] = String(title || "Alert");
-    strData["body"] = String(body || "");
+    var cleanTitle = String(title || "Alert").replace(/^SMS \/ Team Hub: /i, "").replace(/^SMS: /i, "").trim();
+    var cleanBody = String(body || "").trim();
+    strData["title"] = cleanTitle;
+    strData["body"] = cleanBody;
+
+    var notifKey = "notif_" + cleanTitle.substring(0, 25).replace(/[^a-zA-Z0-9_]/g, "") + "_" + getNotifHash(cleanBody.substring(0, 35));
+    strData["notifKey"] = notifKey;
 
     var successCount = 0;
     var failureCount = 0;
     var fcmUrl = "https://fcm.googleapis.com/v1/projects/" + projectId + "/messages:send";
 
-    // 1. Send to all matching device registration tokens
-    if (tokens && tokens.length > 0) {
+    // Android push config: HIGH priority, audible sound, vibration, channel v3, dedupe collapse_key & tag
+    var androidConfig = {
+      priority: "HIGH",
+      collapse_key: notifKey,
+      notification: {
+        channel_id: "b2b_alerts_channel_v3",
+        tag: notifKey,
+        sound: "default",
+        default_sound: true,
+        default_vibrate_timings: true,
+        notification_priority: "PRIORITY_MAX",
+        visibility: "PUBLIC"
+      }
+    };
+
+    // DECISION: Send to TOPIC OR individual TOKENS - NEVER BOTH!
+    // Broadcast ('all_users') or role broadcast ('role_admin', etc.): send to topic ONLY
+    if (topic && (topic === "all_users" || topic.indexOf("role_") === 0 || !tokens || tokens.length === 0)) {
+      try {
+        var topicPayload = {
+          message: {
+            topic: topic,
+            notification: { title: cleanTitle, body: cleanBody },
+            data: strData,
+            android: androidConfig
+          }
+        };
+        var topicOptions = {
+          method: "post",
+          contentType: "application/json",
+          headers: { "Authorization": "Bearer " + accessToken },
+          payload: JSON.stringify(topicPayload),
+          muteHttpExceptions: true
+        };
+        var topicResp = UrlFetchApp.fetch(fcmUrl, topicOptions);
+        if (topicResp.getResponseCode() === 200) {
+          successCount++;
+        } else {
+          failureCount++;
+        }
+      } catch (errTopic) {
+        failureCount++;
+      }
+    } else if (tokens && tokens.length > 0) {
+      // Direct single-user push: Deduplicate tokens so each device only receives 1 push
+      var sentTokens = {};
       for (var i = 0; i < tokens.length; i++) {
         var tok = tokens[i];
-        if (!tok) continue;
+        if (!tok || sentTokens[tok]) continue;
+        sentTokens[tok] = true;
 
         var msgPayload = {
           message: {
             token: tok,
-            notification: { title: title, body: body },
+            notification: { title: cleanTitle, body: cleanBody },
             data: strData,
-            android: {
-              priority: "HIGH",
-              notification: {
-                channel_id: "b2b_alerts_channel_v2",
-                notification_priority: "PRIORITY_MAX",
-                visibility: "PUBLIC",
-                default_sound: true,
-                default_vibrate_timings: true
-              }
-            }
+            android: androidConfig
           }
         };
 
@@ -3065,40 +3106,6 @@ function sendFcmHttpPush(tokens, topic, title, body, dataPayload) {
       }
     }
 
-    // 2. Also send to the topic for guaranteed delivery to all subscribed active apps
-    if (topic) {
-      try {
-        var topicPayload = {
-          message: {
-            topic: topic,
-            notification: { title: title, body: body },
-            data: strData,
-            android: {
-              priority: "HIGH",
-              notification: {
-                channel_id: "b2b_alerts_channel_v2",
-                notification_priority: "PRIORITY_MAX",
-                visibility: "PUBLIC",
-                default_sound: true,
-                default_vibrate_timings: true
-              }
-            }
-          }
-        };
-        var topicOptions = {
-          method: "post",
-          contentType: "application/json",
-          headers: { "Authorization": "Bearer " + accessToken },
-          payload: JSON.stringify(topicPayload),
-          muteHttpExceptions: true
-        };
-        var topicResp = UrlFetchApp.fetch(fcmUrl, topicOptions);
-        if (topicResp.getResponseCode() === 200) {
-          successCount++;
-        }
-      } catch (errTopic) {}
-    }
-
     return {
       status: "SUCCESS",
       successCount: successCount,
@@ -3108,6 +3115,15 @@ function sendFcmHttpPush(tokens, topic, title, body, dataPayload) {
   } catch (err) {
     return { status: "ERROR", message: err.toString() };
   }
+}
+
+function getNotifHash(str) {
+  var hash = 0;
+  for (var i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
 }
   """.trimIndent()
 

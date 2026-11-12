@@ -15,8 +15,8 @@ import androidx.core.app.NotificationManagerCompat
 import com.example.MainActivity
 
 object NotificationHelper {
-  const val CHANNEL_ID = "b2b_alerts_channel_v2"
-  const val CHANNEL_RM_APPROVAL_ID = "b2b_approvals_channel_v2"
+  const val CHANNEL_ID = "b2b_alerts_channel_v3"
+  const val CHANNEL_RM_APPROVAL_ID = "b2b_approvals_channel_v3"
   private const val PREF_NAME = "app_notification_prefs"
   private const val KEY_NOTIFICATION_ASKED = "notification_permission_asked_once"
 
@@ -30,6 +30,14 @@ object NotificationHelper {
 
   fun createNotificationChannels(context: Context) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+
+      // Delete older cached channels to prevent Android OS from silencing notifications
+      try {
+        manager?.deleteNotificationChannel("b2b_alerts_channel_v1")
+        manager?.deleteNotificationChannel("b2b_alerts_channel_v2")
+      } catch (_: Exception) {}
+
       val soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
       val audioAttributes = AudioAttributes.Builder()
         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -38,14 +46,14 @@ object NotificationHelper {
 
       val channel1 = NotificationChannel(
         CHANNEL_ID,
-        "File & Data Updates",
+        "Team & File Alerts",
         NotificationManager.IMPORTANCE_HIGH
       ).apply {
-        description = "High priority team and file update alerts"
+        description = "High priority instant alerts with audible sound and vibration"
         enableLights(true)
         lightColor = Color.BLUE
         enableVibration(true)
-        vibrationPattern = longArrayOf(0, 250, 150, 250)
+        vibrationPattern = longArrayOf(0, 300, 200, 300)
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         setShowBadge(true)
         setSound(soundUri, audioAttributes)
@@ -60,13 +68,12 @@ object NotificationHelper {
         enableLights(true)
         lightColor = Color.GREEN
         enableVibration(true)
-        vibrationPattern = longArrayOf(0, 250, 150, 250)
+        vibrationPattern = longArrayOf(0, 300, 200, 300)
         lockscreenVisibility = Notification.VISIBILITY_PUBLIC
         setShowBadge(true)
         setSound(soundUri, audioAttributes)
       }
 
-      val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
       manager?.createNotificationChannel(channel1)
       manager?.createNotificationChannel(channel2)
     }
@@ -226,7 +233,8 @@ object NotificationHelper {
     dedupeKey: String? = null
   ) {
     try {
-      val key = dedupeKey ?: "sms_incoming_${senderTitle}_${messageText.take(40).hashCode()}"
+      val cleanTitle = senderTitle.removePrefix("SMS / Team Hub: ").removePrefix("SMS: ").trim()
+      val key = dedupeKey ?: "notif_${cleanTitle.take(30)}_${messageText.trim().take(40).hashCode()}"
       if (hasNotificationBeenShown(context, key)) {
         return
       }
@@ -238,27 +246,33 @@ object NotificationHelper {
         flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
 
+      val reqCode = Math.abs(key.hashCode()) % 100000
       val pendingIntent = PendingIntent.getActivity(
         context,
-        System.currentTimeMillis().toInt(),
+        reqCode,
         intent,
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
       )
 
+      val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+      val vibrationPattern = longArrayOf(0, 300, 200, 300)
+
       val builder = NotificationCompat.Builder(context, CHANNEL_ID)
         .setSmallIcon(android.R.drawable.sym_action_chat)
-        .setContentTitle("SMS / Team Hub: $senderTitle")
+        .setContentTitle(cleanTitle)
         .setContentText(messageText)
-        .setStyle(NotificationCompat.BigTextStyle().bigText("$senderTitle:\n$messageText"))
-        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setStyle(NotificationCompat.BigTextStyle().bigText("$cleanTitle:\n$messageText"))
+        .setPriority(NotificationCompat.PRIORITY_MAX)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-        .setDefaults(NotificationCompat.DEFAULT_ALL)
+        .setSound(defaultSoundUri)
+        .setVibrate(vibrationPattern)
+        .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
       val notificationManager = NotificationManagerCompat.from(context)
-      val notificationId = (System.currentTimeMillis() % 100000).toInt() + 10
+      val notificationId = Math.abs(key.hashCode()) % 800000 + 100
       notificationManager.notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }
@@ -406,6 +420,15 @@ object NotificationHelper {
     extras: Map<String, String>? = null
   ) {
     try {
+      val cleanTitle = title.removePrefix("SMS / Team Hub: ").removePrefix("SMS: ").trim()
+      val notifKey = extras?.get("notifKey")
+        ?: "notif_${cleanTitle.take(30)}_${body.trim().take(40).hashCode()}"
+
+      if (hasNotificationBeenShown(context, notifKey)) {
+        return
+      }
+      markNotificationShown(context, notifKey)
+
       createNotificationChannels(context)
 
       val intent = Intent(context, MainActivity::class.java).apply {
@@ -421,7 +444,7 @@ object NotificationHelper {
         }
       }
 
-      val reqCode = (System.currentTimeMillis() % 100000).toInt()
+      val reqCode = Math.abs(notifKey.hashCode()) % 100000
       val pendingIntent = PendingIntent.getActivity(
         context,
         reqCode,
@@ -429,12 +452,12 @@ object NotificationHelper {
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
       )
 
-      val defaultSoundUri = android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION)
-      val vibrationPattern = longArrayOf(0, 250, 150, 250)
+      val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+      val vibrationPattern = longArrayOf(0, 300, 200, 300)
 
       val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-        .setSmallIcon(android.R.drawable.stat_notify_chat)
-        .setContentTitle(title)
+        .setSmallIcon(android.R.drawable.sym_action_chat)
+        .setContentTitle(cleanTitle)
         .setContentText(body)
         .setStyle(NotificationCompat.BigTextStyle().bigText(body))
         .setPriority(NotificationCompat.PRIORITY_MAX)
@@ -442,10 +465,11 @@ object NotificationHelper {
         .setCategory(NotificationCompat.CATEGORY_MESSAGE)
         .setSound(defaultSoundUri)
         .setVibrate(vibrationPattern)
+        .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
         .setAutoCancel(true)
         .setContentIntent(pendingIntent)
 
-      val notificationId = (System.currentTimeMillis() % 1000000).toInt() + 10
+      val notificationId = Math.abs(notifKey.hashCode()) % 800000 + 100
       NotificationManagerCompat.from(context).notify(notificationId, builder.build())
     } catch (_: Exception) {}
   }

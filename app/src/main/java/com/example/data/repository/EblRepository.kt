@@ -5125,6 +5125,8 @@ class EblRepository(
       val isInitialSyncDone = database.appSettingDao().getSetting("is_initial_sync_done")?.settingValue == "true"
       val isRecent = sentTime <= 0L || (now - sentTime) < 24 * 60 * 60 * 1000L
       val notifKey = "sms_notif_${smsId.ifBlank { "${recipientRm}_${rawSentTime}_${actionType}_${messageText.take(20).hashCode()}" }}"
+      val cleanTitle = "$triggeredRole $triggeredCode".removePrefix("SMS / Team Hub: ").removePrefix("SMS: ").trim()
+      val contentDedupeKey = "notif_${cleanTitle.take(30)}_${messageText.trim().take(40).hashCode()}"
 
       val shouldNotifyAdmin = isPrivileged && (actionType == "NEW_FILE" || recipientRm == userRmCode || recipientRm == "ADMIN" || recipientRm == "MENTOR" || recipientRm == "ALL") && triggeredCode != userRmCode && isRecent
       val shouldNotifyRm = !isPrivileged && (recipientRm == userRmCode || recipientRm == "ALL") && triggeredCode != userRmCode && isRecent
@@ -5133,8 +5135,14 @@ class EblRepository(
         context?.let { ctx ->
           if (!isInitialSyncDone) {
             NotificationHelper.markNotificationShown(ctx, notifKey)
-          } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
+          } else if (NotificationHelper.hasNotificationBeenShown(ctx, notifKey) || NotificationHelper.hasNotificationBeenShown(ctx, contentDedupeKey)) {
+            // Already notified via FCM or previous sync
             NotificationHelper.markNotificationShown(ctx, notifKey)
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
+          } else {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
             if (shouldNotifyAdmin) {
               if (actionType == "NEW_FILE") {
                 val rmUser = database.userDao().getUser(triggeredCode)
@@ -5150,8 +5158,9 @@ class EblRepository(
               } else {
                 NotificationHelper.sendIncomingSmsNotification(
                   context = ctx,
-                  senderTitle = "$triggeredRole $triggeredCode",
-                  messageText = messageText
+                  senderTitle = cleanTitle,
+                  messageText = messageText,
+                  dedupeKey = contentDedupeKey
                 )
               }
             } else {
@@ -5286,20 +5295,30 @@ class EblRepository(
       val isForMe = recipientRmCode.isNullOrBlank() || recipientRmCode.equals(userRmCode, ignoreCase = true)
       if (!isExisting && isRecent && senderRmCode != userRmCode && isForMe) {
         context?.let { ctx ->
+          val rawTitle = if (recipientRmCode.isNullOrBlank()) "Team Hub: $senderName ($senderRole)" else "$senderName ($senderRole)"
+          val cleanTitle = rawTitle.removePrefix("SMS / Team Hub: ").removePrefix("SMS: ").trim()
+          val body = when {
+            messageType == "PHOTO" -> "📷 [Photo] ${messageText.ifBlank { "Sent a photo" }}"
+            messageType == "EVENT" -> "📅 [Event Alert] $messageText"
+            else -> messageText
+          }
+          val contentDedupeKey = "notif_${cleanTitle.take(30)}_${body.trim().take(40).hashCode()}"
+
           if (!isInitialSyncDone) {
             NotificationHelper.markNotificationShown(ctx, notifKey)
-          } else if (!NotificationHelper.hasNotificationBeenShown(ctx, notifKey)) {
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
+          } else if (NotificationHelper.hasNotificationBeenShown(ctx, notifKey) || NotificationHelper.hasNotificationBeenShown(ctx, contentDedupeKey)) {
+            // Already notified via FCM or previous sync
             NotificationHelper.markNotificationShown(ctx, notifKey)
-            val title = if (recipientRmCode.isNullOrBlank()) "Team Hub: $senderName ($senderRole)" else "$senderName ($senderRole)"
-            val body = when {
-              messageType == "PHOTO" -> "📷 [Photo] ${messageText.ifBlank { "Sent a photo" }}"
-              messageType == "EVENT" -> "📅 [Event Alert] $messageText"
-              else -> messageText
-            }
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
+          } else {
+            NotificationHelper.markNotificationShown(ctx, notifKey)
+            NotificationHelper.markNotificationShown(ctx, contentDedupeKey)
             NotificationHelper.sendIncomingSmsNotification(
               context = ctx,
-              senderTitle = title,
-              messageText = body
+              senderTitle = cleanTitle,
+              messageText = body,
+              dedupeKey = contentDedupeKey
             )
           }
         }
