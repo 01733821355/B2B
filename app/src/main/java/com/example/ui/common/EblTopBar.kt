@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -56,6 +57,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -111,144 +113,181 @@ fun EblTopBar(
 
   val currentTheme = com.example.ui.theme.LocalAppTheme.current
 
-  TopAppBar(
-    modifier = modifier.testTag("ebl_top_bar"),
-    colors = TopAppBarDefaults.topAppBarColors(
-      containerColor = currentTheme.primary,
-      titleContentColor = Color.White,
-      navigationIconContentColor = Color.White,
-      actionIconContentColor = Color.White
-    ),
-    navigationIcon = {
-      if (canNavigateBack) {
-        IconButton(
-          onClick = onNavigateBack,
-          modifier = Modifier.testTag("top_bar_back_button")
-        ) {
-          Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-            contentDescription = "Back",
-            tint = Color.White
-          )
-        }
-      } else {
-        // App Custom Icon or Active Theme Monogram Avatar Badge
-        Box(
-          modifier = Modifier
-            .padding(start = 12.dp)
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(currentTheme.secondary),
-          contentAlignment = Alignment.Center
-        ) {
-          if (appCustomIconUrl.isNotBlank()) {
-            AsyncImage(
-              model = appCustomIconUrl,
-              contentDescription = "App Icon",
-              modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape),
-              contentScale = ContentScale.Crop
-            )
-          } else {
-            Text(
-              text = currentTheme.id.emoji,
-              fontSize = 18.sp
-            )
-          }
-        }
-      }
-    },
-    title = {
-      Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Text(
-            text = appCustomName,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1
-          )
-          Spacer(modifier = Modifier.width(8.dp))
-          if (user != null) {
-            val roleBg = when (user.role) {
-              "ADMIN" -> Color(0xFFEF4444)
-              "MENTOR" -> Color(0xFF8B5CF6)
-              else -> EblNavyPrimary
-            }
+  Column(
+    modifier = modifier
+      .fillMaxWidth()
+      .background(
+        Brush.horizontalGradient(
+          colors = listOf(currentTheme.primary, currentTheme.secondary, currentTheme.primary)
+        )
+      )
+      .testTag("ebl_top_bar")
+  ) {
+    TopAppBar(
+      colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = Color.Transparent,
+        titleContentColor = Color.White,
+        navigationIconContentColor = Color.White,
+        actionIconContentColor = Color.White
+      ),
+      navigationIcon = {
+        if (canNavigateBack) {
+          val (backInteraction, backScale) = rememberBounceInteraction(0.88f)
+          IconButton(
+            onClick = onNavigateBack,
+            interactionSource = backInteraction,
+            modifier = Modifier
+              .interactiveBounce(pressedScale = 0.88f, interactionSource = backInteraction)
+              .testTag("top_bar_back_button")
+          ) {
             Box(
               modifier = Modifier
-                .background(roleBg, RoundedCornerShape(4.dp))
-                .padding(horizontal = 6.dp, vertical = 2.dp)
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.14f)),
+              contentAlignment = Alignment.Center
             ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = Color.White,
+                modifier = Modifier.size(19.dp)
+              )
+            }
+          }
+        } else {
+          // App Custom Icon or Active Theme Monogram Avatar Badge with 3D metallic gold ring
+          Box(
+            modifier = Modifier
+              .padding(start = 12.dp)
+              .size(40.dp)
+              .background(currentTheme.tertiary.copy(alpha = 0.35f), CircleShape)
+              .padding(2.dp)
+              .clip(CircleShape)
+              .background(Brush.verticalGradient(listOf(currentTheme.secondary, currentTheme.primary))),
+            contentAlignment = Alignment.Center
+          ) {
+            if (appCustomIconUrl.isNotBlank()) {
+              AsyncImage(
+                model = appCustomIconUrl,
+                contentDescription = "App Icon",
+                modifier = Modifier
+                  .fillMaxSize()
+                  .clip(CircleShape),
+                contentScale = ContentScale.Crop
+              )
+            } else {
               Text(
-                text = "${user.role}: ${user.rmCode}",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
+                text = currentTheme.id.emoji,
+                fontSize = 19.sp
               )
             }
           }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-          Text(
-            text = "Dhaka BST: $dhakaTimeText",
-            fontSize = 10.sp,
-            color = Color.White.copy(alpha = 0.8f)
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Surface(
-            color = Color.White.copy(alpha = 0.2f),
-            shape = RoundedCornerShape(4.dp)
-          ) {
+      },
+      title = {
+        Column {
+          Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-              text = "${currentTheme.id.emoji} ${currentTheme.banglaName}",
-              fontSize = 9.sp,
-              fontWeight = FontWeight.Bold,
+              text = appCustomName,
+              fontSize = 15.sp,
+              fontWeight = FontWeight.ExtraBold,
               color = Color.White,
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+              maxLines = 1
             )
-          }
-        }
-      }
-    },
-    actions = {
-      if (user != null) {
-        val totalBadgeCount = (if (user.role == "RM") unreadSmsCount else 0) + pendingSyncCount
-
-        // Clean Profile Icon with optional notification badge
-        Box {
-          IconButton(
-            onClick = { showMenu = true },
-            modifier = Modifier.testTag("top_bar_profile_button")
-          ) {
-            if (totalBadgeCount > 0) {
-              BadgedBox(
-                badge = {
-                  Badge(
-                    containerColor = Color(0xFFDC2626),
-                    contentColor = Color.White
-                  ) {
-                    Text(totalBadgeCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                  }
-                }
+            Spacer(modifier = Modifier.width(8.dp))
+            if (user != null) {
+              val roleBg = when (user.role) {
+                "ADMIN" -> Color(0xFFEF4444)
+                "MENTOR" -> Color(0xFF8B5CF6)
+                else -> Color.White.copy(alpha = 0.2f)
+              }
+              Box(
+                modifier = Modifier
+                  .background(roleBg, RoundedCornerShape(6.dp))
+                  .padding(horizontal = 6.dp, vertical = 2.dp)
               ) {
-                Icon(
-                  imageVector = Icons.Default.AccountCircle,
-                  contentDescription = "User Profile & Menu",
-                  tint = Color.White,
-                  modifier = Modifier.size(28.dp)
+                Text(
+                  text = "${user.role}: ${user.rmCode}",
+                  fontSize = 9.5.sp,
+                  fontWeight = FontWeight.Bold,
+                  color = Color.White
                 )
               }
-            } else {
-              Icon(
-                imageVector = Icons.Default.AccountCircle,
-                contentDescription = "User Profile & Menu",
-                tint = Color.White,
-                modifier = Modifier.size(28.dp)
+            }
+          }
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            PulsingLiveDot(color = Color(0xFF34D399), size = 5.dp)
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+              text = "Dhaka BST: $dhakaTimeText",
+              fontSize = 10.sp,
+              color = Color.White.copy(alpha = 0.85f),
+              fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Surface(
+              color = Color.White.copy(alpha = 0.16f),
+              shape = RoundedCornerShape(6.dp)
+            ) {
+              Text(
+                text = "${currentTheme.id.emoji} ${currentTheme.banglaName}",
+                fontSize = 9.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
               )
             }
           }
+        }
+      },
+      actions = {
+        if (user != null) {
+          val totalBadgeCount = (if (user.role == "RM") unreadSmsCount else 0) + pendingSyncCount
+
+          // 3D Glass Pill Profile Button with notification badge & interactive bounce
+          Box(modifier = Modifier.padding(end = 6.dp)) {
+            val (profileInteraction, _) = rememberBounceInteraction(0.88f)
+            IconButton(
+              onClick = { showMenu = true },
+              interactionSource = profileInteraction,
+              modifier = Modifier
+                .interactiveBounce(pressedScale = 0.88f, interactionSource = profileInteraction)
+                .testTag("top_bar_profile_button")
+            ) {
+              val avatarChip: @Composable () -> Unit = {
+                Box(
+                  modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.16f)),
+                  contentAlignment = Alignment.Center
+                ) {
+                  Icon(
+                    imageVector = Icons.Default.AccountCircle,
+                    contentDescription = "User Profile & Menu",
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                  )
+                }
+              }
+              if (totalBadgeCount > 0) {
+                BadgedBox(
+                  badge = {
+                    Badge(
+                      containerColor = Color(0xFFDC2626),
+                      contentColor = Color.White
+                    ) {
+                      Text(totalBadgeCount.toString(), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    }
+                  }
+                ) {
+                  avatarChip()
+                }
+              } else {
+                avatarChip()
+              }
+            }
 
           DropdownMenu(
             expanded = showMenu,
@@ -426,7 +465,18 @@ fun EblTopBar(
         }
       }
     }
-  )
+    )
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .height(2.dp)
+        .background(
+          Brush.horizontalGradient(
+            listOf(Color.Transparent, currentTheme.tertiary.copy(alpha = 0.75f), Color.Transparent)
+          )
+        )
+    )
+  }
 
   if (showSmsDialog && user != null) {
     SmsNotificationsDialog(

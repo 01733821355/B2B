@@ -46,8 +46,12 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -86,15 +90,21 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.border
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
 import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.KpiGridSection
 import com.example.ui.common.TimeFilterBar
 import com.example.ui.common.VoiceInputField
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberBounceInteraction
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
+import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.viewmodel.AppViewModel
 import com.example.ui.viewmodel.Screen
 import com.example.util.DateUtils
@@ -211,11 +221,12 @@ fun MentorDashboardScreen(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 16.dp, vertical = 4.dp)
-          .clickable { onNavigate(Screen.CustomerForm(null)) }
+          .interactiveBounce(pressedScale = 0.97f, onClick = { onNavigate(Screen.CustomerForm(null)) })
           .testTag("mentor_btn_add_customer"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0F766E).copy(alpha = 0.25f) else Color(0xFFCCFBF1)),
-        border = BorderStroke(1.5.dp, if (isDark) Color(0xFF0D9488) else Color(0xFF5EEAD4))
+        border = BorderStroke(1.25.dp, if (isDark) Color(0xFF0D9488) else Color(0xFF5EEAD4)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
       ) {
         Row(
           modifier = Modifier
@@ -257,6 +268,14 @@ fun MentorDashboardScreen(
           )
         }
       }
+    }
+
+    // 3D Banking Card Portfolio Deck (VISA / Mastercard / UnionPay)
+    item {
+      com.example.ui.common.CardProductPortfolioStrip(
+        files = allFiles,
+        onCardClick = { onNavigate(Screen.GlobalDatabase) }
+      )
     }
 
     item {
@@ -359,11 +378,12 @@ fun MentorDashboardScreen(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 16.dp, vertical = 4.dp)
-          .clickable { onNavigate(Screen.GoogleSheetsSync) }
+          .interactiveBounce(pressedScale = 0.97f, onClick = { onNavigate(Screen.GoogleSheetsSync) })
           .testTag("mentor_card_sheets_sync"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, Color(0xFF10B981).copy(alpha = 0.28f))
       ) {
         Row(
           modifier = Modifier.padding(14.dp),
@@ -376,8 +396,8 @@ fun MentorDashboardScreen(
           ) {
             Box(
               modifier = Modifier
-                .size(42.dp)
-                .background(Color(0xFF064E3B), RoundedCornerShape(10.dp)),
+                .size(44.dp)
+                .background(Color(0xFF064E3B), RoundedCornerShape(12.dp)),
               contentAlignment = Alignment.Center
             ) {
               Icon(
@@ -394,7 +414,7 @@ fun MentorDashboardScreen(
                   text = "Google Sheets Auto-Sync Console",
                   fontSize = 14.sp,
                   fontWeight = FontWeight.Bold,
-                  color = EblNavyDark
+                  color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Surface(
@@ -428,11 +448,12 @@ fun MentorDashboardScreen(
         modifier = Modifier
           .fillMaxWidth()
           .padding(horizontal = 16.dp, vertical = 6.dp)
-          .clickable { onNavigate(Screen.MentorUserLocationTracking) }
+          .interactiveBounce(pressedScale = 0.97f, onClick = { onNavigate(Screen.MentorUserLocationTracking) })
           .testTag("mentor_card_user_location_radar"),
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(1.dp, EblGold.copy(alpha = 0.35f))
       ) {
         Row(
           modifier = Modifier.padding(14.dp),
@@ -805,56 +826,153 @@ fun MentorDashboardScreen(
               Text("No RM officers found.", color = Color.Gray, fontSize = 12.sp)
             }
           } else {
+            val rankByRmCode = remember(rmPerformanceList) {
+              rmPerformanceList.sortedByDescending { it.stats.stc }
+                .mapIndexed { idx, r -> r.rmCode to (idx + 1) }
+                .toMap()
+            }
             rmPerformanceList.forEach { row ->
+              val rank = rankByRmCode[row.rmCode] ?: 99
+              val (rankBg, rankFg, rankBorder) = when (rank) {
+                1 -> Triple(
+                  if (isDark) Color(0xFF78350F).copy(alpha = 0.55f) else Color(0xFFFEF3C7),
+                  if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
+                  if (isDark) Color(0xFFF59E0B).copy(alpha = 0.6f) else Color(0xFFFDE68A)
+                )
+                2 -> Triple(
+                  if (isDark) Color(0xFF334155) else Color(0xFFF1F5F9),
+                  if (isDark) Color(0xFFE2E8F0) else Color(0xFF475569),
+                  if (isDark) Color(0xFF64748B).copy(alpha = 0.6f) else Color(0xFFCBD5E1)
+                )
+                3 -> Triple(
+                  if (isDark) Color(0xFF7C2D12).copy(alpha = 0.5f) else Color(0xFFFFEDD5),
+                  if (isDark) Color(0xFFFDBA74) else Color(0xFFC2410C),
+                  if (isDark) Color(0xFFEA580C).copy(alpha = 0.5f) else Color(0xFFFED7AA)
+                )
+                else -> Triple(
+                  if (isDark) Color(0xFF1E293B) else Color(0xFFF8FAFC),
+                  if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B),
+                  if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+                )
+              }
+
+              val ccTarget = row.target?.getEffectiveCcTarget() ?: 20
+              val corpTarget = row.target?.getEffectiveCorpTarget() ?: 10
+              val b2bTarget = row.target?.getEffectiveB2bTarget() ?: 15
+              val annualCc = row.target?.annualCreditCardTarget ?: (ccTarget * 4)
+              val annualCorp = row.target?.annualCorporateCardTarget ?: (corpTarget * 4)
+              val annualB2b = row.target?.annualB2bTarget ?: (b2bTarget * 4)
+              val curQ = DateUtils.getCurrentQuarter()
+              val customQuarter = row.allQuarterCustomTargets[curQ] ?: emptyMap()
+              val customAnnual = row.allQuarterCustomTargets["ALL"] ?: emptyMap()
+              val standardSet = setOf("Credit Card", "Corporate Card", "B2B")
+              val customCriteriaEntries = (customQuarter.keys + customAnnual.keys + row.assignedCriteria)
+                .map { com.example.data.repository.EblRepository.normalizeCriteria(it) }
+                .distinctBy { it.lowercase() }
+                .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
+                .mapNotNull { critName ->
+                  val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)
+                  val sumQ = (row.allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                    (row.allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                    (row.allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
+                    (row.allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0)
+                  val yrVal = if (sumQ > 0) sumQ else (customAnnual.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customAnnual[critName] ?: 0))
+                  if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.trim().equals(critName.trim(), ignoreCase = true) }) {
+                    critName to (qVal to yrVal)
+                  } else null
+                }
+
+              val totalGoal = (ccTarget + corpTarget + b2bTarget + customCriteriaEntries.sumOf { it.second.first }).coerceAtLeast(1)
+              val rawProgress = (row.stats.stc.toFloat() / totalGoal.toFloat()).coerceIn(0f, 1f)
+              val animatedProgress by animateFloatAsState(
+                targetValue = rawProgress,
+                animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing),
+                label = "mentor_rm_progress_${row.rmCode}"
+              )
+              val pct = ((row.stats.stc.toFloat() / totalGoal.toFloat()) * 100f).toInt()
+              val progressColor = when {
+                pct >= 100 -> if (isDark) Color(0xFF34D399) else Color(0xFF059669)
+                pct >= 60 -> if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E)
+                pct >= 30 -> if (isDark) Color(0xFF60A5FA) else Color(0xFF2563EB)
+                else -> if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
+              }
+
               Column(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .clickable {
-                    viewModel.selectedRmCodeFilter.value = row.rmCode
-                    onNavigate(Screen.GlobalDatabase)
-                  }
-                  .padding(horizontal = 12.dp, vertical = 8.dp)
+                  .interactiveBounce(
+                    pressedScale = 0.985f,
+                    onClick = {
+                      viewModel.selectedRmCodeFilter.value = row.rmCode
+                      onNavigate(Screen.GlobalDatabase)
+                    }
+                  )
+                  .padding(horizontal = 12.dp, vertical = 10.dp)
               ) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                  Column(modifier = Modifier.weight(1.7f)) {
-                    Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark, maxLines = 1, softWrap = false)
-                    Text("Code: ${row.rmCode}", fontSize = 10.sp, color = Color.Gray, maxLines = 1, softWrap = false)
+                  Row(
+                    modifier = Modifier.weight(1.7f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(7.dp)
+                  ) {
+                    Surface(
+                      shape = RoundedCornerShape(7.dp),
+                      color = rankBg,
+                      border = BorderStroke(1.dp, rankBorder)
+                    ) {
+                      Text(
+                        text = "#$rank",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = JetBrainsMonoFontFamily,
+                        color = rankFg,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        softWrap = false
+                      )
+                    }
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                      Text(row.rmName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark, maxLines = 1, softWrap = false)
+                      Text("Code: ${row.rmCode}", fontSize = 10.sp, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFF94A3B8) else Color(0xFF64748B), maxLines = 1, softWrap = false)
+                    }
                   }
-                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F766E))
-                  Text("${row.stats.submitted}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                  Text("${row.stats.approved}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF15803D))
-                  Text("${row.stats.query}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFD97706))
-                  Text("${row.stats.returnToSource}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFE11D48))
-                  Text("${row.stats.declined}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFFDC2626))
+                  Text("${row.stats.stc}", modifier = Modifier.weight(0.7f), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFF2DD4BF) else Color(0xFF0F766E))
+                  Text("${row.stats.submitted}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFFE2E8F0) else EblNavyDark)
+                  Text("${row.stats.approved}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFF4ADE80) else Color(0xFF15803D))
+                  Text("${row.stats.query}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706))
+                  Text("${row.stats.returnToSource}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFFFB7185) else Color(0xFFE11D48))
+                  Text("${row.stats.declined}", modifier = Modifier.weight(0.6f), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = JetBrainsMonoFontFamily, color = if (isDark) Color(0xFFF87171) else Color(0xFFDC2626))
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                val ccTarget = row.target?.getEffectiveCcTarget() ?: 20
-                val corpTarget = row.target?.getEffectiveCorpTarget() ?: 10
-                val b2bTarget = row.target?.getEffectiveB2bTarget() ?: 15
-                val annualCc = row.target?.annualCreditCardTarget ?: (ccTarget * 4)
-                val annualCorp = row.target?.annualCorporateCardTarget ?: (corpTarget * 4)
-                val annualB2b = row.target?.annualB2bTarget ?: (b2bTarget * 4)
-                val curQ = DateUtils.getCurrentQuarter()
-                val customQuarter = row.allQuarterCustomTargets[curQ] ?: emptyMap()
-                val customAnnual = row.allQuarterCustomTargets["ALL"] ?: emptyMap()
-                val standardSet = setOf("Credit Card", "Corporate Card", "B2B")
-                val customCriteriaEntries = (customQuarter.keys + customAnnual.keys + row.assignedCriteria)
-                  .map { com.example.data.repository.EblRepository.normalizeCriteria(it) }
-                  .distinctBy { it.lowercase() }
-                  .filter { k -> standardSet.none { it.equals(k, ignoreCase = true) } }
-                  .mapNotNull { critName ->
-                    val qVal = customQuarter.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customQuarter[critName] ?: 0)
-                    val sumQ = (row.allQuarterCustomTargets["Q1"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
-                      (row.allQuarterCustomTargets["Q2"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
-                      (row.allQuarterCustomTargets["Q3"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0) +
-                      (row.allQuarterCustomTargets["Q4"]?.entries?.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: 0)
-                    val yrVal = if (sumQ > 0) sumQ else (customAnnual.entries.firstOrNull { it.key.trim().equals(critName.trim(), ignoreCase = true) }?.value ?: (customAnnual[critName] ?: 0))
-                    if (qVal > 0 || yrVal > 0 || row.assignedCriteria.any { it.trim().equals(critName.trim(), ignoreCase = true) }) {
-                      critName to (qVal to yrVal)
-                    } else null
-                  }
+                // Compact STC Quota Progress Bar
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                  LinearProgressIndicator(
+                    progress = { animatedProgress },
+                    modifier = Modifier
+                      .weight(1f)
+                      .height(5.dp)
+                      .clip(RoundedCornerShape(4.dp)),
+                    color = progressColor,
+                    trackColor = if (isDark) Color(0xFF1E293B) else Color(0xFFE2E8F0)
+                  )
+                  Text(
+                    text = "${row.stats.stc}/$totalGoal ($pct%)",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = JetBrainsMonoFontFamily,
+                    color = progressColor,
+                    maxLines = 1,
+                    softWrap = false
+                  )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 Row(
                   modifier = Modifier.fillMaxWidth(),
@@ -865,32 +983,91 @@ fun MentorDashboardScreen(
                     modifier = Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                   ) {
-                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFF0FDF4), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBBF7D0))) {
-                      Text("CC: ${row.stats.stcCreditCardCount}/$ccTarget (Yr:$annualCc)", fontSize = 10.sp, color = Color(0xFF166534), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = if (isDark) Color(0xFF064E3B).copy(alpha = 0.45f) else Color(0xFFF0FDF4),
+                      border = BorderStroke(1.dp, if (isDark) Color(0xFF059669).copy(alpha = 0.55f) else Color(0xFFBBF7D0))
+                    ) {
+                      Text(
+                        "CC: ${row.stats.stcCreditCardCount}/$ccTarget (Yr:$annualCc)",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDark) Color(0xFF6EE7B7) else Color(0xFF166534),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                        maxLines = 1,
+                        softWrap = false
+                      )
                     }
-                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFEFF6FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFBFDBFE))) {
-                      Text("Corp: ${row.stats.stcCorporateCardCount}/$corpTarget (Yr:$annualCorp)", fontSize = 10.sp, color = Color(0xFF1E40AF), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.45f) else Color(0xFFEFF6FF),
+                      border = BorderStroke(1.dp, if (isDark) Color(0xFF3B82F6).copy(alpha = 0.55f) else Color(0xFFBFDBFE))
+                    ) {
+                      Text(
+                        "Corp: ${row.stats.stcCorporateCardCount}/$corpTarget (Yr:$annualCorp)",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDark) Color(0xFF93C5FD) else Color(0xFF1E40AF),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                        maxLines = 1,
+                        softWrap = false
+                      )
                     }
-                    Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFAF5FF), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE9D5FF))) {
-                      Text("B2B: ${row.stats.stcB2bCount}/$b2bTarget (Yr:$annualB2b)", fontSize = 10.sp, color = Color(0xFF6B21A8), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                    Surface(
+                      shape = RoundedCornerShape(6.dp),
+                      color = if (isDark) Color(0xFF4C1D95).copy(alpha = 0.45f) else Color(0xFFFAF5FF),
+                      border = BorderStroke(1.dp, if (isDark) Color(0xFF8B5CF6).copy(alpha = 0.55f) else Color(0xFFE9D5FF))
+                    ) {
+                      Text(
+                        "B2B: ${row.stats.stcB2bCount}/$b2bTarget (Yr:$annualB2b)",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (isDark) Color(0xFFD8B4FE) else Color(0xFF6B21A8),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                        maxLines = 1,
+                        softWrap = false
+                      )
                     }
                     customCriteriaEntries.forEach { (critName, pair) ->
-                      Surface(shape = RoundedCornerShape(4.dp), color = Color(0xFFFFFBEB), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFDE68A))) {
-                        Text("$critName: 0/${pair.first} (Yr:${pair.second})", fontSize = 10.sp, fontWeight = FontWeight.Medium, color = Color(0xFFB45309), modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp), maxLines = 1, softWrap = false)
+                      Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (isDark) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFFFBEB),
+                        border = BorderStroke(1.dp, if (isDark) Color(0xFFF59E0B).copy(alpha = 0.55f) else Color(0xFFFDE68A))
+                      ) {
+                        Text(
+                          "$critName: 0/${pair.first} (Yr:${pair.second})",
+                          fontSize = 10.sp,
+                          fontWeight = FontWeight.SemiBold,
+                          color = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
+                          modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.5.dp),
+                          maxLines = 1,
+                          softWrap = false
+                        )
                       }
                     }
                   }
 
-                  Text(
-                    text = "⚙ Set Target",
-                    fontSize = 11.sp,
-                    color = Color(0xFF2563EB),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable { mentorTargetSettingRow = row }
-                  )
+                  Spacer(modifier = Modifier.width(6.dp))
+
+                  Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = if (isDark) Color(0xFF1D4ED8).copy(alpha = 0.25f) else Color(0xFF2563EB).copy(alpha = 0.12f),
+                    border = BorderStroke(0.75.dp, if (isDark) Color(0xFF60A5FA).copy(alpha = 0.45f) else Color(0xFF2563EB).copy(alpha = 0.3f)),
+                    modifier = Modifier.interactiveBounce(pressedScale = 0.92f, onClick = { mentorTargetSettingRow = row })
+                  ) {
+                    Text(
+                      text = "⚙ Set Target",
+                      fontSize = 10.5.sp,
+                      color = if (isDark) Color(0xFF93C5FD) else Color(0xFF2563EB),
+                      fontWeight = FontWeight.Bold,
+                      modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                      maxLines = 1,
+                      softWrap = false
+                    )
+                  }
                 }
               }
-              HorizontalDivider(color = Color(0xFFF1F5F9))
+              HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f))
             }
           }
         }
@@ -1019,21 +1196,30 @@ fun MentorDashboardScreen(
 
     }
 
+    val mentorHaptics = LocalHapticFeedback.current
+    val (mentorFabInteraction, _) = rememberBounceInteraction(0.92f)
     FloatingActionButton(
-      onClick = { onNavigate(Screen.CustomerForm(null)) },
+      onClick = {
+        mentorHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        onNavigate(Screen.CustomerForm(null))
+      },
+      interactionSource = mentorFabInteraction,
       containerColor = Color(0xFF0F766E),
       contentColor = Color.White,
+      shape = RoundedCornerShape(16.dp),
       modifier = Modifier
         .align(Alignment.BottomEnd)
         .padding(16.dp)
+        .border(1.5.dp, EblGold.copy(alpha = 0.8f), RoundedCornerShape(16.dp))
+        .interactiveBounce(pressedScale = 0.92f, interactionSource = mentorFabInteraction)
         .testTag("mentor_fab_add_customer")
     ) {
       Row(
-        modifier = Modifier.padding(horizontal = 12.dp),
+        modifier = Modifier.padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
         Icon(Icons.Default.Add, contentDescription = "Add Customer")
-        Spacer(modifier = Modifier.width(4.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text("New File", fontWeight = FontWeight.Bold, fontSize = 12.sp)
       }
     }

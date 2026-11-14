@@ -1,6 +1,9 @@
 package com.example.ui.common
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -45,7 +48,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -377,23 +383,40 @@ fun FloatableRmNavButton(
           }
         }
 
-        // Main Floatable & Draggable Hub Button
+        // Main Floatable & Draggable Hub Button with spring rotation & haptic click
+        val haptics = LocalHapticFeedback.current
+        val fabRotation by animateFloatAsState(
+          targetValue = if (isExpanded) 90f else 0f,
+          animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+          ),
+          label = "fab_rotation"
+        )
+        val (fabInteraction, _) = rememberBounceInteraction(0.90f)
         FloatingActionButton(
-          onClick = { isExpanded = !isExpanded },
+          onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            isExpanded = !isExpanded
+          },
+          interactionSource = fabInteraction,
           containerColor = if (isExpanded) Color(0xFFDC2626) else EblNavyPrimary,
           contentColor = Color.White,
           shape = CircleShape,
-          elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
+          elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 10.dp),
           modifier = Modifier
-            .size(54.dp)
+            .size(56.dp)
             .border(2.dp, EblGold, CircleShape)
+            .interactiveBounce(pressedScale = 0.90f, interactionSource = fabInteraction)
             .testTag("draggable_rm_floating_nav_btn")
         ) {
           Icon(
             imageVector = if (isExpanded) Icons.Default.Close else Icons.Default.Menu,
             contentDescription = "Floatable Nav Menu (Drag to move)",
             tint = Color.White,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier
+              .size(24.dp)
+              .graphicsLayer { rotationZ = fabRotation }
           )
         }
       }

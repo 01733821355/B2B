@@ -1,9 +1,18 @@
 package com.example.ui.common
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,24 +37,31 @@ import androidx.compose.material.icons.filled.PendingActions
 import androidx.compose.material.icons.filled.Rule
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stars
-import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +70,8 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
+import com.example.ui.theme.JetBrainsMonoFontFamily
+import com.example.ui.theme.LocalAppTheme
 import com.example.ui.viewmodel.KpiStats
 import com.example.util.DateUtils
 
@@ -64,6 +82,9 @@ fun TimeFilterBar(
   modifier: Modifier = Modifier
 ) {
   val scrollState = rememberScrollState()
+  val haptics = LocalHapticFeedback.current
+  val currentTheme = LocalAppTheme.current
+
   Row(
     modifier = modifier
       .fillMaxWidth()
@@ -73,24 +94,68 @@ fun TimeFilterBar(
   ) {
     DateUtils.TimeFilter.values().forEach { filter ->
       val isSelected = filter == selectedFilter
-      FilterChip(
-        selected = isSelected,
-        onClick = { onFilterSelected(filter) },
-        label = {
-          Text(
-            text = filter.label,
-            fontSize = 12.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-            maxLines = 1,
-            softWrap = false
-          )
+      val interactionSource = remember { MutableInteractionSource() }
+      val isPressed by interactionSource.collectIsPressedAsState()
+
+      val scale by animateFloatAsState(
+        targetValue = when {
+          isPressed -> 0.93f
+          isSelected -> 1.03f
+          else -> 1f
         },
-        colors = FilterChipDefaults.filterChipColors(
-          selectedContainerColor = EblNavyPrimary,
-          selectedLabelColor = Color.White
+        animationSpec = spring(
+          dampingRatio = Spring.DampingRatioMediumBouncy,
+          stiffness = Spring.StiffnessMedium
         ),
-        modifier = Modifier.testTag("time_filter_${filter.name}")
+        label = "chip_scale"
       )
+
+      val bgColor by animateColorAsState(
+        targetValue = if (isSelected) currentTheme.primary else MaterialTheme.colorScheme.surface,
+        animationSpec = tween(durationMillis = 200),
+        label = "chip_bg"
+      )
+
+      val contentColor by animateColorAsState(
+        targetValue = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+        animationSpec = tween(durationMillis = 200),
+        label = "chip_fg"
+      )
+
+      Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = bgColor,
+        shadowElevation = if (isSelected) 4.dp else 1.dp,
+        border = BorderStroke(
+          width = if (isSelected) 1.2.dp else 0.8.dp,
+          color = if (isSelected) currentTheme.tertiary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        modifier = Modifier
+          .graphicsLayer {
+            scaleX = scale
+            scaleY = scale
+          }
+          .clip(RoundedCornerShape(14.dp))
+          .clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.material3.ripple(),
+            onClick = {
+              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onFilterSelected(filter)
+            }
+          )
+          .testTag("time_filter_${filter.name}")
+      ) {
+        Text(
+          text = filter.label,
+          fontSize = 12.sp,
+          fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+          color = contentColor,
+          maxLines = 1,
+          softWrap = false,
+          modifier = Modifier.padding(horizontal = 13.dp, vertical = 7.dp)
+        )
+      }
     }
   }
 }
@@ -106,61 +171,158 @@ fun MetricKpiCard(
   onClick: (() -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
+  val isDark = LocalAppTheme.current.isDark
+  val haptics = LocalHapticFeedback.current
+  val interactionSource = remember { MutableInteractionSource() }
+  val isPressed by interactionSource.collectIsPressedAsState()
+
+  val scale by animateFloatAsState(
+    targetValue = if (isPressed && onClick != null) 0.955f else 1f,
+    animationSpec = spring(
+      dampingRatio = Spring.DampingRatioMediumBouncy,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "kpi_card_scale"
+  )
+
+  val displayTint = remember(iconTint, isDark) {
+    if (!isDark) iconTint
+    else Color(
+      red = (iconTint.red * 0.55f + 0.45f).coerceIn(0f, 1f),
+      green = (iconTint.green * 0.55f + 0.45f).coerceIn(0f, 1f),
+      blue = (iconTint.blue * 0.55f + 0.45f).coerceIn(0f, 1f),
+      alpha = 1f
+    )
+  }
+
+  val numericValue = remember(value) { value.toIntOrNull() }
+
   Card(
     modifier = modifier
-      .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
-      .testTag("kpi_card_${title.lowercase().replace(" ", "_")}"),
-    shape = RoundedCornerShape(14.dp),
-    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-    border = androidx.compose.foundation.BorderStroke(1.dp, bgTint.copy(alpha = 0.8f))
-  ) {
-    Column(modifier = Modifier.padding(12.dp)) {
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-      ) {
-        Box(
-          modifier = Modifier
-            .size(34.dp)
-            .background(bgTint, RoundedCornerShape(10.dp)),
-          contentAlignment = Alignment.Center
-        ) {
-          Icon(
-            imageVector = icon,
-            contentDescription = title,
-            tint = iconTint,
-            modifier = Modifier.size(18.dp)
-          )
-        }
-        Text(
-          text = value,
-          fontSize = 22.sp,
-          fontWeight = FontWeight.ExtraBold,
-          color = iconTint
-        )
+      .graphicsLayer {
+        scaleX = scale
+        scaleY = scale
       }
-      Spacer(modifier = Modifier.height(8.dp))
-      Text(
-        text = title,
-        fontSize = 12.sp,
-        color = MaterialTheme.colorScheme.onSurface,
-        fontWeight = FontWeight.Bold,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        softWrap = false
+      .clip(RoundedCornerShape(18.dp))
+      .then(
+        if (onClick != null) {
+          Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = androidx.compose.material3.ripple(color = displayTint),
+            onClick = {
+              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+              onClick()
+            }
+          )
+        } else Modifier
       )
-      if (subtitle != null) {
-        Spacer(modifier = Modifier.height(2.dp))
+      .testTag("kpi_card_${title.lowercase().replace(" ", "_")}"),
+    shape = RoundedCornerShape(18.dp),
+    colors = CardDefaults.cardColors(
+      containerColor = MaterialTheme.colorScheme.surface
+    ),
+    elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 1.dp else 5.dp),
+    border = BorderStroke(
+      1.dp,
+      if (isDark) displayTint.copy(alpha = 0.35f) else iconTint.copy(alpha = 0.16f)
+    )
+  ) {
+    Column {
+      // Subtle top hairline metallic accent
+      Box(
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(2.5.dp)
+          .background(
+            Brush.horizontalGradient(
+              listOf(displayTint.copy(alpha = 0.85f), displayTint.copy(alpha = 0.25f), Color.Transparent)
+            )
+          )
+      )
+      Column(modifier = Modifier.padding(13.dp)) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          // 3D Glossy Beveled Icon Medallion
+          Box(
+            modifier = Modifier
+              .size(40.dp)
+              .background(iconTint.copy(alpha = if (isDark) 0.55f else 0.35f), RoundedCornerShape(12.dp))
+              .padding(bottom = 2.5.dp)
+              .background(
+                Brush.verticalGradient(
+                  listOf(
+                    iconTint.copy(alpha = if (isDark) 0.92f else 0.95f),
+                    Color(
+                      red = (iconTint.red * 0.72f),
+                      green = (iconTint.green * 0.72f),
+                      blue = (iconTint.blue * 0.72f),
+                      alpha = 1f
+                    )
+                  )
+                ),
+                RoundedCornerShape(11.dp)
+              ),
+            contentAlignment = Alignment.Center
+          ) {
+            Box(
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .align(Alignment.TopCenter)
+                .background(
+                  Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.35f), Color.Transparent)),
+                  RoundedCornerShape(topStart = 11.dp, topEnd = 11.dp)
+                )
+            )
+            Icon(
+              imageVector = icon,
+              contentDescription = title,
+              tint = Color.White,
+              modifier = Modifier.size(20.dp)
+            )
+          }
+
+          if (numericValue != null) {
+            AnimatedCountText(
+              targetCount = numericValue,
+              color = displayTint,
+              fontSize = 24.sp,
+              fontWeight = FontWeight.ExtraBold,
+              fontFamily = JetBrainsMonoFontFamily
+            )
+          } else {
+            Text(
+              text = value,
+              fontSize = 22.sp,
+              fontWeight = FontWeight.ExtraBold,
+              color = displayTint
+            )
+          }
+        }
+        Spacer(modifier = Modifier.height(10.dp))
         Text(
-          text = subtitle,
-          fontSize = 10.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          text = title,
+          fontSize = 12.5.sp,
+          color = MaterialTheme.colorScheme.onSurface,
+          fontWeight = FontWeight.Bold,
           maxLines = 1,
           overflow = TextOverflow.Ellipsis,
           softWrap = false
         )
+        if (subtitle != null) {
+          Spacer(modifier = Modifier.height(2.dp))
+          Text(
+            text = subtitle,
+            fontSize = 10.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            softWrap = false
+          )
+        }
       }
     }
   }
@@ -172,21 +334,45 @@ fun KpiGridSection(
   onKpiClick: ((String) -> Unit)? = null,
   modifier: Modifier = Modifier
 ) {
+  val haptics = LocalHapticFeedback.current
+  val heroInteraction = remember { MutableInteractionSource() }
+  val isHeroPressed by heroInteraction.collectIsPressedAsState()
+  val heroScale by animateFloatAsState(
+    targetValue = if (isHeroPressed) 0.97f else 1f,
+    animationSpec = spring(
+      dampingRatio = Spring.DampingRatioMediumBouncy,
+      stiffness = Spring.StiffnessMedium
+    ),
+    label = "hero_stc_scale"
+  )
+
   Column(
     modifier = modifier
       .fillMaxWidth()
       .padding(horizontal = 16.dp)
   ) {
     // 1. PREMIER HERO CARD: STC (Official Achievement / Production Done)
-    // As explicitly specified: "stc sobar age hobe", "stc mane production hoya jaoa mane done hoa so stc hoyle sheta acivment hishabe count hobe"
     Card(
       modifier = Modifier
         .fillMaxWidth()
-        .clickable { onKpiClick?.invoke("STC") }
+        .graphicsLayer {
+          scaleX = heroScale
+          scaleY = heroScale
+        }
+        .clip(RoundedCornerShape(18.dp))
+        .clickable(
+          interactionSource = heroInteraction,
+          indication = androidx.compose.material3.ripple(color = Color.White),
+          onClick = {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onKpiClick?.invoke("STC")
+          }
+        )
         .testTag("kpi_card_stc_achievement"),
-      shape = RoundedCornerShape(16.dp),
+      shape = RoundedCornerShape(18.dp),
       colors = CardDefaults.cardColors(containerColor = Color(0xFF0F766E)),
-      elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+      elevation = CardDefaults.cardElevation(defaultElevation = if (isHeroPressed) 2.dp else 7.dp),
+      border = BorderStroke(1.dp, EblGold.copy(alpha = 0.55f))
     ) {
       Box(
         modifier = Modifier
@@ -196,10 +382,18 @@ fun KpiGridSection(
               listOf(Color(0xFF0F766E), Color(0xFF115E59), Color(0xFF042F2E))
             )
           )
-          .padding(16.dp)
       ) {
+        // Subtle live shimmer sheen
+        Box(
+          modifier = Modifier
+            .matchParentSize()
+            .background(rememberShimmerBrush(Color.White.copy(alpha = 0.1f)))
+        )
+
         Row(
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
@@ -212,15 +406,20 @@ fun KpiGridSection(
           ) {
             Box(
               modifier = Modifier
-                .size(46.dp)
-                .background(Color(0xFFCCFBF1), CircleShape),
+                .size(50.dp)
+                .background(Color(0xFF92400E).copy(alpha = 0.65f), CircleShape)
+                .padding(bottom = 2.5.dp)
+                .background(
+                  Brush.verticalGradient(listOf(Color(0xFFFEF08A), EblGold, Color(0xFFD97706))),
+                  CircleShape
+                ),
               contentAlignment = Alignment.Center
             ) {
               Icon(
                 imageVector = Icons.Default.Stars,
                 contentDescription = "STC Achievement",
-                tint = Color(0xFF0F766E),
-                modifier = Modifier.size(28.dp)
+                tint = EblNavyDark,
+                modifier = Modifier.size(27.dp)
               )
             }
             Column {
@@ -230,28 +429,28 @@ fun KpiGridSection(
               ) {
                 Text(
                   text = "STC (Achievement / Done)",
-                  fontSize = 14.sp,
-                  fontWeight = FontWeight.Bold,
+                  fontSize = 14.5.sp,
+                  fontWeight = FontWeight.ExtraBold,
                   color = Color.White,
                   maxLines = 1,
                   softWrap = false
                 )
                 Surface(
-                  shape = RoundedCornerShape(4.dp),
+                  shape = RoundedCornerShape(5.dp),
                   color = EblGold
                 ) {
                   Text(
                     text = "TARGET KPI",
-                    fontSize = 9.sp,
+                    fontSize = 8.5.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = EblNavyDark,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
                     maxLines = 1,
                     softWrap = false
                   )
                 }
               }
-              Spacer(modifier = Modifier.height(2.dp))
+              Spacer(modifier = Modifier.height(3.dp))
               Text(
                 text = "Production Done • Official Goal Metric",
                 fontSize = 11.sp,
@@ -263,13 +462,12 @@ fun KpiGridSection(
             }
           }
 
-          Text(
-            text = stats.stc.toString(),
-            fontSize = 28.sp,
-            fontWeight = FontWeight.ExtraBold,
+          AnimatedCountText(
+            targetCount = stats.stc,
             color = Color.White,
-            maxLines = 1,
-            softWrap = false
+            fontSize = 30.sp,
+            fontWeight = FontWeight.ExtraBold,
+            fontFamily = JetBrainsMonoFontFamily
           )
         }
       }
@@ -306,7 +504,7 @@ fun KpiGridSection(
 
     Spacer(modifier = Modifier.height(10.dp))
 
-    // 3. Row 2: Submitted & Analyst Receive ("colect3d submited er pore analyst receive nameo akta option rakho")
+    // 3. Row 2: Submitted & Analyst Receive
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -456,15 +654,24 @@ fun StatusDistributionChart(
     Pair("Condition", Pair(stats.condition, Color(0xFF9333EA)))
   ).filter { it.second.first > 0 }
 
+  var playAnim by remember { mutableStateOf(false) }
+  LaunchedEffect(total) { playAnim = true }
+  val fillProgress by animateFloatAsState(
+    targetValue = if (playAnim) 1f else 0.05f,
+    animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+    label = "chart_fill_progress"
+  )
+
   Card(
     modifier = modifier
       .fillMaxWidth()
       .padding(horizontal = 16.dp, vertical = 6.dp),
-    shape = RoundedCornerShape(14.dp),
+    shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+    border = BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
   ) {
-    Column(modifier = Modifier.padding(14.dp)) {
+    Column(modifier = Modifier.padding(15.dp)) {
       Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -476,22 +683,36 @@ fun StatusDistributionChart(
           fontWeight = FontWeight.Bold,
           color = MaterialTheme.colorScheme.onSurface
         )
-        Text(
-          text = "Total $total Files",
-          fontSize = 11.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Surface(
+          shape = RoundedCornerShape(8.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+        ) {
+          Text(
+            text = "Total $total Files",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+          )
+        }
       }
-      Spacer(modifier = Modifier.height(10.dp))
+      Spacer(modifier = Modifier.height(12.dp))
 
-      // Custom horizontal segmented bar
+      // Animated rounded horizontal segmented bar
       Canvas(
         modifier = Modifier
           .fillMaxWidth()
           .height(16.dp)
+          .clip(RoundedCornerShape(8.dp))
       ) {
         var currentX = 0f
-        val canvasWidth = size.width
+        val canvasWidth = size.width * fillProgress
+        drawRoundRect(
+          color = Color.LightGray.copy(alpha = 0.2f),
+          topLeft = Offset.Zero,
+          size = size,
+          cornerRadius = CornerRadius(8.dp.toPx(), 8.dp.toPx())
+        )
         for (item in items) {
           val fraction = item.second.first.toFloat() / total.toFloat()
           val barWidth = canvasWidth * fraction
@@ -506,9 +727,9 @@ fun StatusDistributionChart(
 
       Spacer(modifier = Modifier.height(12.dp))
 
-      // Multi-column clean legend (words won't wrap awkwardly!)
-      Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        items.chunked(4).forEach { rowItems ->
+      // Multi-column clean legend
+      Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        items.chunked(3).forEach { rowItems ->
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -523,16 +744,20 @@ fun StatusDistributionChart(
                     .size(8.dp)
                     .background(item.second.second, CircleShape)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(5.dp))
                 Text(
                   text = "${item.first}: ${item.second.first}",
-                  fontSize = 10.sp,
-                  fontWeight = FontWeight.Medium,
+                  fontSize = 10.5.sp,
+                  fontWeight = FontWeight.SemiBold,
                   color = MaterialTheme.colorScheme.onSurfaceVariant,
                   maxLines = 1,
-                  softWrap = false
+                  softWrap = false,
+                  overflow = TextOverflow.Ellipsis
                 )
               }
+            }
+            repeat(3 - rowItems.size) {
+              Spacer(modifier = Modifier.weight(1f))
             }
           }
         }

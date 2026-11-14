@@ -74,8 +74,24 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.R
+import com.example.ui.common.StaggeredEntrance
 import com.example.ui.common.VoiceInputField
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberBounceInteraction
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -294,6 +310,16 @@ fun LoginScreen(
     )
 
     val currentTheme = com.example.ui.theme.LocalAppTheme.current
+    val pulseTransition = rememberInfiniteTransition(label = "login_logo_pulse")
+    val ringScale by pulseTransition.animateFloat(
+      initialValue = 0.96f,
+      targetValue = 1.07f,
+      animationSpec = infiniteRepeatable(
+        animation = tween(1800, easing = FastOutSlowInEasing),
+        repeatMode = RepeatMode.Reverse
+      ),
+      label = "ring_scale"
+    )
 
     Column(
       modifier = Modifier
@@ -303,93 +329,113 @@ fun LoginScreen(
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center
     ) {
-      // Golden Brand Logo + Active Theme Emoji Avatar
-      Box(
-        modifier = Modifier
-          .size(80.dp)
-          .background(currentTheme.primary, CircleShape),
-        contentAlignment = Alignment.Center
-      ) {
-        Box(
-          modifier = Modifier
-            .size(68.dp)
-            .clip(CircleShape)
-            .background(currentTheme.secondary),
-          contentAlignment = Alignment.Center
-        ) {
-          if (appCustomIconUrl.isNotBlank()) {
-            AsyncImage(
-              model = appCustomIconUrl,
-              contentDescription = "App Logo",
+      // Golden Brand Logo + Active Theme Emoji Avatar with ambient breathing halo
+      StaggeredEntrance(delayMillis = 0) {
+        Box(contentAlignment = Alignment.Center) {
+          Box(
+            modifier = Modifier
+              .size(92.dp)
+              .graphicsLayer {
+                scaleX = ringScale
+                scaleY = ringScale
+              }
+              .border(1.5.dp, currentTheme.tertiary.copy(alpha = 0.55f), CircleShape)
+          )
+          Box(
+            modifier = Modifier
+              .size(80.dp)
+              .background(currentTheme.primary, CircleShape)
+              .border(2.dp, currentTheme.tertiary, CircleShape),
+            contentAlignment = Alignment.Center
+          ) {
+            Box(
               modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape),
-              contentScale = ContentScale.Crop
-            )
-          } else {
-            Text(
-              text = currentTheme.id.emoji,
-              fontSize = 32.sp
-            )
+                .size(68.dp)
+                .clip(CircleShape)
+                .background(currentTheme.secondary),
+              contentAlignment = Alignment.Center
+            ) {
+              if (appCustomIconUrl.isNotBlank()) {
+                AsyncImage(
+                  model = appCustomIconUrl,
+                  contentDescription = "App Logo",
+                  modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape),
+                  contentScale = ContentScale.Crop
+                )
+              } else {
+                Text(
+                  text = currentTheme.id.emoji,
+                  fontSize = 32.sp
+                )
+              }
+            }
           }
         }
       }
 
       Spacer(modifier = Modifier.height(14.dp))
 
-      // Team / App Name configured by Mentor
-      Text(
-        text = appCustomName,
-        color = Color.White,
-        fontSize = 22.sp,
-        fontWeight = FontWeight.Bold,
-        textAlign = TextAlign.Center
-      )
-
-      Spacer(modifier = Modifier.height(4.dp))
-
-      Text(
-        text = "Executive Operations & Field Force Team",
-        color = currentTheme.tertiary,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Medium,
-        textAlign = TextAlign.Center
-      )
-
-      Spacer(modifier = Modifier.height(6.dp))
-
-      val timePeriod = remember { DateUtils.getCurrentTimeOfDayPeriod() }
-
-      // Time-of-Day Greeting & Active Theme Seasonal Badge
-      Surface(
-        shape = RoundedCornerShape(20.dp),
-        color = Color.Black.copy(alpha = 0.4f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.5f))
-      ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Text(text = timePeriod.emoji, fontSize = 11.sp)
-          Spacer(modifier = Modifier.width(4.dp))
+      StaggeredEntrance(delayMillis = 50) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          // Team / App Name configured by Mentor
           Text(
-            text = "${timePeriod.greeting} • ${currentTheme.name}",
+            text = appCustomName,
             color = Color.White,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
+            fontSize = 23.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center
           )
+
+          Spacer(modifier = Modifier.height(4.dp))
+
+          Text(
+            text = "Executive Operations & Field Force Team",
+            color = currentTheme.tertiary,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center
+          )
+
+          Spacer(modifier = Modifier.height(8.dp))
+
+          val timePeriod = remember { DateUtils.getCurrentTimeOfDayPeriod() }
+
+          // Time-of-Day Greeting & Active Theme Seasonal Badge
+          Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = Color.Black.copy(alpha = 0.48f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.6f))
+          ) {
+            Row(
+              modifier = Modifier.padding(horizontal = 13.dp, vertical = 5.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Text(text = timePeriod.emoji, fontSize = 11.sp)
+              Spacer(modifier = Modifier.width(5.dp))
+              Text(
+                text = "${timePeriod.greeting} • ${currentTheme.name}",
+                color = Color.White,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+              )
+            }
+          }
         }
       }
 
       Spacer(modifier = Modifier.height(18.dp))
 
+      StaggeredEntrance(delayMillis = 100) {
       Card(
         modifier = Modifier
           .fillMaxWidth()
           .testTag("login_card"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B) else Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF1E293B).copy(alpha = 0.96f) else Color.White.copy(alpha = 0.97f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+        border = BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.35f))
       ) {
         Column(
           modifier = Modifier.padding(24.dp),
@@ -397,10 +443,11 @@ fun LoginScreen(
         ) {
           Text(
             text = "Sign In to Portal",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.ExtraBold,
             color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
           )
+          Spacer(modifier = Modifier.height(2.dp))
           Text(
             text = "Enter your assigned RM Code or Admin username",
             fontSize = 12.sp,
@@ -410,22 +457,29 @@ fun LoginScreen(
 
           Spacer(modifier = Modifier.height(20.dp))
 
-          // Error Message Alert
-          if (errorMessage != null) {
-            Box(
-              modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFFEE2E2), RoundedCornerShape(8.dp))
-                .padding(12.dp)
-            ) {
-              Text(
-                text = errorMessage!!,
-                color = Color(0xFFB91C1C),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-              )
+          // Animated Error Message Alert
+          AnimatedVisibility(
+            visible = errorMessage != null,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+          ) {
+            Column {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .background(Color(0xFFFEE2E2), RoundedCornerShape(10.dp))
+                  .border(1.dp, Color(0xFFFCA5A5), RoundedCornerShape(10.dp))
+                  .padding(12.dp)
+              ) {
+                Text(
+                  text = errorMessage.orEmpty(),
+                  color = Color(0xFFB91C1C),
+                  fontSize = 12.sp,
+                  fontWeight = FontWeight.SemiBold
+                )
+              }
+              Spacer(modifier = Modifier.height(14.dp))
             }
-            Spacer(modifier = Modifier.height(14.dp))
           }
 
           // Voice-Enabled RM Code / Username
@@ -504,18 +558,29 @@ fun LoginScreen(
 
           Spacer(modifier = Modifier.height(24.dp))
 
-          // Login Button
+          // Login Button with spring bounce & haptics
+          val haptics = androidx.compose.ui.platform.LocalHapticFeedback.current
+          val (signInInteraction, signInScale) = rememberBounceInteraction(0.96f)
           Button(
-            onClick = { doLogin() },
+            onClick = {
+              haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+              doLogin()
+            },
+            interactionSource = signInInteraction,
             enabled = !isLoading,
             colors = ButtonDefaults.buttonColors(
-              containerColor = EblNavyPrimary,
+              containerColor = currentTheme.primary,
               contentColor = Color.White
             ),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(12.dp),
+            elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp),
             modifier = Modifier
               .fillMaxWidth()
-              .height(50.dp)
+              .height(52.dp)
+              .graphicsLayer {
+                scaleX = signInScale
+                scaleY = signInScale
+              }
               .testTag("login_submit_btn")
           ) {
             if (isLoading) {
@@ -556,10 +621,15 @@ fun LoginScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
+            val (bioInteraction, bioScale) = rememberBounceInteraction(0.96f)
             OutlinedButton(
-              onClick = { doBiometricLogin(isUserExplicitClick = true) },
+              onClick = {
+                haptics.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                doBiometricLogin(isUserExplicitClick = true)
+              },
+              interactionSource = bioInteraction,
               enabled = !isLoading,
-              shape = RoundedCornerShape(10.dp),
+              shape = RoundedCornerShape(12.dp),
               border = BorderStroke(1.5.dp, EblGold),
               colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = if (isDark) Color(0xFF1E293B) else Color(0xFFFFFBEB),
@@ -567,7 +637,11 @@ fun LoginScreen(
               ),
               modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(52.dp)
+                .graphicsLayer {
+                  scaleX = bioScale
+                  scaleY = bioScale
+                }
                 .testTag("login_biometric_btn")
             ) {
               Icon(
@@ -607,6 +681,7 @@ fun LoginScreen(
             }
           }
         }
+      }
       }
 
       Spacer(modifier = Modifier.height(24.dp))

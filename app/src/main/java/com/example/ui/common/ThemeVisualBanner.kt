@@ -37,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -110,14 +111,24 @@ fun ThemeVisualBanner(
     modifier = modifier
       .fillMaxWidth()
       .testTag("theme_visual_banner"),
-    shape = RoundedCornerShape(18.dp),
+    shape = RoundedCornerShape(22.dp),
     colors = CardDefaults.cardColors(containerColor = currentTheme.primary),
-    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    border = androidx.compose.foundation.BorderStroke(
+      1.dp,
+      Brush.linearGradient(
+        listOf(
+          currentTheme.tertiary.copy(alpha = 0.55f),
+          Color.White.copy(alpha = 0.18f),
+          currentTheme.tertiary.copy(alpha = 0.35f)
+        )
+      )
+    )
   ) {
     Box(
       modifier = Modifier
         .fillMaxWidth()
-        .height(185.dp)
+        .height(194.dp)
     ) {
       // Background Image: Custom Drive/Web background if set by Mentor, otherwise default corporate asset
       if (!customBackgroundUrl.isNullOrBlank()) {
@@ -134,7 +145,7 @@ fun ThemeVisualBanner(
           contentDescription = "Corporate Office",
           contentScale = ContentScale.Crop,
           modifier = Modifier.fillMaxSize(),
-          alpha = 0.82f
+          alpha = 0.85f
         )
       }
 
@@ -142,9 +153,9 @@ fun ThemeVisualBanner(
       Box(
         modifier = Modifier
           .align(Alignment.BottomEnd)
-          .size(width = 190.dp, height = 120.dp)
-          .padding(end = 4.dp, bottom = 4.dp)
-          .clip(RoundedCornerShape(14.dp)),
+          .size(width = 190.dp, height = 124.dp)
+          .padding(end = 6.dp, bottom = 6.dp)
+          .clip(RoundedCornerShape(16.dp)),
         contentAlignment = Alignment.Center
       ) {
         Image(
@@ -152,31 +163,38 @@ fun ThemeVisualBanner(
           contentDescription = "Theme Illustration",
           contentScale = ContentScale.FillBounds,
           modifier = Modifier.fillMaxSize(),
-          alpha = 0.88f
+          alpha = 0.9f
         )
       }
 
-      // Layered Gradient Scrim to keep photo vividly visible while ensuring text contrast
+      // Layered Gradient Scrim to keep photo vividly visible while ensuring sharp text contrast
       Box(
         modifier = Modifier
           .fillMaxSize()
           .background(
             Brush.horizontalGradient(
               listOf(
-                Color.Black.copy(alpha = 0.65f),
-                Color.Black.copy(alpha = 0.38f),
-                Color.Black.copy(alpha = 0.12f),
+                Color(0xFF050E1D).copy(alpha = 0.84f),
+                Color(0xFF091E3A).copy(alpha = 0.52f),
+                Color.Black.copy(alpha = 0.14f),
                 Color.Transparent
               )
             )
           )
       )
 
+      // Subtle animated ambient light sheen
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(rememberShimmerBrush(Color.White.copy(alpha = 0.08f)))
+      )
+
       // Banner Content
       Column(
         modifier = Modifier
           .fillMaxSize()
-          .padding(horizontal = 16.dp, vertical = 14.dp),
+          .padding(horizontal = 18.dp, vertical = 15.dp),
         verticalArrangement = Arrangement.SpaceBetween
       ) {
         // Top Row: Time Greeting & Live Time / Theme Chip
@@ -188,21 +206,21 @@ fun ThemeVisualBanner(
           // Greeting & Time Badge
           Surface(
             shape = RoundedCornerShape(20.dp),
-            color = currentTheme.secondary.copy(alpha = 0.9f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.6f))
+            color = currentTheme.secondary.copy(alpha = 0.88f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.65f))
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+              modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
                 text = timePeriod.emoji,
                 fontSize = 11.sp
               )
-              Spacer(modifier = Modifier.width(4.dp))
+              Spacer(modifier = Modifier.width(5.dp))
               Text(
                 text = timePeriod.greeting,
-                fontSize = 10.sp,
+                fontSize = 10.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.White,
                 maxLines = 1,
@@ -214,10 +232,11 @@ fun ThemeVisualBanner(
           // Active Theme Badge with Emoji
           Surface(
             shape = RoundedCornerShape(20.dp),
-            color = Color.Black.copy(alpha = 0.45f)
+            color = Color.Black.copy(alpha = 0.48f),
+            border = androidx.compose.foundation.BorderStroke(0.75.dp, Color.White.copy(alpha = 0.2f))
           ) {
             Row(
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+              modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
               verticalAlignment = Alignment.CenterVertically
             ) {
               Text(
@@ -228,7 +247,7 @@ fun ThemeVisualBanner(
               Text(
                 text = currentTheme.name,
                 fontSize = 10.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.SemiBold,
                 color = currentTheme.tertiary,
                 maxLines = 1,
                 softWrap = false
@@ -238,36 +257,43 @@ fun ThemeVisualBanner(
         }
 
         // Center Content: Title, Subtitle, Details
-        Column(modifier = Modifier.fillMaxWidth(0.72f)) {
+        Column(modifier = Modifier.fillMaxWidth(0.75f)) {
           Text(
             text = title,
-            fontSize = 17.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             softWrap = false
           )
-          Spacer(modifier = Modifier.height(2.dp))
+          Spacer(modifier = Modifier.height(3.dp))
           Text(
             text = subtitle,
-            fontSize = 11.sp,
+            fontSize = 11.5.sp,
             color = currentTheme.tertiary,
-            fontWeight = FontWeight.Medium,
+            fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             softWrap = false
           )
           if (badgeText != null) {
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(
-              text = badgeText,
-              fontSize = 10.sp,
-              color = Color.White.copy(alpha = 0.85f),
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-              softWrap = false
-            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Surface(
+              color = Color.White.copy(alpha = 0.14f),
+              shape = RoundedCornerShape(6.dp)
+            ) {
+              Text(
+                text = badgeText,
+                fontSize = 10.sp,
+                color = Color.White.copy(alpha = 0.92f),
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false,
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+              )
+            }
           }
         }
 
@@ -282,9 +308,12 @@ fun ThemeVisualBanner(
               Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                  .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
-                  .padding(horizontal = 6.dp, vertical = 2.dp)
+                  .background(Color.Black.copy(alpha = 0.44f), RoundedCornerShape(8.dp))
+                  .border(0.75.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(8.dp))
+                  .padding(horizontal = 8.dp, vertical = 3.dp)
               ) {
+                PulsingLiveDot(color = Color(0xFF34D399), size = 5.dp)
+                Spacer(modifier = Modifier.width(5.dp))
                 Icon(
                   imageVector = Icons.Default.AccessTime,
                   contentDescription = "Time",
@@ -295,23 +324,27 @@ fun ThemeVisualBanner(
                 Text(
                   text = formattedTime,
                   fontSize = 10.sp,
-                  color = Color.White.copy(alpha = 0.9f),
-                  fontWeight = FontWeight.Medium
+                  color = Color.White.copy(alpha = 0.95f),
+                  fontWeight = FontWeight.SemiBold
                 )
               }
             }
 
             if (onUploadBackground != null) {
               Spacer(modifier = Modifier.width(8.dp))
+              val (photoInteraction, _) = rememberBounceInteraction(0.92f)
               Surface(
                 onClick = onUploadBackground,
-                shape = RoundedCornerShape(6.dp),
-                color = Color.Black.copy(alpha = 0.5f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.6f)),
-                modifier = Modifier.testTag("mentor_change_banner_btn")
+                interactionSource = photoInteraction,
+                shape = RoundedCornerShape(8.dp),
+                color = Color.Black.copy(alpha = 0.55f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.65f)),
+                modifier = Modifier
+                  .interactiveBounce(pressedScale = 0.92f, interactionSource = photoInteraction)
+                  .testTag("mentor_change_banner_btn")
               ) {
                 Row(
-                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
                   Icon(
@@ -320,12 +353,12 @@ fun ThemeVisualBanner(
                     tint = currentTheme.tertiary,
                     modifier = Modifier.size(12.dp)
                   )
-                  Spacer(modifier = Modifier.width(3.dp))
+                  Spacer(modifier = Modifier.width(4.dp))
                   Text(
                     text = "Change Photo",
                     fontSize = 10.sp,
                     color = Color.White,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.SemiBold
                   )
                 }
               }

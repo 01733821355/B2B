@@ -15,15 +15,28 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.viewModels
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +92,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.common.ActiveEventSlidingBanner
 import com.example.ui.common.EblTopBar
+import com.example.ui.common.Nav3DIconType
+import com.example.ui.common.Realistic3DBottomBar
+import com.example.ui.common.Realistic3DNavIcon
 import com.example.ui.screens.ChangePasswordDialog
 import com.example.ui.screens.LoginScreen
 import com.example.ui.screens.admin.AdminDashboardScreen
@@ -516,14 +532,25 @@ fun EblMainApp(viewModel: AppViewModel) {
             }
             if (fromIndex != -1 && toIndex != -1 && fromIndex != toIndex) {
               if (toIndex > fromIndex) {
-                (slideInHorizontally(animationSpec = tween(280)) { width -> width } + fadeIn(animationSpec = tween(280)))
-                  .togetherWith(slideOutHorizontally(animationSpec = tween(280)) { width -> -width } + fadeOut(animationSpec = tween(200)))
+                (slideInHorizontally(
+                  animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                  )
+                ) { width -> width / 2 } + fadeIn(animationSpec = tween(240)))
+                  .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> -width / 3 } + fadeOut(animationSpec = tween(180)))
               } else {
-                (slideInHorizontally(animationSpec = tween(280)) { width -> -width } + fadeIn(animationSpec = tween(280)))
-                  .togetherWith(slideOutHorizontally(animationSpec = tween(280)) { width -> width } + fadeOut(animationSpec = tween(200)))
+                (slideInHorizontally(
+                  animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                  )
+                ) { width -> -width / 2 } + fadeIn(animationSpec = tween(240)))
+                  .togetherWith(slideOutHorizontally(animationSpec = tween(220)) { width -> width / 3 } + fadeOut(animationSpec = tween(180)))
               }
             } else {
-              fadeIn(animationSpec = tween(200)).togetherWith(fadeOut(animationSpec = tween(160)))
+              (fadeIn(animationSpec = tween(220)) + scaleIn(initialScale = 0.97f, animationSpec = tween(220)))
+                .togetherWith(fadeOut(animationSpec = tween(160)) + scaleOut(targetScale = 0.985f, animationSpec = tween(160)))
             }
           },
           label = "ScreenSwipeTransition",
@@ -800,121 +827,11 @@ fun EblBottomNav(
   currentScreen: Screen,
   onSelectScreen: (Screen) -> Unit
 ) {
-  NavigationBar(
-    containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 2.dp,
-    modifier = Modifier.height(58.dp)
-  ) {
-    if (userRole == "RM") {
-      NavigationBarItem(
-        selected = currentScreen is Screen.RmDashboard,
-        onClick = { onSelectScreen(Screen.RmDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", modifier = Modifier.size(20.dp)) },
-        label = { Text("Dashboard", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
-        onClick = { onSelectScreen(Screen.CustomerForm(null)) },
-        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
-        label = { Text("New File", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.CustomerList,
-        onClick = { onSelectScreen(Screen.CustomerList) },
-        icon = { Icon(Icons.Default.Folder, contentDescription = "My Files", modifier = Modifier.size(20.dp)) },
-        label = { Text("My Files", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.Reports,
-        onClick = { onSelectScreen(Screen.Reports) },
-        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports", modifier = Modifier.size(20.dp)) },
-        label = { Text("Reports", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.More,
-        onClick = { onSelectScreen(Screen.More) },
-        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
-        label = { Text("More", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-    } else if (userRole == "ADMIN") {
-      NavigationBarItem(
-        selected = currentScreen is Screen.AdminDashboard,
-        onClick = { onSelectScreen(Screen.AdminDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard", modifier = Modifier.size(20.dp)) },
-        label = { Text("Dashboard", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
-        onClick = { onSelectScreen(Screen.CustomerForm(null)) },
-        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
-        label = { Text("New File", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.GlobalDatabase,
-        onClick = { onSelectScreen(Screen.GlobalDatabase) },
-        icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
-        label = { Text("Database", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.Reports,
-        onClick = { onSelectScreen(Screen.Reports) },
-        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports", modifier = Modifier.size(20.dp)) },
-        label = { Text("Reports", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.More,
-        onClick = { onSelectScreen(Screen.More) },
-        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
-        label = { Text("More", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-    } else { // MENTOR
-      NavigationBarItem(
-        selected = currentScreen is Screen.MentorDashboard,
-        onClick = { onSelectScreen(Screen.MentorDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Console", modifier = Modifier.size(20.dp)) },
-        label = { Text("Console", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
-        onClick = { onSelectScreen(Screen.CustomerForm(null)) },
-        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File", modifier = Modifier.size(20.dp)) },
-        label = { Text("New File", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.GlobalDatabase,
-        onClick = { onSelectScreen(Screen.GlobalDatabase) },
-        icon = { Icon(Icons.Default.Storage, contentDescription = "Database", modifier = Modifier.size(20.dp)) },
-        label = { Text("Database", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.GoogleSheetsSync,
-        onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
-        icon = { Icon(Icons.Default.Sync, contentDescription = "Sync", modifier = Modifier.size(20.dp)) },
-        label = { Text("Sheets", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-      NavigationBarItem(
-        selected = currentScreen is Screen.More,
-        onClick = { onSelectScreen(Screen.More) },
-        icon = { Icon(Icons.Default.Widgets, contentDescription = "More", modifier = Modifier.size(20.dp)) },
-        label = { Text("More", fontSize = 9.sp) },
-        colors = NavigationBarItemDefaults.colors(selectedIconColor = EblNavyPrimary)
-      )
-    }
-  }
+  Realistic3DBottomBar(
+    userRole = userRole,
+    currentScreen = currentScreen,
+    onSelectScreen = onSelectScreen
+  )
 }
 
 @Composable
@@ -931,44 +848,45 @@ fun EblNavigationRail(
       NavigationRailItem(
         selected = currentScreen is Screen.RmDashboard,
         onClick = { onSelectScreen(Screen.RmDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.DASHBOARD, currentScreen is Screen.RmDashboard, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Dashboard") }
       )
       NavigationRailItem(
         selected = currentScreen is Screen.CustomerForm && currentScreen.editFileId == null,
         onClick = { onSelectScreen(Screen.CustomerForm(null)) },
-        icon = { Icon(Icons.Default.AddCircle, contentDescription = "New File") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.NEW_FILE, currentScreen is Screen.CustomerForm && currentScreen.editFileId == null, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("New File") }
       )
       NavigationRailItem(
         selected = currentScreen is Screen.CustomerList,
         onClick = { onSelectScreen(Screen.CustomerList) },
-        icon = { Icon(Icons.Default.Folder, contentDescription = "My Files") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.MY_FILES, currentScreen is Screen.CustomerList, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Files") }
       )
       NavigationRailItem(
         selected = currentScreen is Screen.Reports,
         onClick = { onSelectScreen(Screen.Reports) },
-        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.REPORTS, currentScreen is Screen.Reports, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Reports") }
       )
       NavigationRailItem(
         selected = currentScreen is Screen.More,
         onClick = { onSelectScreen(Screen.More) },
-        icon = { Icon(Icons.Default.Widgets, contentDescription = "More") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.MORE, currentScreen is Screen.More, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("More") }
       )
     } else {
+      val isHome = currentScreen is Screen.AdminDashboard || currentScreen is Screen.MentorDashboard
       NavigationRailItem(
-        selected = currentScreen is Screen.AdminDashboard || currentScreen is Screen.MentorDashboard,
+        selected = isHome,
         onClick = { onSelectScreen(if (userRole == "ADMIN") Screen.AdminDashboard else Screen.MentorDashboard) },
-        icon = { Icon(Icons.Default.Dashboard, contentDescription = "Dashboard") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.DASHBOARD, isHome, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Dashboard") }
       )
       NavigationRailItem(
         selected = currentScreen is Screen.GlobalDatabase,
         onClick = { onSelectScreen(Screen.GlobalDatabase) },
-        icon = { Icon(Icons.Default.Storage, contentDescription = "Database") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.DATABASE, currentScreen is Screen.GlobalDatabase, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Database") }
       )
       NavigationRailItem(
@@ -980,21 +898,21 @@ fun EblNavigationRail(
       NavigationRailItem(
         selected = currentScreen is Screen.Reports,
         onClick = { onSelectScreen(Screen.Reports) },
-        icon = { Icon(Icons.Default.Assessment, contentDescription = "Reports") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.REPORTS, currentScreen is Screen.Reports, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("Reports") }
       )
       if (userRole == "MENTOR") {
         NavigationRailItem(
           selected = currentScreen is Screen.GoogleSheetsSync,
           onClick = { onSelectScreen(Screen.GoogleSheetsSync) },
-          icon = { Icon(Icons.Default.Sync, contentDescription = "Sync") },
+          icon = { Realistic3DNavIcon(Nav3DIconType.SHEETS, currentScreen is Screen.GoogleSheetsSync, EblNavyPrimary, Modifier.size(30.dp)) },
           label = { Text("Sync") }
         )
       }
       NavigationRailItem(
         selected = currentScreen is Screen.More,
         onClick = { onSelectScreen(Screen.More) },
-        icon = { Icon(Icons.Default.Widgets, contentDescription = "More") },
+        icon = { Realistic3DNavIcon(Nav3DIconType.MORE, currentScreen is Screen.More, EblNavyPrimary, Modifier.size(30.dp)) },
         label = { Text("More") }
       )
     }

@@ -1,5 +1,6 @@
 package com.example.ui.screens.more
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -47,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -57,6 +59,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
+import com.example.ui.common.StaggeredEntrance
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberShimmerBrush
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
 import com.example.ui.theme.LocalAppTheme
@@ -87,45 +92,60 @@ fun MoreScreen(
   ) {
     // Header Banner
     item {
-      Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-          containerColor = if (isDark) Color(0xFF1E293B) else EblNavyDark
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth().testTag("more_screen_hero_card")
-      ) {
-        Row(
-          modifier = Modifier.padding(18.dp),
-          verticalAlignment = Alignment.CenterVertically
+      val currentTheme = LocalAppTheme.current
+      StaggeredEntrance(delayMillis = 0) {
+        Card(
+          shape = RoundedCornerShape(20.dp),
+          colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+          elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+          border = BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.45f)),
+          modifier = Modifier.fillMaxWidth().testTag("more_screen_hero_card")
         ) {
-          Surface(
-            shape = CircleShape,
-            color = Color(0xFF2563EB).copy(alpha = 0.25f),
-            modifier = Modifier.size(46.dp)
-          ) {
-            Box(contentAlignment = Alignment.Center) {
-              Icon(
-                Icons.Default.Business,
-                contentDescription = null,
-                tint = Color(0xFF93C5FD),
-                modifier = Modifier.size(24.dp)
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .background(
+                Brush.linearGradient(
+                  listOf(currentTheme.primary, currentTheme.secondary)
+                )
               )
+              .background(rememberShimmerBrush(Color.White.copy(alpha = 0.08f)))
+          ) {
+            Row(
+              modifier = Modifier.padding(18.dp),
+              verticalAlignment = Alignment.CenterVertically
+            ) {
+              Surface(
+                shape = CircleShape,
+                color = currentTheme.tertiary.copy(alpha = 0.18f),
+                border = BorderStroke(1.dp, currentTheme.tertiary.copy(alpha = 0.55f)),
+                modifier = Modifier.size(48.dp)
+              ) {
+                Box(contentAlignment = Alignment.Center) {
+                  Icon(
+                    Icons.Default.Business,
+                    contentDescription = null,
+                    tint = currentTheme.tertiary,
+                    modifier = Modifier.size(24.dp)
+                  )
+                }
+              }
+              Spacer(modifier = Modifier.width(14.dp))
+              Column {
+                Text(
+                  text = "Tools & Operations Hub",
+                  fontSize = 18.sp,
+                  fontWeight = FontWeight.ExtraBold,
+                  color = Color.White
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                  text = "Calculators, checklists, routes, documents & analytics",
+                  fontSize = 11.5.sp,
+                  color = Color.White.copy(alpha = 0.8f)
+                )
+              }
             }
-          }
-          Spacer(modifier = Modifier.width(14.dp))
-          Column {
-            Text(
-              text = "Tools & Operations Hub",
-              fontSize = 17.sp,
-              fontWeight = FontWeight.Bold,
-              color = Color.White
-            )
-            Text(
-              text = "Access calculators, checklists, routes, files and utilities",
-              fontSize = 11.sp,
-              color = Color(0xFF94A3B8)
-            )
           }
         }
       }
@@ -138,9 +158,14 @@ fun MoreScreen(
       val bioStatus = remember { BiometricHelper.checkBiometricAvailability(context) }
 
       Card(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = cardBg),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        border = BorderStroke(
+          1.dp,
+          if (isBiometricEnabled) Color(0xFF059669).copy(alpha = 0.35f)
+          else if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+        ),
         modifier = Modifier.fillMaxWidth().testTag("more_tool_biometric_card")
       ) {
         Row(
@@ -438,9 +463,14 @@ fun MoreScreen(
       item {
         val executiveMode by viewModel.universalExecutiveUiMode.collectAsState()
         Card(
-          shape = RoundedCornerShape(12.dp),
+          shape = RoundedCornerShape(16.dp),
           colors = CardDefaults.cardColors(containerColor = cardBg),
           elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+          border = BorderStroke(
+            1.dp,
+            if (executiveMode) Color(0xFFF59E0B).copy(alpha = 0.55f)
+            else if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0)
+          ),
           modifier = Modifier
             .fillMaxWidth()
             .testTag("more_executive_ui_card")
@@ -577,12 +607,16 @@ private fun ToolActionCard(
   val isDark = LocalAppTheme.current.isDark
 
   Card(
-    shape = RoundedCornerShape(12.dp),
+    shape = RoundedCornerShape(16.dp),
     colors = CardDefaults.cardColors(containerColor = cardBg),
     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+    border = BorderStroke(
+      1.dp,
+      if (isDark) iconTint.copy(alpha = 0.25f) else iconTint.copy(alpha = 0.16f)
+    ),
     modifier = Modifier
       .fillMaxWidth()
-      .clickable(onClick = onClick)
+      .interactiveBounce(pressedScale = 0.97f, onClick = onClick)
       .testTag(testTag)
   ) {
     Row(
@@ -590,16 +624,37 @@ private fun ToolActionCard(
       verticalAlignment = Alignment.CenterVertically
     ) {
       Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (isDark) iconTint.copy(alpha = 0.2f) else iconBg,
-        modifier = Modifier.size(42.dp)
+        shape = RoundedCornerShape(14.dp),
+        color = Color.Transparent,
+        shadowElevation = 4.dp,
+        border = BorderStroke(1.dp, iconTint.copy(alpha = 0.35f)),
+        modifier = Modifier.size(46.dp)
       ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+          modifier = Modifier
+            .fillMaxSize()
+            .background(
+              Brush.verticalGradient(
+                if (isDark) listOf(iconTint.copy(alpha = 0.42f), iconTint.copy(alpha = 0.2f))
+                else listOf(iconBg, iconBg.copy(alpha = 0.7f))
+              )
+            ),
+          contentAlignment = Alignment.Center
+        ) {
+          Box(
+            modifier = Modifier
+              .fillMaxWidth()
+              .height(16.dp)
+              .align(Alignment.TopCenter)
+              .background(
+                Brush.verticalGradient(listOf(Color.White.copy(alpha = if (isDark) 0.16f else 0.55f), Color.Transparent))
+              )
+          )
           Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (isDark) iconTint else iconTint,
-            modifier = Modifier.size(22.dp)
+            tint = iconTint,
+            modifier = Modifier.size(23.dp)
           )
         }
       }
@@ -613,24 +668,24 @@ private fun ToolActionCard(
         ) {
           Text(
             text = title,
-            fontSize = 13.sp,
+            fontSize = 13.5.sp,
             fontWeight = FontWeight.Bold,
             color = primaryText
           )
           Surface(
-            shape = RoundedCornerShape(4.dp),
-            color = if (isDark) iconTint.copy(alpha = 0.25f) else iconBg
+            shape = RoundedCornerShape(6.dp),
+            color = if (isDark) iconTint.copy(alpha = 0.22f) else iconBg
           ) {
             Text(
               text = badge,
               fontSize = 9.sp,
-              fontWeight = FontWeight.SemiBold,
+              fontWeight = FontWeight.Bold,
               color = iconTint,
-              modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+              modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
             )
           }
         }
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(3.dp))
         Text(
           text = subtitle,
           fontSize = 11.sp,
@@ -641,12 +696,20 @@ private fun ToolActionCard(
 
       Spacer(modifier = Modifier.width(8.dp))
 
-      Icon(
-        imageVector = Icons.Default.ChevronRight,
-        contentDescription = "Open",
-        tint = if (isDark) Color(0xFF64748B) else Color(0xFF94A3B8),
-        modifier = Modifier.size(18.dp)
-      )
+      Surface(
+        shape = CircleShape,
+        color = if (isDark) Color(0xFF334155).copy(alpha = 0.5f) else Color(0xFFF1F5F9),
+        modifier = Modifier.size(28.dp)
+      ) {
+        Box(contentAlignment = Alignment.Center) {
+          Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = "Open",
+            tint = iconTint,
+            modifier = Modifier.size(16.dp)
+          )
+        }
+      }
     }
   }
 }

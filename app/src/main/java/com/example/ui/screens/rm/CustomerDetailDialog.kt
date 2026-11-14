@@ -89,9 +89,13 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
+import android.content.Intent
 import com.example.ui.common.ActiveStatusBadge
 import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.CpvStatusBadge
+import com.example.ui.common.Realistic3DBankCardPreview
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberBounceInteraction
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -328,6 +332,12 @@ fun CustomerDetailDialog(
             .weight(1f, fill = false)
             .verticalScroll(scrollState)
         ) {
+          // Realistic 3D Interactive Banking Card Preview
+          Realistic3DBankCardPreview(
+            file = currentFile,
+            modifier = Modifier.padding(bottom = 12.dp)
+          )
+
           // Status row with quick Edit Status affordance
           Row(
             modifier = Modifier.fillMaxWidth(),
@@ -365,14 +375,112 @@ fun CustomerDetailDialog(
             }
           }
 
-          Spacer(modifier = Modifier.height(14.dp))
+          Spacer(modifier = Modifier.height(10.dp))
+
+          // 1-Tap Customer Contact Quick Actions (Call / WhatsApp / Email)
+          if (currentFile.mobile.isNotBlank() || currentFile.email.isNotBlank()) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              if (currentFile.mobile.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(10.dp),
+                  color = Color(0xFF059669).copy(alpha = if (isDark) 0.22f else 0.12f),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF059669).copy(alpha = 0.35f)),
+                  modifier = Modifier
+                    .weight(1f)
+                    .interactiveBounce(pressedScale = 0.94f) {
+                      try {
+                        val dialIntent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:${currentFile.mobile.trim()}"))
+                        context.startActivity(dialIntent)
+                      } catch (_: Exception) {
+                        Toast.makeText(context, "Unable to open phone dialer", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                    .testTag("btn_detail_quick_call")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Phone, contentDescription = "Call Customer", tint = Color(0xFF059669), modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Call", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF059669))
+                  }
+                }
+
+                Surface(
+                  shape = RoundedCornerShape(10.dp),
+                  color = Color(0xFF16A34A).copy(alpha = if (isDark) 0.22f else 0.12f),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF16A34A).copy(alpha = 0.35f)),
+                  modifier = Modifier
+                    .weight(1f)
+                    .interactiveBounce(pressedScale = 0.94f) {
+                      try {
+                        val digits = currentFile.mobile.filter { it.isDigit() }
+                        val waNum = if (digits.startsWith("0")) "88$digits" else digits
+                        val waIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$waNum"))
+                        context.startActivity(waIntent)
+                      } catch (_: Exception) {
+                        Toast.makeText(context, "WhatsApp not available", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                    .testTag("btn_detail_quick_whatsapp")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.SwapHoriz, contentDescription = "WhatsApp Customer", tint = Color(0xFF16A34A), modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("WhatsApp", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF16A34A))
+                  }
+                }
+              }
+
+              if (currentFile.email.isNotBlank()) {
+                Surface(
+                  shape = RoundedCornerShape(10.dp),
+                  color = Color(0xFF2563EB).copy(alpha = if (isDark) 0.22f else 0.12f),
+                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF2563EB).copy(alpha = 0.35f)),
+                  modifier = Modifier
+                    .weight(1f)
+                    .interactiveBounce(pressedScale = 0.94f) {
+                      try {
+                        val mailIntent = Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:${currentFile.email.trim()}"))
+                        context.startActivity(mailIntent)
+                      } catch (_: Exception) {
+                        Toast.makeText(context, "No email app found", Toast.LENGTH_SHORT).show()
+                      }
+                    }
+                    .testTag("btn_detail_quick_email")
+                ) {
+                  Row(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                  ) {
+                    Icon(Icons.Default.Email, contentDescription = "Email Customer", tint = Color(0xFF2563EB), modifier = Modifier.size(15.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Email", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2563EB))
+                  }
+                }
+              }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+          } else {
+            Spacer(modifier = Modifier.height(4.dp))
+          }
 
           // Information Table
           Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
           ) {
             Column(modifier = Modifier.padding(12.dp)) {
               DetailRow("Office / Company", currentFile.companyName)
@@ -450,10 +558,11 @@ fun CustomerDetailDialog(
             Box(
               modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
+                .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
+                .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
                 .padding(10.dp)
             ) {
-              Text(currentFile.remarks, fontSize = 12.sp, color = Color.DarkGray)
+              Text(currentFile.remarks, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(modifier = Modifier.height(14.dp))
           }
@@ -474,7 +583,7 @@ fun CustomerDetailDialog(
                   cpvRemarksInput = currentFile.cpvRemarks
                   showUpdateStatusDialog = true
                 },
-                shape = RoundedCornerShape(6.dp),
+                shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                 modifier = Modifier
                   .height(26.dp)
@@ -489,9 +598,9 @@ fun CustomerDetailDialog(
           Spacer(modifier = Modifier.height(4.dp))
           Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE2E8F0))
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = if (isDark) Color(0xFF0F172A) else Color(0xFFF8FAFC)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0))
           ) {
             Column(modifier = Modifier.padding(10.dp)) {
               DetailRow("CPV Status", currentFile.cpvStatus)
@@ -513,7 +622,7 @@ fun CustomerDetailDialog(
             Text("Attached Documents & Photos (${attachments.size}):", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             Button(
               onClick = { showAddAttachmentModal = true },
-              shape = RoundedCornerShape(6.dp),
+              shape = RoundedCornerShape(8.dp),
               colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
               contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
               modifier = Modifier.height(28.dp).testTag("btn_detail_add_attachment")
@@ -533,9 +642,9 @@ fun CustomerDetailDialog(
                 modifier = Modifier
                   .fillMaxWidth()
                   .padding(vertical = 3.dp)
-                  .background(Color(0xFFF1F5F9), RoundedCornerShape(8.dp))
-                  .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp))
-                  .clickable { selectedAttachmentForView = att }
+                  .background(if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9), RoundedCornerShape(10.dp))
+                  .border(1.dp, if (isDark) Color(0xFF334155) else Color(0xFFE2E8F0), RoundedCornerShape(10.dp))
+                  .interactiveBounce(pressedScale = 0.97f) { selectedAttachmentForView = att }
                   .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
               ) {

@@ -1009,7 +1009,7 @@ fun CustomerFileFormScreen(
         )
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Product Type
+        // Product Type with visual Banking Card Logo
         ExposedDropdownMenuBox(
           expanded = productExpanded,
           onExpandedChange = { productExpanded = !productExpanded },
@@ -1020,6 +1020,14 @@ fun CustomerFileFormScreen(
             onValueChange = {},
             readOnly = true,
             label = { Text("Product Type") },
+            leadingIcon = {
+              Box(modifier = Modifier.padding(start = 8.dp)) {
+                com.example.ui.common.CardNetworkLogoBadge(
+                  network = com.example.ui.common.resolveCardNetwork(selectedProductType, ccNumber),
+                  compact = true
+                )
+              }
+            },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = productExpanded) },
             modifier = Modifier.fillMaxWidth().menuAnchor().testTag("form_product_type")
           )
@@ -1029,7 +1037,18 @@ fun CustomerFileFormScreen(
           ) {
             productOptions.forEach { opt ->
               DropdownMenuItem(
-                text = { Text(opt) },
+                text = {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                  ) {
+                    com.example.ui.common.CardNetworkLogoBadge(
+                      network = com.example.ui.common.resolveCardNetwork(opt),
+                      compact = true
+                    )
+                    Text(opt, fontWeight = FontWeight.Medium)
+                  }
+                },
                 onClick = {
                   selectedProductType = opt
                   productExpanded = false

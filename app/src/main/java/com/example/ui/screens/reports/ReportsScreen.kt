@@ -1,6 +1,7 @@
 package com.example.ui.screens.reports
 
 import android.app.DatePickerDialog
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -60,18 +61,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.UserEntity
+import com.example.ui.common.AnimatedCountText
 import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.ThemeVisualBanner
 import com.example.ui.common.TimeFilterBar
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberBounceInteraction
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
+import com.example.ui.theme.JetBrainsMonoFontFamily
 import com.example.ui.viewmodel.AppViewModel
 import com.example.util.DateUtils
 import com.example.util.ExcelReportGenerator
@@ -192,9 +198,52 @@ fun ReportsScreen(
         )
       }
 
+      // Always-visible Live Report Snapshot Strip (Quick Filter & Date Range)
+      item {
+        Row(
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+          ReportSnapshotMetricCard(
+            label = "STC",
+            count = stcCount,
+            tint = if (isDark) Color(0xFF5EEAD4) else Color(0xFF0F766E),
+            bg = if (isDark) Color(0xFF134E4A).copy(alpha = 0.5f) else Color(0xFFCCFBF1),
+            modifier = Modifier.weight(1f)
+          )
+          ReportSnapshotMetricCard(
+            label = "Submitted",
+            count = submittedCount,
+            tint = if (isDark) Color(0xFF93C5FD) else Color(0xFF1D4ED8),
+            bg = if (isDark) Color(0xFF1E3A8A).copy(alpha = 0.45f) else Color(0xFFEFF6FF),
+            modifier = Modifier.weight(1f)
+          )
+          ReportSnapshotMetricCard(
+            label = "Approved",
+            count = approvedCount,
+            tint = if (isDark) Color(0xFF86EFAC) else Color(0xFF15803D),
+            bg = if (isDark) Color(0xFF14532D).copy(alpha = 0.45f) else Color(0xFFDCFCE7),
+            modifier = Modifier.weight(1f)
+          )
+          ReportSnapshotMetricCard(
+            label = "Query/RTS",
+            count = queryCount,
+            tint = if (isDark) Color(0xFFFCD34D) else Color(0xFFB45309),
+            bg = if (isDark) Color(0xFF78350F).copy(alpha = 0.45f) else Color(0xFFFEF3C7),
+            modifier = Modifier.weight(1f)
+          )
+        }
+      }
+
       // Action Export Buttons: PDF and Excel
       item {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+        val (pdfInteraction, pdfScale) = rememberBounceInteraction(pressedScale = 0.96f)
+        val (excelInteraction, excelScale) = rememberBounceInteraction(pressedScale = 0.96f)
+        val (printInteraction, printScale) = rememberBounceInteraction(pressedScale = 0.96f)
+
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
           Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -211,9 +260,14 @@ fun ReportsScreen(
                 generatedPdfFile = pdf
                 showPdfSuccessDialog = true
               },
+              interactionSource = pdfInteraction,
               colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-              shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("btn_export_pdf_report")
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .graphicsLayer { scaleX = pdfScale; scaleY = pdfScale }
+                .testTag("btn_export_pdf_report")
             ) {
               Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
@@ -232,9 +286,14 @@ fun ReportsScreen(
                 generatedExcelFile = excel
                 showExcelSuccessDialog = true
               },
+              interactionSource = excelInteraction,
               colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF15803D)),
-              shape = RoundedCornerShape(8.dp),
-              modifier = Modifier.weight(1f).height(42.dp).testTag("btn_export_excel_report")
+              shape = RoundedCornerShape(10.dp),
+              modifier = Modifier
+                .weight(1f)
+                .height(44.dp)
+                .graphicsLayer { scaleX = excelScale; scaleY = excelScale }
+                .testTag("btn_export_excel_report")
             ) {
               Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(16.dp))
               Spacer(modifier = Modifier.width(6.dp))
@@ -243,8 +302,12 @@ fun ReportsScreen(
 
             OutlinedButton(
               onClick = { showPrintPreviewDialog = true },
-              modifier = Modifier.height(42.dp).testTag("btn_print_preview_report"),
-              shape = RoundedCornerShape(8.dp)
+              interactionSource = printInteraction,
+              modifier = Modifier
+                .height(44.dp)
+                .graphicsLayer { scaleX = printScale; scaleY = printScale }
+                .testTag("btn_print_preview_report"),
+              shape = RoundedCornerShape(10.dp)
             ) {
               Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(15.dp))
               Spacer(modifier = Modifier.width(4.dp))
@@ -283,25 +346,33 @@ fun ReportsScreen(
 
               // Toggle Mode Chips
               Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val (quickInteraction, quickScale) = rememberBounceInteraction(pressedScale = 0.94f)
+                val (dateInteraction, dateScale) = rememberBounceInteraction(pressedScale = 0.94f)
                 FilterChip(
                   selected = !isDateToDateMode,
                   onClick = { isDateToDateMode = false },
+                  interactionSource = quickInteraction,
                   label = { Text("Quick Filters", fontSize = 11.sp) },
                   colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = EblNavyPrimary,
                     selectedLabelColor = Color.White
                   ),
-                  modifier = Modifier.testTag("mode_chip_quick_filter")
+                  modifier = Modifier
+                    .graphicsLayer { scaleX = quickScale; scaleY = quickScale }
+                    .testTag("mode_chip_quick_filter")
                 )
                 FilterChip(
                   selected = isDateToDateMode,
                   onClick = { isDateToDateMode = true },
+                  interactionSource = dateInteraction,
                   label = { Text("Date Range", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                   colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = Color(0xFF0F766E),
                     selectedLabelColor = Color.White
                   ),
-                  modifier = Modifier.testTag("mode_chip_date_to_date")
+                  modifier = Modifier
+                    .graphicsLayer { scaleX = dateScale; scaleY = dateScale }
+                    .testTag("mode_chip_date_to_date")
                 )
               }
             }
@@ -316,11 +387,15 @@ fun ReportsScreen(
               )
             } else {
               // Date to Date Custom Picker Section
+              val tealBg = if (isDark) Color(0xFF042F2E).copy(alpha = 0.55f) else Color(0xFFF0FDFA)
+              val tealBorder = if (isDark) Color(0xFF115E59) else Color(0xFFCCFBF1)
+              val chipSurfaceBg = if (isDark) Color(0xFF1E293B) else Color.White
+              val tealText = if (isDark) Color(0xFF5EEAD4) else Color(0xFF0F766E)
               Column(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .background(Color(0xFFF0FDFA), RoundedCornerShape(10.dp))
-                  .border(1.dp, Color(0xFFCCFBF1), RoundedCornerShape(10.dp))
+                  .background(tealBg, RoundedCornerShape(10.dp))
+                  .border(1.dp, tealBorder, RoundedCornerShape(10.dp))
                   .padding(12.dp)
               ) {
                 Row(
@@ -337,7 +412,7 @@ fun ReportsScreen(
                       Icon(
                         imageVector = Icons.Default.CalendarMonth,
                         contentDescription = "From Date",
-                        tint = Color(0xFF0F766E),
+                        tint = tealText,
                         modifier = Modifier.clickable { showDatePicker(fromDateStr) { fromDateStr = it } }
                       )
                     },
@@ -357,7 +432,7 @@ fun ReportsScreen(
                       Icon(
                         imageVector = Icons.Default.CalendarMonth,
                         contentDescription = "To Date",
-                        tint = Color(0xFF0F766E),
+                        tint = tealText,
                         modifier = Modifier.clickable { showDatePicker(toDateStr) { toDateStr = it } }
                       )
                     },
@@ -371,7 +446,7 @@ fun ReportsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Fast Quarter & Range Preset Buttons
-                Text("Quick Quarter Presets:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF115E59))
+                Text("Quick Quarter Presets:", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = tealText)
                 Spacer(modifier = Modifier.height(4.dp))
                 val presetScrollState = rememberScrollState()
                 Row(
@@ -380,108 +455,31 @@ fun ReportsScreen(
                     .horizontalScroll(presetScrollState),
                   horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF14B8A6)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = "2026-10-01"
-                      toDateStr = "2026-12-31"
-                    }
-                  ) {
-                    Text("Q4 (Oct-Dec)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF14B8A6)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = "2026-07-01"
-                      toDateStr = "2026-09-30"
-                    }
-                  ) {
-                    Text("Q3 (Jul-Sep)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF14B8A6)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = "2026-04-01"
-                      toDateStr = "2026-06-30"
-                    }
-                  ) {
-                    Text("Q2 (Apr-Jun)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF14B8A6)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = "2026-01-01"
-                      toDateStr = "2026-03-31"
-                    }
-                  ) {
-                    Text("Q1 (Jan-Mar)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF0284C7)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = firstDayMonthIso
-                      toDateStr = todayIso
-                    }
-                  ) {
-                    Text("This Month", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0284C7), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-
-                  Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color.White,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF4B5563)),
-                    modifier = Modifier.clickable {
-                      fromDateStr = "2026-01-01"
-                      toDateStr = "2026-12-31"
-                    }
-                  ) {
-                    Text("Full Year 2026", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF374151), modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp))
-                  }
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Date-to-Date Performance Breakdown Metrics
-                Row(
-                  modifier = Modifier.fillMaxWidth(),
-                  horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                  Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFCCFBF1), modifier = Modifier.weight(1f)) {
-                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                      Text("STC (Done)", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0F766E))
-                      Text("$stcCount", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF0F766E))
-                    }
-                  }
-                  Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFEFF6FF), modifier = Modifier.weight(1f)) {
-                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                      Text("Submitted", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D4ED8))
-                      Text("$submittedCount", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF1D4ED8))
-                    }
-                  }
-                  Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFDCFCE7), modifier = Modifier.weight(1f)) {
-                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                      Text("Approved", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF15803D))
-                      Text("$approvedCount", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF15803D))
-                    }
-                  }
-                  Surface(shape = RoundedCornerShape(6.dp), color = Color(0xFFFEF3C7), modifier = Modifier.weight(1f)) {
-                    Column(modifier = Modifier.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                      Text("Query/RTS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFB45309))
-                      Text("$queryCount", fontSize = 16.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFFB45309))
+                  val presets = listOf(
+                    Triple("Q4 (Oct-Dec)", "2026-10-01" to "2026-12-31", Color(0xFF14B8A6) to tealText),
+                    Triple("Q3 (Jul-Sep)", "2026-07-01" to "2026-09-30", Color(0xFF14B8A6) to tealText),
+                    Triple("Q2 (Apr-Jun)", "2026-04-01" to "2026-06-30", Color(0xFF14B8A6) to tealText),
+                    Triple("Q1 (Jan-Mar)", "2026-01-01" to "2026-03-31", Color(0xFF14B8A6) to tealText),
+                    Triple("This Month", firstDayMonthIso to todayIso, Color(0xFF0284C7) to (if (isDark) Color(0xFF38BDF8) else Color(0xFF0284C7))),
+                    Triple("Full Year 2026", "2026-01-01" to "2026-12-31", Color(0xFF4B5563) to (if (isDark) Color(0xFFCBD5E1) else Color(0xFF374151)))
+                  )
+                  presets.forEach { (label, range, colors) ->
+                    Surface(
+                      shape = RoundedCornerShape(8.dp),
+                      color = chipSurfaceBg,
+                      border = BorderStroke(1.dp, colors.first),
+                      modifier = Modifier.interactiveBounce(pressedScale = 0.94f, onClick = {
+                        fromDateStr = range.first
+                        toDateStr = range.second
+                      })
+                    ) {
+                      Text(
+                        label,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.second,
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp)
+                      )
                     }
                   }
                 }
@@ -586,11 +584,17 @@ fun ReportsScreen(
                       ApplicationStatusBadge(f.applicationStatus)
                     }
                     if (isPrivileged) {
-                      Text(f.assignedRmCode, modifier = Modifier.weight(0.9f), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = EblNavyPrimary)
+                      Text(
+                        f.assignedRmCode,
+                        modifier = Modifier.weight(0.9f),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary
+                      )
                     }
-                    Text(DateUtils.formatDateOnly(f.updatedAt), modifier = Modifier.weight(1f), fontSize = 10.sp, color = Color.Gray)
+                    Text(DateUtils.formatDateOnly(f.updatedAt), modifier = Modifier.weight(1f), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                   }
-                  HorizontalDivider(color = Color(0xFFF1F5F9))
+                  HorizontalDivider(color = if (isDark) Color(0xFF1E293B) else Color(0xFFF1F5F9))
                 }
               }
             }
@@ -693,5 +697,43 @@ fun ReportsScreen(
         }
       }
     )
+  }
+}
+
+@Composable
+private fun ReportSnapshotMetricCard(
+  label: String,
+  count: Int,
+  tint: Color,
+  bg: Color,
+  modifier: Modifier = Modifier
+) {
+  Surface(
+    shape = RoundedCornerShape(10.dp),
+    color = bg,
+    border = BorderStroke(1.dp, tint.copy(alpha = 0.28f)),
+    modifier = modifier
+  ) {
+    Column(
+      modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+      horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+      Text(
+        text = label,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.Bold,
+        color = tint,
+        maxLines = 1,
+        softWrap = false
+      )
+      Spacer(modifier = Modifier.height(2.dp))
+      AnimatedCountText(
+        targetCount = count,
+        color = tint,
+        fontSize = 17.sp,
+        fontWeight = FontWeight.ExtraBold,
+        fontFamily = JetBrainsMonoFontFamily
+      )
+    }
   }
 }

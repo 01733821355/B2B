@@ -79,6 +79,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.example.data.model.CustomerFileEntity
 import com.example.data.model.UserEntity
 import com.example.ui.common.ActiveStatusBadge
@@ -86,6 +94,8 @@ import com.example.ui.common.ApplicationStatusBadge
 import com.example.ui.common.CpvStatusBadge
 import com.example.ui.common.EblPullRefreshBox
 import com.example.ui.common.FloatableRmNavButton
+import com.example.ui.common.interactiveBounce
+import com.example.ui.common.rememberBounceInteraction
 import com.example.ui.theme.EblGold
 import com.example.ui.theme.EblNavyDark
 import com.example.ui.theme.EblNavyPrimary
@@ -171,9 +181,12 @@ fun CustomerFileListScreen(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
       ) {
+        val listHaptics = LocalHapticFeedback.current
         // PDF Report Download Button
+        val (pdfInteraction, _) = rememberBounceInteraction(0.92f)
         OutlinedButton(
           onClick = {
+            listHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             val pdf = PdfReportGenerator.generatePdfReport(
               context = context,
               files = files,
@@ -184,10 +197,14 @@ fun CustomerFileListScreen(
             generatedPdfFile = pdf
             showPdfSuccessDialog = true
           },
-          shape = RoundedCornerShape(8.dp),
+          interactionSource = pdfInteraction,
+          shape = RoundedCornerShape(10.dp),
           contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
           colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFDC2626)),
-          modifier = Modifier.height(34.dp).testTag("btn_list_export_pdf")
+          modifier = Modifier
+            .height(34.dp)
+            .interactiveBounce(pressedScale = 0.92f, interactionSource = pdfInteraction)
+            .testTag("btn_list_export_pdf")
         ) {
           Icon(Icons.Default.PictureAsPdf, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
@@ -195,8 +212,10 @@ fun CustomerFileListScreen(
         }
 
         // Excel Report Download Button
+        val (excelInteraction, _) = rememberBounceInteraction(0.92f)
         OutlinedButton(
           onClick = {
+            listHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             val excel = ExcelReportGenerator.generateExcelReport(
               context = context,
               files = files,
@@ -207,10 +226,14 @@ fun CustomerFileListScreen(
             generatedExcelFile = excel
             showExcelSuccessDialog = true
           },
-          shape = RoundedCornerShape(8.dp),
+          interactionSource = excelInteraction,
+          shape = RoundedCornerShape(10.dp),
           contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
           colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF15803D)),
-          modifier = Modifier.height(34.dp).testTag("btn_list_export_excel")
+          modifier = Modifier
+            .height(34.dp)
+            .interactiveBounce(pressedScale = 0.92f, interactionSource = excelInteraction)
+            .testTag("btn_list_export_excel")
         ) {
           Icon(Icons.Default.TableChart, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
@@ -218,15 +241,21 @@ fun CustomerFileListScreen(
         }
 
         // Field Visit Route Plan Button
+        val (routeInteraction, _) = rememberBounceInteraction(0.92f)
         OutlinedButton(
           onClick = {
+            listHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             onOpenRoutePlanner(selectedFileIdsForRoute.toList())
           },
-          shape = RoundedCornerShape(8.dp),
+          interactionSource = routeInteraction,
+          shape = RoundedCornerShape(10.dp),
           contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
           colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1D4ED8)),
           border = BorderStroke(1.dp, Color(0xFF93C5FD)),
-          modifier = Modifier.height(34.dp).testTag("btn_list_open_route_planner")
+          modifier = Modifier
+            .height(34.dp)
+            .interactiveBounce(pressedScale = 0.92f, interactionSource = routeInteraction)
+            .testTag("btn_list_open_route_planner")
         ) {
           Icon(Icons.Default.Directions, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
@@ -237,19 +266,35 @@ fun CustomerFileListScreen(
           )
         }
 
+        val (refreshInteraction, _) = rememberBounceInteraction(0.88f)
         IconButton(
-          onClick = { viewModel.refreshData() },
-          modifier = Modifier.size(34.dp).testTag("btn_refresh_files")
+          onClick = {
+            listHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            viewModel.refreshData()
+          },
+          interactionSource = refreshInteraction,
+          modifier = Modifier
+            .size(34.dp)
+            .interactiveBounce(pressedScale = 0.88f, interactionSource = refreshInteraction)
+            .testTag("btn_refresh_files")
         ) {
           Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = EblNavyPrimary, modifier = Modifier.size(18.dp))
         }
 
+        val (newBtnInteraction, _) = rememberBounceInteraction(0.92f)
         Button(
-          onClick = onAddNewFile,
+          onClick = {
+            listHaptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onAddNewFile()
+          },
+          interactionSource = newBtnInteraction,
           colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
-          shape = RoundedCornerShape(8.dp),
+          shape = RoundedCornerShape(10.dp),
           contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-          modifier = Modifier.height(34.dp).testTag("btn_list_add_file")
+          modifier = Modifier
+            .height(34.dp)
+            .interactiveBounce(pressedScale = 0.92f, interactionSource = newBtnInteraction)
+            .testTag("btn_list_add_file")
         ) {
           Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
           Spacer(modifier = Modifier.width(3.dp))
@@ -391,16 +436,33 @@ fun CustomerFileListScreen(
           .padding(horizontal = 16.dp)
       ) {
         itemsIndexed(files, key = { index, file -> "${file.fileId}_$index" }) { _, file ->
+          val statusAccent = when (file.applicationStatus) {
+            "STC" -> Color(0xFF0F766E)
+            "Approved" -> Color(0xFF15803D)
+            "Submitted", "Analyst Receive" -> Color(0xFF2563EB)
+            "Declined" -> Color(0xFFDC2626)
+            "Query", "Return to Source", "Condition" -> Color(0xFFD97706)
+            else -> Color(0xFF64748B)
+          }
           Card(
             modifier = Modifier
               .fillMaxWidth()
               .padding(vertical = 5.dp)
+              .interactiveBounce(pressedScale = 0.98f, onClick = { viewingFile = file })
               .testTag("file_row_${file.fileId}"),
-            shape = RoundedCornerShape(10.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            border = BorderStroke(1.dp, statusAccent.copy(alpha = 0.2f))
           ) {
-            Column(modifier = Modifier.padding(14.dp)) {
+            Column {
+              Box(
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .height(3.dp)
+                  .background(statusAccent.copy(alpha = 0.78f))
+              )
+              Column(modifier = Modifier.padding(14.dp)) {
               // Top line: Checkbox + Name & Status badges
               Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -467,19 +529,29 @@ fun CustomerFileListScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
               ) {
-                Column {
-                  Text(
-                    text = "Product: ${file.productType} • Mobile: ${file.mobile}",
-                    fontSize = 11.sp,
-                    color = Color.DarkGray
-                  )
+                Column(modifier = Modifier.weight(1f)) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                  ) {
+                    com.example.ui.common.ProductCardMiniBadge(
+                      productType = file.productType,
+                      ccNumber = file.ccNumber
+                    )
+                    Text(
+                      text = "• ${file.mobile}",
+                      fontSize = 11.sp,
+                      color = MaterialTheme.colorScheme.onSurfaceVariant,
+                      maxLines = 1
+                    )
+                  }
                   if (file.ccNumber.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
                       text = "CC-Number: ${file.ccNumber}",
                       fontSize = 11.sp,
                       fontWeight = FontWeight.SemiBold,
-                      color = EblNavyPrimary
+                      color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary
                     )
                   }
                   if (file.limit.isNotBlank() || file.analyst.isNotBlank()) {
@@ -500,7 +572,7 @@ fun CustomerFileListScreen(
                     text = "RM: ${file.assignedRmCode}",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    color = EblNavyPrimary
+                    color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary
                   )
                 }
               }
@@ -514,12 +586,12 @@ fun CustomerFileListScreen(
                 Text(
                   text = "Created: ${DateUtils.formatDateTime(file.createdAt)}",
                   fontSize = 10.sp,
-                  color = Color.Gray
+                  color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                   text = "Updated: ${DateUtils.formatDateTime(file.updatedAt)}",
                   fontSize = 10.sp,
-                  color = EblNavyPrimary,
+                  color = if (isDark) Color(0xFF93C5FD) else EblNavyPrimary,
                   fontWeight = FontWeight.Medium
                 )
               }
@@ -527,9 +599,12 @@ fun CustomerFileListScreen(
               if (file.pendingDocuments.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Surface(
-                  shape = RoundedCornerShape(6.dp),
-                  color = Color(0xFFFEF2F2),
-                  border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFECACA)),
+                  shape = RoundedCornerShape(8.dp),
+                  color = if (isDark) Color(0xFF450A0A).copy(alpha = 0.55f) else Color(0xFFFEF2F2),
+                  border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isDark) Color(0xFF991B1B) else Color(0xFFFECACA)
+                  ),
                   modifier = Modifier.fillMaxWidth()
                 ) {
                   Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -537,7 +612,7 @@ fun CustomerFileListScreen(
                       text = "⚠️ Missing / Pending Documents:",
                       fontSize = 10.sp,
                       fontWeight = FontWeight.Bold,
-                      color = Color(0xFFDC2626)
+                      color = if (isDark) Color(0xFFFCA5A5) else Color(0xFFDC2626)
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     FlowRow(
@@ -547,13 +622,13 @@ fun CustomerFileListScreen(
                       file.pendingDocuments.split(",").filter { it.isNotBlank() }.forEach { doc ->
                         Surface(
                           shape = RoundedCornerShape(4.dp),
-                          color = Color(0xFFFEE2E2)
+                          color = if (isDark) Color(0xFF7F1D1D).copy(alpha = 0.65f) else Color(0xFFFEE2E2)
                         ) {
                           Text(
                             text = "• $doc",
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF991B1B),
+                            color = if (isDark) Color(0xFFFECACA) else Color(0xFF991B1B),
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                           )
                         }
@@ -574,7 +649,7 @@ fun CustomerFileListScreen(
                 Box(
                   modifier = Modifier
                     .weight(1f, fill = false)
-                    .clickable { fileForQuickCpvChange = file }
+                    .interactiveBounce(pressedScale = 0.94f, onClick = { fileForQuickCpvChange = file })
                 ) {
                   CpvStatusBadge(file.cpvStatus)
                 }
@@ -585,36 +660,52 @@ fun CustomerFileListScreen(
                   horizontalArrangement = Arrangement.spacedBy(4.dp),
                   verticalAlignment = Alignment.CenterVertically
                 ) {
+                  val (detailsInteraction, _) = rememberBounceInteraction(0.92f)
                   OutlinedButton(
                     onClick = { viewingFile = file },
-                    shape = RoundedCornerShape(6.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                    modifier = Modifier.height(30.dp).testTag("btn_view_${file.fileId}")
+                    interactionSource = detailsInteraction,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier
+                      .height(30.dp)
+                      .interactiveBounce(pressedScale = 0.92f, interactionSource = detailsInteraction)
+                      .testTag("btn_view_${file.fileId}")
                   ) {
                     Icon(Icons.Default.Visibility, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
                     Text("Details", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
+                  val (editInteraction, _) = rememberBounceInteraction(0.92f)
                   OutlinedButton(
                     onClick = { onEditFile(file.fileId) },
-                    shape = RoundedCornerShape(6.dp),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                    modifier = Modifier.height(30.dp).testTag("btn_edit_${file.fileId}")
+                    interactionSource = editInteraction,
+                    shape = RoundedCornerShape(8.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier
+                      .height(30.dp)
+                      .interactiveBounce(pressedScale = 0.92f, interactionSource = editInteraction)
+                      .testTag("btn_edit_${file.fileId}")
                   ) {
                     Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
                     Spacer(modifier = Modifier.width(3.dp))
                     Text("Edit", fontSize = 11.sp, maxLines = 1, softWrap = false)
                   }
 
+                  val (deleteInteraction, _) = rememberBounceInteraction(0.88f)
                   IconButton(
                     onClick = { fileToDelete = file },
-                    modifier = Modifier.size(30.dp).testTag("btn_delete_${file.fileId}")
+                    interactionSource = deleteInteraction,
+                    modifier = Modifier
+                      .size(30.dp)
+                      .interactiveBounce(pressedScale = 0.88f, interactionSource = deleteInteraction)
+                      .testTag("btn_delete_${file.fileId}")
                   ) {
                     Icon(Icons.Default.Delete, contentDescription = "Delete", tint = Color(0xFFDC2626), modifier = Modifier.size(16.dp))
                   }
                 }
               }
+            }
             }
           }
         }
@@ -628,14 +719,19 @@ fun CustomerFileListScreen(
 }
 
     // Floating Want to Go Action Bar when 1 or more files are selected
-    if (selectedFileIdsForRoute.isNotEmpty()) {
+    AnimatedVisibility(
+      visible = selectedFileIdsForRoute.isNotEmpty(),
+      enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+      exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+      modifier = Modifier
+        .align(Alignment.BottomCenter)
+        .fillMaxWidth()
+    ) {
       Surface(
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        color = Color.White,
-        shadowElevation = 8.dp,
-        modifier = Modifier
-          .align(Alignment.BottomCenter)
-          .fillMaxWidth()
+        shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+        color = if (isDark) Color(0xFF1E293B) else Color.White,
+        shadowElevation = 10.dp,
+        modifier = Modifier.fillMaxWidth()
       ) {
         Row(
           modifier = Modifier
@@ -660,13 +756,17 @@ fun CustomerFileListScreen(
             }
           }
 
+          val (goInteraction, _) = rememberBounceInteraction(0.93f)
           Button(
             onClick = {
               onOpenRoutePlanner(selectedFileIdsForRoute.toList())
             },
+            interactionSource = goInteraction,
             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF059669)),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.testTag("btn_want_to_go_floating")
+            shape = RoundedCornerShape(10.dp),
+            modifier = Modifier
+              .interactiveBounce(pressedScale = 0.93f, interactionSource = goInteraction)
+              .testTag("btn_want_to_go_floating")
           ) {
             Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
             Spacer(modifier = Modifier.width(4.dp))
