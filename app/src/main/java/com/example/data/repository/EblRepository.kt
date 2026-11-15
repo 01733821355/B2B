@@ -1674,7 +1674,7 @@ class EblRepository(
       return@withContext
     }
     try {
-      val currentStatus = database.appSettingDao().getSyncStatus() ?: return@withContext
+      val currentStatus = database.appSettingDao().getSyncStatus() ?: com.example.data.model.SyncStatusEntity()
       val activeWebAppUrl = currentStatus.appsScriptUrl.ifBlank {
         "https://script.google.com/macros/s/AKfycbzxQ2GtKwhT8UjUdvqPTWielndlsMu9d_rVFf2ro4sI5-uCRrvj8uQXFKpVnBF7g9r0NQ/exec"
       }
@@ -4808,11 +4808,37 @@ class EblRepository(
           } catch (_: Exception) { value }
         } else value
 
-        if (existing == null || existing.settingValue != valueToSave) {
+        val isIconOrBannerKey = key.equals("app_custom_icon_url", true) ||
+          key.equals("App Icon", true) || key.equals("app_icon", true) || key.equals("App Logo", true) ||
+          key.equals("dashboard_banner_background_url", true)
+        if (isIconOrBannerKey) {
+          val trimmedMediaVal = valueToSave.trim()
+          val isForeignLocalPath = trimmedMediaVal.startsWith("/data/", true) ||
+            trimmedMediaVal.startsWith("/storage/", true) ||
+            trimmedMediaVal.startsWith("content://", true) ||
+            trimmedMediaVal.startsWith("file://", true)
+          if (isForeignLocalPath) {
+            continue
+          }
+        }
+
+        val normalizedValueToSave = if (isIconOrBannerKey && valueToSave.trim().startsWith("http", true)) {
+          val trimmedMediaVal = valueToSave.trim()
+          when {
+            trimmedMediaVal.contains("lh3.googleusercontent.com", true) -> trimmedMediaVal
+            trimmedMediaVal.contains("drive.google.com", true) || trimmedMediaVal.contains("docs.google.com", true) ->
+              com.example.util.AttachmentHelper.getGoogleDriveDirectCdnUrl(trimmedMediaVal)
+            else -> trimmedMediaVal
+          }
+        } else {
+          valueToSave
+        }
+
+        if (existing == null || existing.settingValue != normalizedValueToSave) {
           database.appSettingDao().insertOrUpdateSetting(
             AppSettingEntity(
               settingKey = key,
-              settingValue = valueToSave,
+              settingValue = normalizedValueToSave,
               updatedBy = "GoogleSheets_Universal",
               updatedAt = now
             )
@@ -4839,6 +4865,12 @@ class EblRepository(
             database.appSettingDao().insertOrUpdateSetting(
               AppSettingEntity("app_custom_name", value, "GoogleSheets_Universal", now)
             )
+          } else if (key.equals("App Icon", true) || key.equals("app_icon", true) || key.equals("App Logo", true) || key.equals("app_custom_icon_url", true)) {
+            if (!key.equals("app_custom_icon_url", false)) {
+              database.appSettingDao().insertOrUpdateSetting(
+                AppSettingEntity("app_custom_icon_url", normalizedValueToSave, "GoogleSheets_Universal", now)
+              )
+            }
           } else if (key.startsWith("CHECKLIST_PRESET_") || key.startsWith("CHECKLIST_CUSTOM_")) {
             val nonKeywords = listOf("THEME", "SCALE", "FONT", "COLOR", "STYLE", "STATUS", "PASSWORD", "APP_NAME")
             val isRogue = nonKeywords.any { friendlyName.uppercase().contains(it) || keyUpper.contains(it) }
@@ -6107,14 +6139,22 @@ class EblRepository(
     Result.success(msg)
   }
 
-  suspend fun setAppCustomIcon(iconUrl: String) = withContext(Dispatchers.IO) {
+  suspend fun setAppCustomIcon(iconUrl: String): Unit = withContext(Dispatchers.IO) {
     val currentUser = authRepository.currentUser.value
     val now = DateUtils.currentDhakaMillis()
+    val trimmed = iconUrl.trim()
+    val normalizedUrl = when {
+      trimmed.isBlank() -> ""
+      trimmed.contains("lh3.googleusercontent.com", ignoreCase = true) -> trimmed
+      trimmed.contains("drive.google.com", ignoreCase = true) || trimmed.contains("docs.google.com", ignoreCase = true) ->
+        com.example.util.AttachmentHelper.getGoogleDriveDirectCdnUrl(trimmed)
+      else -> trimmed
+    }
     database.appSettingDao().insertOrUpdateSetting(
-      AppSettingEntity("app_custom_icon_url", iconUrl, currentUser?.rmCode ?: "MENTOR", now)
+      AppSettingEntity("app_custom_icon_url", normalizedUrl, currentUser?.rmCode ?: "MENTOR", now)
     )
-    applicationScope.launch {
-      syncSettingUpsertToGoogleSheets("app_custom_icon_url", iconUrl)
+    if (normalizedUrl.isBlank() || normalizedUrl.startsWith("http", ignoreCase = true)) {
+      syncSettingUpsertToGoogleSheets("app_custom_icon_url", normalizedUrl)
     }
   }
 

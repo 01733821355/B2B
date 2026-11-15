@@ -105,7 +105,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     .stateIn(viewModelScope, SharingStarted.Eagerly, "RM File Management Suite")
 
   val appCustomIconUrl: StateFlow<String> = database.appSettingDao().getSettingFlow("app_custom_icon_url")
-    .map { it?.settingValue ?: "" }
+    .map { setting ->
+      val raw = setting?.settingValue?.trim().orEmpty()
+      when {
+        raw.isBlank() -> ""
+        raw.contains("lh3.googleusercontent.com", ignoreCase = true) -> raw
+        raw.contains("drive.google.com", ignoreCase = true) || raw.contains("docs.google.com", ignoreCase = true) ->
+          com.example.util.AttachmentHelper.getGoogleDriveDirectCdnUrl(raw)
+        raw.startsWith("http", ignoreCase = true) -> raw
+        java.io.File(raw).exists() -> raw
+        else -> ""
+      }
+    }
     .stateIn(viewModelScope, SharingStarted.Eagerly, "")
 
   val dashboardBannerBackgroundUrl: StateFlow<String> = database.appSettingDao().getSettingFlow("dashboard_banner_background_url")
@@ -861,10 +872,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     viewModelScope.launch {
       val res = runCatching { eblRepository.setAppCustomIcon(iconUrl) }
       res.onSuccess {
-        _uiMessage.emit("Universal App Icon updated.")
+        _uiMessage.emit("Universal App Icon updated & synced.")
         onResult(true, null)
       }.onFailure { err ->
         onResult(false, err.message)
+      }
+    }
+  }
+
+  fun uploadAndSetAppCustomIcon(
+    file: java.io.File,
+    fileName: String,
+    fileType: String,
+    onResult: (Boolean, String?) -> Unit
+  ) {
+    viewModelScope.launch {
+      val res = eblRepository.uploadFileToGoogleDrive(file, fileName, fileType)
+      res.onSuccess { driveUrl ->
+        if (driveUrl.isNotBlank()) {
+          val saveRes = runCatching { eblRepository.setAppCustomIcon(driveUrl) }
+          saveRes.onSuccess {
+            _uiMessage.emit("Universal App Icon uploaded to Google Drive & synced for all users.")
+            onResult(true, driveUrl)
+          }.onFailure { err ->
+            onResult(false, err.message ?: "Failed to save Drive icon URL")
+          }
+        } else {
+          onResult(false, "Drive upload succeeded but URL was empty")
+        }
+      }.onFailure { err ->
+        onResult(false, err.message ?: "Failed to upload app icon to Google Drive")
       }
     }
   }

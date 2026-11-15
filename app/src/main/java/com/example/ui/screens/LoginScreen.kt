@@ -355,14 +355,17 @@ fun LoginScreen(
                 .background(currentTheme.secondary),
               contentAlignment = Alignment.Center
             ) {
-              if (appCustomIconUrl.isNotBlank()) {
+              var loginIconLoadFailed by remember(appCustomIconUrl) { mutableStateOf(false) }
+              if (appCustomIconUrl.isNotBlank() && !loginIconLoadFailed) {
                 AsyncImage(
                   model = appCustomIconUrl,
                   contentDescription = "App Logo",
                   modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape),
-                  contentScale = ContentScale.Crop
+                  contentScale = ContentScale.Crop,
+                  onError = { loginIconLoadFailed = true },
+                  onSuccess = { loginIconLoadFailed = false }
                 )
               } else {
                 Text(

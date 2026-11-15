@@ -167,14 +167,17 @@ fun EblTopBar(
               .background(Brush.verticalGradient(listOf(currentTheme.secondary, currentTheme.primary))),
             contentAlignment = Alignment.Center
           ) {
-            if (appCustomIconUrl.isNotBlank()) {
+            var topIconLoadFailed by remember(appCustomIconUrl) { mutableStateOf(false) }
+            if (appCustomIconUrl.isNotBlank() && !topIconLoadFailed) {
               AsyncImage(
                 model = appCustomIconUrl,
                 contentDescription = "App Icon",
                 modifier = Modifier
                   .fillMaxSize()
                   .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                onError = { topIconLoadFailed = true },
+                onSuccess = { topIconLoadFailed = false }
               )
             } else {
               Text(

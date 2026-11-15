@@ -138,22 +138,34 @@ fun MentorDashboardScreen(
   var newBannerUrlInput by remember { mutableStateOf("") }
   val bannerBackgroundUrl by viewModel.dashboardBannerBackgroundUrl.collectAsState()
 
+  var isUploadingAppIcon by remember { mutableStateOf(false) }
+
   val iconPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickVisualMedia()
   ) { uri ->
     if (uri != null) {
       coroutineScope.launch {
+        isUploadingAppIcon = true
+        val iconFileName = "app_icon_${System.currentTimeMillis()}.jpg"
         val saved = com.example.util.AttachmentHelper.saveUriToInternalStorage(
           context,
           uri,
-          "app_icon_${System.currentTimeMillis()}.png"
+          iconFileName
         )
         if (saved != null) {
-          viewModel.setAppCustomIcon(saved.storagePath) { success, _ ->
-            if (success) {
-              Toast.makeText(context, "Universal App Icon updated successfully!", Toast.LENGTH_SHORT).show()
-            }
+          val localFile = java.io.File(saved.storagePath)
+          Toast.makeText(context, "Uploading App Icon to Google Drive...", Toast.LENGTH_SHORT).show()
+          viewModel.uploadAndSetAppCustomIcon(localFile, saved.fileName.ifBlank { iconFileName }, "image/jpeg") { success, msg ->
+            isUploadingAppIcon = false
+            Toast.makeText(
+              context,
+              if (success) "Universal App Icon uploaded to Drive & synced!" else "Icon upload failed: ${msg ?: "Unknown error"}",
+              Toast.LENGTH_LONG
+            ).show()
           }
+        } else {
+          isUploadingAppIcon = false
+          Toast.makeText(context, "Failed to read selected image.", Toast.LENGTH_SHORT).show()
         }
       }
     }
@@ -608,14 +620,17 @@ fun MentorDashboardScreen(
                 .background(Color(0xFF312E81)),
               contentAlignment = Alignment.Center
             ) {
-              if (appCustomIconUrl.isNotBlank()) {
+              var iconPreviewFailed by remember(appCustomIconUrl) { mutableStateOf(false) }
+              if (appCustomIconUrl.isNotBlank() && !iconPreviewFailed) {
                 AsyncImage(
                   model = appCustomIconUrl,
                   contentDescription = "Current App Icon",
                   modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape),
-                  contentScale = ContentScale.Crop
+                  contentScale = ContentScale.Crop,
+                  onError = { iconPreviewFailed = true },
+                  onSuccess = { iconPreviewFailed = false }
                 )
               } else {
                 Icon(
@@ -634,13 +649,13 @@ fun MentorDashboardScreen(
                 color = Color.Gray
               )
               Text(
-                text = if (appCustomIconUrl.isNotBlank()) "Custom Icon Active" else "Default Icon",
+                text = if (isUploadingAppIcon) "Uploading to Drive..." else if (appCustomIconUrl.isNotBlank()) "Custom Icon Active" else "Default Icon",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 color = if (isDark) Color(0xFFF1F5F9) else EblNavyDark
               )
               Text(
-                text = "Syncs universally to all users' devices • Configured by Mentor",
+                text = "Uploads to Google Drive & syncs across all users' devices",
                 fontSize = 10.sp,
                 color = Color(0xFF059669)
               )
@@ -652,13 +667,22 @@ fun MentorDashboardScreen(
               onClick = {
                 iconPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
               },
+              enabled = !isUploadingAppIcon,
               colors = ButtonDefaults.buttonColors(containerColor = EblNavyPrimary),
               shape = RoundedCornerShape(8.dp),
               modifier = Modifier.testTag("btn_mentor_pick_app_icon")
             ) {
-              Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(14.dp))
+              if (isUploadingAppIcon) {
+                androidx.compose.material3.CircularProgressIndicator(
+                  modifier = Modifier.size(14.dp),
+                  color = Color.White,
+                  strokeWidth = 2.dp
+                )
+              } else {
+                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(14.dp))
+              }
               Spacer(modifier = Modifier.width(4.dp))
-              Text("Upload", fontSize = 11.sp)
+              Text(if (isUploadingAppIcon) "Saving" else "Upload", fontSize = 11.sp)
             }
             OutlinedButton(
               onClick = {
@@ -1307,10 +1331,12 @@ fun MentorDashboardScreen(
         Button(
           onClick = {
             val clean = newAppIconUrlInput.trim()
-            viewModel.setAppCustomIcon(clean) { success, _ ->
+            viewModel.setAppCustomIcon(clean) { success, err ->
               if (success) {
                 showEditAppIconDialog = false
-                Toast.makeText(context, "Universal App Icon updated successfully!", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Universal App Icon updated & synced!", Toast.LENGTH_SHORT).show()
+              } else {
+                Toast.makeText(context, "Failed to update icon: ${err ?: "Error"}", Toast.LENGTH_LONG).show()
               }
             }
           },
